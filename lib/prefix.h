@@ -48,12 +48,10 @@ struct ethaddr {
 
 
 /* length is the number of valuable bits of prefix structure 
-* route type 5:
-* 16 bits from main prefix structure
-* the rest for evpn structure, excluding mac field 
+* route type 5: eth-tag + prefix + prefixlen
 */
-#define PREFIX_LEN_ROUTE_TYPE_5_IPV4 (8+8+8+8+32+32+8)
-#define PREFIX_LEN_ROUTE_TYPE_5_IPV6 (8+8+8+8+128+128+8)
+#define PREFIX_LEN_ROUTE_TYPE_5_IPV4 (32+32+8)
+#define PREFIX_LEN_ROUTE_TYPE_5_IPV6 (32+128+8)
 
 /* EVPN address (RFC 7432) */
 struct evpn_addr
@@ -69,6 +67,7 @@ struct evpn_addr
   uint32_t eth_tag;
   union
   {
+    u_char addr;
     struct in_addr v4_addr;
     struct in6_addr v6_addr;
   } ip;
@@ -189,11 +188,12 @@ union prefix46ptr
   struct prefix_ipv6 *p6;
 } __attribute__ ((transparent_union));
 
-union prefix46constptr
+union prefixconstptr
 {
   const struct prefix *p;
   const struct prefix_ipv4 *p4;
   const struct prefix_ipv6 *p6;
+  const struct prefix_evpn *evp;
 } __attribute__ ((transparent_union));
 
 #ifndef INET_ADDRSTRLEN
@@ -265,14 +265,9 @@ extern const char *prefix_family_str (const struct prefix *);
 extern int prefix_blen (const struct prefix *);
 extern int str2prefix (const char *, struct prefix *);
 
-/*
- * 8 groups of 4 bytes of hexadecimal + 7 seperators is 39
- * /128 = 4 bytes
- * Null = 1 byte
- * 39 + 4 + 1 = 44 bytes
- */
-#define PREFIX2STR_BUFFER  44
-extern const char *prefix2str (union prefix46constptr, char *, int);
+#define PREFIX2STR_BUFFER  PREFIX_STRLEN
+
+extern const char *prefix2str (union prefixconstptr, char *, int);
 extern int prefix_match (const struct prefix *, const struct prefix *);
 extern int prefix_same (const struct prefix *, const struct prefix *);
 extern int prefix_cmp (const struct prefix *, const struct prefix *);
