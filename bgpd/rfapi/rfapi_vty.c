@@ -482,7 +482,7 @@ rfapi_vty_out_vncinfo (
   if (bi->attr && bi->attr->extra && bi->attr->extra->ecommunity)
     {
       s = ecommunity_ecom2str (bi->attr->extra->ecommunity,
-                               ECOMMUNITY_FORMAT_ROUTE_MAP);
+                               ECOMMUNITY_FORMAT_ROUTE_MAP, ECOMMUNITY_ROUTE_TARGET);
       vty_out (vty, " EC{%s}", s);
       XFREE (MTYPE_ECOMMUNITY_STR, s);
     }
@@ -693,7 +693,7 @@ rfapiPrintBi (void *stream, struct bgp_info *bi)
       if (bi->attr->extra->ecommunity)
         {
           s = ecommunity_ecom2str (bi->attr->extra->ecommunity,
-                                   ECOMMUNITY_FORMAT_ROUTE_MAP);
+                                   ECOMMUNITY_FORMAT_ROUTE_MAP, ECOMMUNITY_ROUTE_TARGET);
           r = snprintf (p, REMAIN, " %s", s);
           INCP;
           XFREE (MTYPE_ECOMMUNITY_STR, s);
@@ -1449,7 +1449,7 @@ rfapiShowRemoteRegistrationsIt (
                     }
 
                   s = ecommunity_ecom2str (it->rt_import_list,
-                                           ECOMMUNITY_FORMAT_ROUTE_MAP);
+                                           ECOMMUNITY_FORMAT_ROUTE_MAP, ECOMMUNITY_ROUTE_TARGET);
 
                   if (pLni)
                     {
@@ -1813,7 +1813,7 @@ rfapiPrintDescriptor (struct vty *vty, struct rfapi_descriptor *rfd)
     {
       s =
         ecommunity_ecom2str (rfd->rt_export_list,
-                             ECOMMUNITY_FORMAT_ROUTE_MAP);
+                             ECOMMUNITY_FORMAT_ROUTE_MAP, ECOMMUNITY_ROUTE_TARGET);
       vty_out (vty, " Export %s%s", s, HVTY_NEWLINE);
       XFREE (MTYPE_ECOMMUNITY_STR, s);
     }
@@ -1826,7 +1826,7 @@ rfapiPrintDescriptor (struct vty *vty, struct rfapi_descriptor *rfd)
   if (rfd->import_table)
     {
       s = ecommunity_ecom2str (rfd->import_table->rt_import_list,
-                               ECOMMUNITY_FORMAT_ROUTE_MAP);
+                               ECOMMUNITY_FORMAT_ROUTE_MAP, ECOMMUNITY_ROUTE_TARGET);
       vty_out (vty, " Import %s%s", s, HVTY_NEWLINE);
       XFREE (MTYPE_ECOMMUNITY_STR, s);
     }
