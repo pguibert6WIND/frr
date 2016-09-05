@@ -751,8 +751,9 @@ subgroup_update_packet (struct update_subgroup *subgrp)
 	    mpattrlen_pos = bgp_packet_mpattr_start (snlri, afi, safi,
                                          (peer_cap_enhe(peer) ? AFI_IP6 : afi),
 				          &vecarr, adv->baa->attr);
-          bgp_packet_mpattr_prefix (snlri, afi, safi, &rn->p, prd, tag,
-                                    addpath_encode, addpath_tx_id);
+
+          bgp_packet_mpattr_prefix (snlri, afi, safi, &rn->p, prd,
+                                    tag, addpath_encode, addpath_tx_id, NULL);
 	}
 
       num_pfx++;
@@ -907,7 +908,7 @@ subgroup_withdraw_packet (struct update_subgroup *subgrp)
 	    }
 
 	  bgp_packet_mpunreach_prefix (s, &rn->p, afi, safi, prd, NULL,
-                                       addpath_encode, addpath_tx_id);
+                                       addpath_encode, addpath_tx_id, NULL);
 	}
 
       num_pfx++;
@@ -1115,7 +1116,7 @@ subgroup_default_withdraw_packet (struct update_subgroup *subgrp)
       mplen_pos = bgp_packet_mpunreach_start (s, afi, safi);
       bgp_packet_mpunreach_prefix (s, &p, afi, safi, NULL, NULL,
                                    addpath_encode,
-                                   BGP_ADDPATH_TX_ID_FOR_DEFAULT_ORIGINATE);
+                                   BGP_ADDPATH_TX_ID_FOR_DEFAULT_ORIGINATE, NULL);
 
       /* Set the mp_unreach attr's length */
       bgp_packet_mpunreach_end (s, mplen_pos);
