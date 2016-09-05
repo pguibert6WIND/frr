@@ -73,6 +73,9 @@ bgp_node_afi (struct vty *vty)
     case BGP_ENCAPV6_NODE:
       afi = AFI_IP6;
       break;
+    case BGP_EVPN_NODE:
+      afi = AFI_L2VPN;
+      break;
     default:
       afi = AFI_IP;
       break;
@@ -100,6 +103,9 @@ bgp_node_safi (struct vty *vty)
     case BGP_IPV6M_NODE:
       safi = SAFI_MULTICAST;
       break;
+    case BGP_EVPN_NODE:
+      safi = SAFI_EVPN;
+      break;
     default:
       safi = SAFI_UNICAST;
       break;
@@ -120,6 +126,9 @@ bgp_vty_afi_from_arg(const char *afi_str)
     afi = AFI_IP6;
   }
 #endif /* HAVE_IPV6 */
+  else if (!strcmp(afi_str, "l2vpn")) {
+    afi = AFI_L2VPN;
+  }
   return afi;
 }
 
@@ -205,6 +214,12 @@ argv_find_and_parse_safi(struct cmd_token **argv, int argc, int *index, safi_t *
       ret = 1;
       if (safi)
         *safi = SAFI_ENCAP;
+    }
+  else if (argv_find (argv, argc, "evpn", index))
+    {
+      ret = 1;
+      if (safi)
+        *safi = SAFI_EVPN;
     }
   return ret;
 }
@@ -5606,6 +5621,18 @@ DEFUN (address_family_encapv6,
   return CMD_SUCCESS;
 }
 
+DEFUN (address_family_evpn,
+       address_family_evpn_cmd,
+       "address-family evpn",
+       "Enter Address Family command mode\n"
+       "Address family\n")
+{
+#if defined(HAVE_EVPN)
+  vty->node = BGP_EVPN_NODE;
+#endif /* HAVE_EVPN */
+  return CMD_SUCCESS;
+}
+
 DEFUN (exit_address_family,
        exit_address_family_cmd,
        "exit-address-family",
@@ -5618,7 +5645,8 @@ DEFUN (exit_address_family,
       || vty->node == BGP_IPV6M_NODE
       || vty->node == BGP_VPNV6_NODE
       || vty->node == BGP_ENCAP_NODE
-      || vty->node == BGP_ENCAPV6_NODE)
+      || vty->node == BGP_ENCAPV6_NODE
+      || vty->node == BGP_EVPN_NODE)
     vty->node = BGP_NODE;
   return CMD_SUCCESS;
 }
@@ -9834,6 +9862,13 @@ static struct cmd_node bgp_encapv6_node =
   1
 };
 
+static struct cmd_node bgp_evpn_node =
+{
+  BGP_EVPN_NODE,
+  "%s(config-router-evpn)# ",
+  1
+};
+
 static void community_list_vty (void);
 
 void
@@ -9849,6 +9884,7 @@ bgp_vty_init (void)
   install_node (&bgp_vpnv6_node, NULL);
   install_node (&bgp_encap_node, NULL);
   install_node (&bgp_encapv6_node, NULL);
+  install_node (&bgp_evpn_node, NULL);
 
   /* Install default VTY commands to new nodes.  */
   install_default (BGP_NODE);
@@ -9860,6 +9896,7 @@ bgp_vty_init (void)
   install_default (BGP_VPNV6_NODE);
   install_default (BGP_ENCAP_NODE);
   install_default (BGP_ENCAPV6_NODE);
+  install_default (BGP_EVPN_NODE);
 
   /* "bgp multiple-instance" commands. */
   install_element (CONFIG_NODE, &bgp_multiple_instance_cmd);
@@ -10073,6 +10110,7 @@ bgp_vty_init (void)
   install_element (BGP_VPNV6_NODE, &neighbor_activate_cmd);
   install_element (BGP_ENCAP_NODE, &neighbor_activate_cmd);
   install_element (BGP_ENCAPV6_NODE, &neighbor_activate_cmd);
+  install_element (BGP_EVPN_NODE, &neighbor_activate_cmd);
 
   /* "no neighbor activate" commands. */
   install_element (BGP_NODE, &no_neighbor_activate_cmd);
@@ -10084,6 +10122,7 @@ bgp_vty_init (void)
   install_element (BGP_VPNV6_NODE, &no_neighbor_activate_cmd);
   install_element (BGP_ENCAP_NODE, &no_neighbor_activate_cmd);
   install_element (BGP_ENCAPV6_NODE, &no_neighbor_activate_cmd);
+  install_element (BGP_EVPN_NODE, &no_neighbor_activate_cmd);
 
   /* "neighbor peer-group" set commands.
    * Long term we should only accept this command under BGP_NODE and not all of
@@ -10153,6 +10192,9 @@ bgp_vty_init (void)
 
   install_element (BGP_ENCAPV6_NODE, &neighbor_attr_unchanged_cmd);
   install_element (BGP_ENCAPV6_NODE, &no_neighbor_attr_unchanged_cmd);
+
+  install_element (BGP_EVPN_NODE, &neighbor_attr_unchanged_cmd);
+  install_element (BGP_EVPN_NODE, &no_neighbor_attr_unchanged_cmd);
 
   /* "nexthop-local unchanged" commands */
   install_element (BGP_IPV6_NODE, &neighbor_nexthop_local_unchanged_cmd);
@@ -10701,6 +10743,8 @@ bgp_vty_init (void)
   install_element (BGP_NODE, &address_family_encapv6_cmd);
 #endif
 
+  install_element (BGP_NODE, &address_family_evpn_cmd);
+
   /* "exit-address-family" command. */
   install_element (BGP_IPV4_NODE, &exit_address_family_cmd);
   install_element (BGP_IPV4M_NODE, &exit_address_family_cmd);
@@ -10710,6 +10754,7 @@ bgp_vty_init (void)
   install_element (BGP_VPNV6_NODE, &exit_address_family_cmd);
   install_element (BGP_ENCAP_NODE, &exit_address_family_cmd);
   install_element (BGP_ENCAPV6_NODE, &exit_address_family_cmd);
+  install_element (BGP_EVPN_NODE, &exit_address_family_cmd);
 
   /* "clear ip bgp commands" */
   install_element (ENABLE_NODE, &clear_ip_bgp_all_cmd);
