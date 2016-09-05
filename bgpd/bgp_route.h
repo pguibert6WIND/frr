@@ -178,6 +178,10 @@ struct bgp_static
 
   /* MPLS label.  */
   u_char tag[3];
+
+  /* EVPN */
+  struct eth_segment_id *eth_s_id;
+  char *router_mac;
 };
 
 #define BGP_ATTR_NEXTHOP_AFI_IP6(attr) \
