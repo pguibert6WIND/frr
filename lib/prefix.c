@@ -240,6 +240,8 @@ afi2str(afi_t afi)
 	return "IPv6";
     case AFI_ETHER:
 	return "ethernet";
+    case AFI_L2VPN:
+	return "l2vpn";
     case AFI_MAX:
         return "bad-value";
     default:
@@ -260,6 +262,8 @@ safi2str(safi_t safi)
 	return "encap";
     case SAFI_MPLS_VPN:
 	return "vpn";
+    case SAFI_EVPN:
+	return "evpn";
   }
   return NULL;
 }
