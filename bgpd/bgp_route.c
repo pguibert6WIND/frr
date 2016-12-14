@@ -87,7 +87,11 @@ bgp_afi_node_get (struct bgp_table *table, afi_t afi, safi_t safi, struct prefix
       prn = bgp_node_get (table, (struct prefix *) prd);
 
       if (prn->info == NULL)
-	prn->info = bgp_table_init (afi, safi);
+        {
+          struct bgp_table *newtab = bgp_table_init (afi, safi);
+          newtab->owner = table->owner;
+          prn->info = newtab;
+        }
       else
 	bgp_unlock_node (prn);
       table = prn->info;
