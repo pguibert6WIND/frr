@@ -431,7 +431,8 @@ typedef enum {
 	SAFI_ENCAP = 4,
 	SAFI_EVPN = 5,
 	SAFI_LABELED_UNICAST = 6,
-	SAFI_MAX = 7
+	SAFI_FLOWSPEC = 7,
+	SAFI_MAX = 8
 } safi_t;
 
 /*
@@ -459,7 +460,8 @@ typedef enum {
 	IANA_SAFI_LABELED_UNICAST = 4,
 	IANA_SAFI_ENCAP = 7,
 	IANA_SAFI_EVPN = 70,
-	IANA_SAFI_MPLS_VPN = 128
+	IANA_SAFI_MPLS_VPN = 128,
+	IANA_SAFI_FLOWSPEC = 133
 } iana_safi_t;
 
 /* Default Administrative Distance of each protocol. */
@@ -535,6 +537,8 @@ static inline safi_t safi_iana2int(iana_safi_t safi)
 		return SAFI_EVPN;
 	case IANA_SAFI_LABELED_UNICAST:
 		return SAFI_LABELED_UNICAST;
+	case IANA_SAFI_FLOWSPEC:
+		return SAFI_FLOWSPEC;
 	default:
 		return SAFI_MAX;
 	}
@@ -555,6 +559,8 @@ static inline iana_safi_t safi_int2iana(safi_t safi)
 		return IANA_SAFI_EVPN;
 	case SAFI_LABELED_UNICAST:
 		return IANA_SAFI_LABELED_UNICAST;
+	case SAFI_FLOWSPEC:
+		return IANA_SAFI_FLOWSPEC;
 	default:
 		return IANA_SAFI_RESERVED;
 	}
