@@ -5708,9 +5708,7 @@ DEFUN (address_family_evpn,
        "Layer2 VPN Address family\n"
        "Ethernet Virtual Private Network Subsequent Address Family\n")
 {
-#if defined(HAVE_EVPN)
   vty->node = BGP_EVPN_NODE;
-#endif /* HAVE_EVPN */
   return CMD_SUCCESS;
 }
 
