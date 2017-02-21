@@ -1719,6 +1719,8 @@ aspath_reconcile_as4 ( struct aspath *aspath, struct aspath *as4path)
   hops = (aspath_count_hops (aspath) + aspath_count_confeds (aspath))
          - aspath_count_hops (as4path);
   
+  zlog_err("AS4: hops calc is (asp %u as4p %u %u",aspath_count_hops (aspath),
+           aspath_count_hops (as4path),hops);
   if (hops < 0)
     {
       if (BGP_DEBUG (as4, AS4))
@@ -1771,6 +1773,7 @@ aspath_reconcile_as4 ( struct aspath *aspath, struct aspath *as4path)
 	}
       
       assert (cpasns <= seg->length);
+      zlog_err("AS4: assegment append asn cpasns is %u",cpasns);
       
       newseg = assegment_new (seg->type, 0);
       newseg = assegment_append_asns (newseg, seg->as, cpasns);
