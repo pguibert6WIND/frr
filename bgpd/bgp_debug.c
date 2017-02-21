@@ -1928,6 +1928,10 @@ bgp_debug_init (void)
   install_element (CONFIG_NODE, &no_debug_bgp_bestpath_cmd);
   install_element (ENABLE_NODE, &no_debug_bgp_bestpath_prefix_cmd);
   install_element (CONFIG_NODE, &no_debug_bgp_bestpath_prefix_cmd);
+  DEBUG_ON (as4, AS4);
+  DEBUG_ON (as4, AS4_SEGMENT);
+  TERM_DEBUG_ON (as4, AS4);
+  TERM_DEBUG_ON (as4, AS4_SEGMENT);
 }
 
 /* Return true if this prefix is on the per_prefix_list of prefixes to debug
