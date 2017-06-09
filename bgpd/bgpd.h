@@ -269,7 +269,7 @@ struct bgp
   u_int32_t restarted_peers;
   u_int32_t implicit_eors;
   u_int32_t explicit_eors;
-#define BGP_UPDATE_DELAY_DEF              0
+#define BGP_UPDATE_DELAY_DEF              5
 #define BGP_UPDATE_DELAY_MIN              0
 #define BGP_UPDATE_DELAY_MAX              3600
 
