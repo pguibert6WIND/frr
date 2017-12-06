@@ -478,8 +478,11 @@ static int vrf_config_write(struct vty *vty)
 		if (!zvrf)
 			continue;
 
-		if (vrf->vrf_id != VRF_DEFAULT)
+		if (vrf->vrf_id != VRF_DEFAULT) {
 			vty_out(vty, "vrf %s\n", zvrf_name(zvrf));
+			zebra_ns_config_write(vty, (struct ns *)vrf->ns_ctxt);
+			vty_out(vty, "!\n");
+		}
 
 		static_config(vty, zvrf, AFI_IP, SAFI_UNICAST, "ip route");
 		static_config(vty, zvrf, AFI_IP, SAFI_MULTICAST, "ip mroute");
