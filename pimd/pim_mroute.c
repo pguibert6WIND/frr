@@ -711,24 +711,14 @@ int pim_mroute_socket_enable(struct pim_instance *pim)
 		zlog_err("pim_mroute_socket_enable: could not raise privs, %s",
 			 safe_strerror(errno));
 
-	fd = socket(AF_INET, SOCK_RAW, IPPROTO_IGMP);
+	fd = vrf_socket(AF_INET, SOCK_RAW, IPPROTO_IGMP,
+			pim->vrf_id, pim->vrf->name);
 
 	if (fd < 0) {
 		zlog_warn("Could not create mroute socket: errno=%d: %s", errno,
 			  safe_strerror(errno));
 		return -2;
 	}
-
-#ifdef SO_BINDTODEVICE
-	if (pim->vrf->vrf_id != VRF_DEFAULT &&
-	    setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, pim->vrf->name,
-		       strlen(pim->vrf->name))) {
-		zlog_warn("Could not setsockopt SO_BINDTODEVICE: %s",
-			  safe_strerror(errno));
-		close(fd);
-		return -3;
-	}
-#endif
 
 	if (pimd_privs.change(ZPRIVS_LOWER))
 		zlog_err("pim_mroute_socket_enable: could not lower privs, %s",

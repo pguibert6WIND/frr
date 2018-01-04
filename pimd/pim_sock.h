@@ -37,7 +37,7 @@
 
 int pim_socket_bind(int fd, struct interface *ifp);
 void pim_socket_ip_hdr(int fd);
-int pim_socket_raw(int protocol);
+int pim_socket_raw(int protocol, vrf_id_t vrf_id);
 int pim_socket_mcast(int protocol, struct in_addr ifaddr, struct interface *ifp,
 		     u_char loop);
 int pim_socket_join(int fd, struct in_addr group, struct in_addr ifaddr,

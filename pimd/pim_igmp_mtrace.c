@@ -156,7 +156,7 @@ static int mtrace_send_packet(struct interface *ifp,
 			   inet_ntop(AF_INET, &pim_ifp->primary_address,
 				     pim_str, sizeof(pim_str)));
 
-	fd = pim_socket_raw(IPPROTO_IGMP);
+	fd = pim_socket_raw(IPPROTO_IGMP, ifp->vrf_id);
 
 	if (fd < 0)
 		return -1;
@@ -248,7 +248,7 @@ static int mtrace_un_forward_packet(struct pim_instance *pim, struct ip *ip_hdr,
 
 	ip_hdr->ip_sum = in_cksum(ip_hdr, ip_hdr->ip_hl * 4);
 
-	fd = pim_socket_raw(IPPROTO_RAW);
+	fd = pim_socket_raw(IPPROTO_RAW, interface->vrf_id);
 
 	if (fd < 0)
 		return -1;

@@ -48,7 +48,7 @@
 #include "pim_jp_agg.h"
 
 static void pim_if_igmp_join_del_all(struct interface *ifp);
-static int igmp_join_sock(const char *ifname, ifindex_t ifindex,
+static int igmp_join_sock(struct interface *ifp,
 			  struct in_addr group_addr,
 			  struct in_addr source_addr);
 
@@ -591,7 +591,7 @@ void pim_if_addr_add(struct connected *ifc)
 				 */
 				close(ij->sock_fd);
 				join_fd = igmp_join_sock(
-					ifp->name, ifp->ifindex, ij->group_addr,
+					ifp, ij->group_addr,
 					ij->source_addr);
 				if (join_fd < 0) {
 					char group_str[INET_ADDRSTRLEN];
@@ -1214,12 +1214,15 @@ static struct igmp_join *igmp_join_find(struct list *join_list,
 	return 0;
 }
 
-static int igmp_join_sock(const char *ifname, ifindex_t ifindex,
+static int igmp_join_sock(struct interface *ifp,
 			  struct in_addr group_addr, struct in_addr source_addr)
 {
 	int join_fd;
+	const char *ifname = ifp->name;
+	ifindex_t ifindex = ifp->ifindex;
+	vrf_id_t vrf_id = ifp->vrf_id;
 
-	join_fd = pim_socket_raw(IPPROTO_IGMP);
+	join_fd = pim_socket_raw(IPPROTO_IGMP, vrf_id);
 	if (join_fd < 0) {
 		return -1;
 	}
@@ -1244,7 +1247,7 @@ static struct igmp_join *igmp_join_new(struct interface *ifp,
 	pim_ifp = ifp->info;
 	zassert(pim_ifp);
 
-	join_fd = igmp_join_sock(ifp->name, ifp->ifindex, group_addr,
+	join_fd = igmp_join_sock(ifp, group_addr,
 				 source_addr);
 	if (join_fd < 0) {
 		char group_str[INET_ADDRSTRLEN];

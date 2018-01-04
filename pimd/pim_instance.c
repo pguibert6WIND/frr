@@ -21,6 +21,7 @@
 #include <zebra.h>
 
 #include "hash.h"
+#include "ns.h"
 #include "vrf.h"
 
 #include "pimd.h"
