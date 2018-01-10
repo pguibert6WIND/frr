@@ -96,7 +96,14 @@ struct bgp_table *bgp_table_init(afi_t afi, safi_t safi)
 
 	rt = XCALLOC(MTYPE_BGP_TABLE, sizeof(struct bgp_table));
 
-	rt->route_table = route_table_init_with_delegate(&bgp_table_delegate);
+	if (safi == SAFI_FLOWSPEC)
+		rt->route_table =
+			route_table_opaque_init_with_delegate(
+					&bgp_table_delegate);
+	else
+		rt->route_table =
+			route_table_init_with_delegate(
+					&bgp_table_delegate);
 
 	/*
 	 * Set up back pointer to bgp_table.

@@ -4110,7 +4110,6 @@ void bgp_static_update(struct bgp *bgp, struct prefix *p,
 		return;
 
 	rn = bgp_afi_node_get(bgp->rib[afi][safi], afi, safi, p, NULL);
-
 	bgp_attr_default_set(&attr, BGP_ORIGIN_IGP);
 
 	attr.nexthop = bgp_static->igpnexthop;
