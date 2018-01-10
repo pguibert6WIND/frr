@@ -106,6 +106,15 @@ struct evpn_addr {
 #define AF_EVPN (AF_MAX + 1)
 #endif
 
+#if !defined(AF_FLOWSPEC)
+#define AF_FLOWSPEC (AF_MAX + 2)
+#endif
+
+struct flowspec_prefix {
+	u_short prefixlen; /* length in bytes */
+	uintptr_t ptr;
+};
+
 /* FRR generic prefix structure. */
 struct prefix {
 	u_char family;
@@ -122,6 +131,7 @@ struct prefix {
 		u_char val[16];
 		uintptr_t ptr;
 		struct evpn_addr prefix_evpn; /* AF_EVPN */
+		struct flowspec_prefix prefix_flowspec; /* AF_FLOWSPEC */
 	} u __attribute__((aligned(8)));
 };
 
@@ -174,6 +184,13 @@ struct prefix_ptr {
 	uintptr_t prefix __attribute__((aligned(8)));
 };
 
+/* Prefix for a Flowspec entry */
+struct prefix_fs {
+	u_char family;
+	u_char prefixlen; /* unused */
+	struct flowspec_prefix  prefix __attribute__((aligned(8)));
+};
+
 struct prefix_sg {
 	u_char family;
 	u_char prefixlen;
@@ -191,6 +208,7 @@ union prefixptr {
 	struct prefix_ipv4 *p4;
 	struct prefix_ipv6 *p6;
 	struct prefix_evpn *evp;
+	const struct prefix_fs *fs;
 } __attribute__((transparent_union));
 
 union prefixconstptr {
@@ -198,6 +216,7 @@ union prefixconstptr {
 	const struct prefix_ipv4 *p4;
 	const struct prefix_ipv6 *p6;
 	const struct prefix_evpn *evp;
+	const struct prefix_fs *fs;
 } __attribute__((transparent_union));
 
 #ifndef INET_ADDRSTRLEN
@@ -288,12 +307,15 @@ extern int str2prefix(const char *, struct prefix *);
 #define PREFIX2STR_BUFFER  PREFIX_STRLEN
 
 extern const char *prefix2str(union prefixconstptr, char *, int);
+extern int prefix_opaque_match(const struct prefix *n, const struct prefix *p);
 extern int prefix_match(const struct prefix *, const struct prefix *);
 extern int prefix_match_network_statement(const struct prefix *,
 					  const struct prefix *);
 extern int prefix_same(const struct prefix *, const struct prefix *);
 extern int prefix_cmp(const struct prefix *, const struct prefix *);
+extern int prefix_opaque_cmp(const struct prefix *, const struct prefix *);
 extern int prefix_common_bits(const struct prefix *, const struct prefix *);
+extern void prefix_opaque_copy(struct prefix *dest, const struct prefix *src);
 extern void prefix_copy(struct prefix *dest, const struct prefix *src);
 extern void apply_mask(struct prefix *);
 
@@ -347,6 +369,7 @@ extern int is_zero_mac(struct ethaddr *mac);
 extern int prefix_str2mac(const char *str, struct ethaddr *mac);
 extern char *prefix_mac2str(const struct ethaddr *mac, char *buf, int size);
 
+extern unsigned prefix_opaque_hash_key(void *pp);
 extern unsigned prefix_hash_key(void *pp);
 
 static inline int ipv6_martian(struct in6_addr *addr)

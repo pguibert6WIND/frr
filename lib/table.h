@@ -177,6 +177,8 @@ struct route_table_iter_t_ {
 extern struct route_table *route_table_init(void);
 
 extern struct route_table *
+route_table_opaque_init_with_delegate(route_table_delegate_t *);
+extern struct route_table *
 route_table_init_with_delegate(route_table_delegate_t *);
 
 extern route_table_delegate_t *route_table_get_default_delegate(void);

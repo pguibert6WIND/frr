@@ -33,10 +33,34 @@ DEFINE_MTYPE(LIB, ROUTE_NODE, "Route node")
 
 static void route_table_free(struct route_table *);
 
+static int route_table_opaque_hash_cmp(const void *a, const void *b)
+{
+	const struct prefix *pa = a, *pb = b;
+
+	return prefix_opaque_cmp(pa, pb) == 0;
+}
+
 static int route_table_hash_cmp(const void *a, const void *b)
 {
 	const struct prefix *pa = a, *pb = b;
+
 	return prefix_cmp(pa, pb) == 0;
+}
+
+/*
+ * route_table_init_with_delegate
+ */
+struct route_table *
+route_table_opaque_init_with_delegate(route_table_delegate_t *delegate)
+{
+	struct route_table *rt;
+
+	rt = XCALLOC(MTYPE_ROUTE_TABLE, sizeof(struct route_table));
+	rt->delegate = delegate;
+	rt->hash = hash_create(prefix_opaque_hash_key,
+			       route_table_opaque_hash_cmp,
+			       "route table opaque hash");
+	return rt;
 }
 
 /*
@@ -73,7 +97,10 @@ static struct route_node *route_node_set(struct route_table *table,
 
 	node = route_node_new(table);
 
-	prefix_copy(&node->p, prefix);
+	if (prefix->family == AF_FLOWSPEC)
+		prefix_opaque_copy(&node->p, prefix);
+	else
+		prefix_copy(&node->p, prefix);
 	node->table = table;
 
 	inserted = hash_get(node->table->hash, node, hash_alloc_intern);
@@ -192,14 +219,19 @@ struct route_node *route_node_match(const struct route_table *table,
 	const struct prefix *p = pu.p;
 	struct route_node *node;
 	struct route_node *matched;
+	int (*func_match)(const struct prefix *, const struct prefix *);
 
 	matched = NULL;
 	node = table->top;
+	if (p->family == AF_FLOWSPEC)
+		func_match = prefix_opaque_match;
+	else
+		func_match = prefix_match;
 
 	/* Walk down tree.  If there is matched route then store it to
 	   matched. */
 	while (node && node->p.prefixlen <= p->prefixlen
-	       && prefix_match(&node->p, p)) {
+	       && func_match(&node->p, p)) {
 		if (node->info)
 			matched = node;
 
@@ -279,16 +311,20 @@ struct route_node *route_node_get(struct route_table *const table,
 	struct route_node *inserted;
 	u_char prefixlen = p->prefixlen;
 	const u_char *prefix = &p->u.prefix;
+	int (*func_match)(const struct prefix *, const struct prefix *);
 
 	apply_mask((struct prefix *)p);
 	node = hash_get(table->hash, (void *)p, NULL);
 	if (node && node->info)
 		return route_lock_node(node);
-
+	if (p->family == AF_FLOWSPEC)
+		func_match = prefix_opaque_match;
+	else
+		func_match = prefix_match;
 	match = NULL;
 	node = table->top;
 	while (node && node->p.prefixlen <= prefixlen
-	       && prefix_match(&node->p, p)) {
+	       && func_match(&node->p, p)) {
 		if (node->p.prefixlen == prefixlen)
 			return route_lock_node(node);
 
@@ -304,8 +340,15 @@ struct route_node *route_node_get(struct route_table *const table,
 			table->top = new;
 	} else {
 		new = route_node_new(table);
-		route_common(&node->p, p, &new->p);
-		new->p.family = p->family;
+		if (p->family == AF_FLOWSPEC) {
+			/* if different, build of new prefix can not be derived
+			 * from current prefix
+			 */
+			prefix_opaque_copy(&new->p, p);
+		} else {
+			route_common(&node->p, p, &new->p);
+			new->p.family = p->family;
+		}
 		new->table = table;
 		set_link(new, node);
 		inserted = hash_get(node->table->hash, new, hash_alloc_intern);
@@ -530,9 +573,15 @@ int route_table_prefix_iter_cmp(const struct prefix *p1,
 {
 	struct prefix common_space;
 	struct prefix *common = &common_space;
+	int (*func_match)(const struct prefix *, const struct prefix *);
+
+	if (p1->family == AF_FLOWSPEC)
+		func_match = prefix_opaque_match;
+	else
+		func_match = prefix_match;
 
 	if (p1->prefixlen <= p2->prefixlen) {
-		if (prefix_match(p1, p2)) {
+		if (func_match(p1, p2)) {
 
 			/*
 			 * p1 contains p2, or is equal to it.
@@ -544,7 +593,7 @@ int route_table_prefix_iter_cmp(const struct prefix *p1,
 		/*
 		 * Check if p2 contains p1.
 		 */
-		if (prefix_match(p2, p1))
+		if (func_match(p2, p1))
 			return 1;
 	}
 
@@ -606,16 +655,21 @@ route_table_get_next_internal(const struct route_table *table,
 {
 	struct route_node *node, *tmp_node;
 	int cmp;
+	int (*func_match)(const struct prefix *, const struct prefix *);
 
 	node = table->top;
+	if (p->family == AF_FLOWSPEC)
+		func_match = prefix_opaque_match;
+	else
+		func_match = prefix_match;
 
 	while (node) {
 		int match;
 
 		if (node->p.prefixlen < p->prefixlen)
-			match = prefix_match(&node->p, p);
+			match = func_match(&node->p, p);
 		else
-			match = prefix_match(p, &node->p);
+			match = func_match(p, &node->p);
 
 		if (match) {
 			if (node->p.prefixlen == p->prefixlen) {

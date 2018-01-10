@@ -428,6 +428,31 @@ int prefix_match(const struct prefix *n, const struct prefix *p)
 	return 1;
 }
 
+/* If n includes p prefix then return 1 else return 0. */
+int prefix_opaque_match(const struct prefix *n, const struct prefix *p)
+{
+	int offset;
+	const u_char *np, *pp;
+
+	if (n->family != AF_FLOWSPEC)
+		return 0;
+
+	/* prefixlen is unused. look at fs prefix len */
+	if (n->u.prefix_flowspec.prefixlen > p->u.prefix_flowspec.prefixlen)
+		return 0;
+
+	/* Set both prefix's head pointer. */
+	np = (const u_char *)&n->u.prefix_flowspec.ptr;
+	pp = (const u_char *)&p->u.prefix_flowspec.ptr;
+
+	offset = n->u.prefix_flowspec.prefixlen;
+
+	while (offset--)
+		if (np[offset] != pp[offset])
+			return 0;
+	return 1;
+}
+
 /* If n includes p then return 1 else return 0. Prefix mask is not considered */
 int prefix_match_network_statement(const struct prefix *n,
 				   const struct prefix *p)
@@ -454,6 +479,23 @@ int prefix_match_network_statement(const struct prefix *n,
 }
 
 /* Copy prefix from src to dest. */
+void prefix_opaque_copy(struct prefix *dest, const struct prefix *src)
+{
+	void *temp;
+	int len;
+
+	if (src->family != AF_FLOWSPEC)
+		return;
+
+	len = src->u.prefix_flowspec.prefixlen;
+	dest->u.prefix_flowspec.prefixlen = src->u.prefix_flowspec.prefixlen;
+	dest->family = src->family;
+	temp = XCALLOC(MTYPE_TMP, len);
+	dest->u.prefix_flowspec.ptr = (uintptr_t)temp;
+	memcpy((void *)dest->u.prefix_flowspec.ptr,
+	       (void *)src->u.prefix_flowspec.ptr, len);
+}
+
 void prefix_copy(struct prefix *dest, const struct prefix *src)
 {
 	dest->family = src->family;
@@ -511,7 +553,36 @@ int prefix_same(const struct prefix *p1, const struct prefix *p2)
 			if (!memcmp(&p1->u.prefix_evpn, &p2->u.prefix_evpn,
 				    sizeof(struct evpn_addr)))
 				return 1;
+		if (p1->family == AF_FLOWSPEC) {
+			if (p1->u.prefix_flowspec.prefixlen !=
+			    p2->u.prefix_flowspec.prefixlen)
+				return 0;
+			if (!memcmp(&p1->u.prefix_flowspec.ptr,
+				    &p2->u.prefix_flowspec.ptr,
+				    p2->u.prefix_flowspec.prefixlen))
+				return 1;
+		}
 	}
+	return 0;
+}
+
+int prefix_opaque_cmp(const struct prefix *p1, const struct prefix *p2)
+{
+	int offset;
+
+	if (p1->family != AF_FLOWSPEC)
+		return 1;
+
+	/* Set both prefix's head pointer. */
+	const u_char *pp1 = (const u_char *)p1->u.prefix_flowspec.ptr;
+	const u_char *pp2 = (const u_char *)p2->u.prefix_flowspec.ptr;
+
+	offset = p1->u.prefix_flowspec.prefixlen;
+
+	while (offset--)
+		if (pp1[offset] != pp2[offset])
+			return 1;
+
 	return 0;
 }
 
@@ -1266,4 +1337,27 @@ unsigned prefix_hash_key(void *pp)
 	prefix_copy(&copy, (struct prefix *)pp);
 	return jhash(&copy, offsetof(struct prefix, u.prefix)
 		     + PSIZE(copy.prefixlen), 0x55aa5a5a);
+}
+
+unsigned int prefix_opaque_hash_key(void *pp)
+{
+	struct prefix copy;
+	u_int32_t len;
+	void *temp;
+
+	if (((struct prefix *)pp)->family != AF_FLOWSPEC)
+		return 0;
+
+	/* make sure *all* unused bits are zero,
+	 * particularly including alignment /
+	 * padding and unused prefix bytes.
+	 */
+	memset(&copy, 0, sizeof(copy));
+	prefix_opaque_copy(&copy, (struct prefix *)pp);
+	len = jhash(&copy, offsetof(struct prefix, u.prefix_flowspec.ptr)
+		     + copy.u.prefix_flowspec.prefixlen, 0x55aa5a5a);
+	temp = (void *)copy.u.prefix_flowspec.ptr;
+	XFREE(MTYPE_TMP, temp);
+	copy.u.ptr = (uintptr_t)NULL;
+	return len;
 }
