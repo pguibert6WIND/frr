@@ -30,6 +30,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_zebra.h"
+#include "bgpd/bgp_mplsvpn.h"
 
 static int bgp_pbr_match_counter_unique;
 static int bgp_pbr_match_entry_counter_unique;
