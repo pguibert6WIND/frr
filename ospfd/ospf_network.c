@@ -175,6 +175,15 @@ int ospf_sock_init(struct ospf *ospf)
 	int ret, hincl = 1;
 	int bufsize = (8 * 1024 * 1024);
 
+	/* silently ignore. already done */
+	if (ospf->fd > 0)
+		return -1;
+
+	if (ospf->vrf_id == VRF_UNKNOWN) {
+		zlog_warn("ospf_sock_init: VRF %u not registered",
+			  ospf->vrf_id);
+		return -1;
+	}
 	if (ospfd_privs.change(ZPRIVS_RAISE)) {
 		zlog_err("ospf_sock_init: could not raise privs, %s",
 			 safe_strerror(errno));
