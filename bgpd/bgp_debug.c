@@ -42,6 +42,7 @@
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_label.h"
 #include "bgpd/bgp_evpn.h"
+#include "bgpd/bgp_flowspec.h"
 
 unsigned long conf_bgp_debug_as4;
 unsigned long conf_bgp_debug_neighbor_events;
@@ -55,6 +56,7 @@ unsigned long conf_bgp_debug_zebra;
 unsigned long conf_bgp_debug_allow_martians;
 unsigned long conf_bgp_debug_nht;
 unsigned long conf_bgp_debug_update_groups;
+unsigned long conf_bgp_debug_flowspec;
 
 unsigned long term_bgp_debug_as4;
 unsigned long term_bgp_debug_neighbor_events;
@@ -68,6 +70,7 @@ unsigned long term_bgp_debug_zebra;
 unsigned long term_bgp_debug_allow_martians;
 unsigned long term_bgp_debug_nht;
 unsigned long term_bgp_debug_update_groups;
+unsigned long term_bgp_debug_flowspec;
 
 struct list *bgp_debug_neighbor_events_peers = NULL;
 struct list *bgp_debug_keepalive_peers = NULL;
@@ -1589,6 +1592,7 @@ DEFUN (no_debug_bgp,
 	TERM_DEBUG_OFF(zebra, ZEBRA);
 	TERM_DEBUG_OFF(allow_martians, ALLOW_MARTIANS);
 	TERM_DEBUG_OFF(nht, NHT);
+	TERM_DEBUG_OFF(flowspec, FLOWSPEC);
 	vty_out(vty, "All possible debugging has been turned off\n");
 
 	return CMD_SUCCESS;
@@ -1648,6 +1652,10 @@ DEFUN_NOSH (show_debugging_bgp,
 
 	if (BGP_DEBUG(allow_martians, ALLOW_MARTIANS))
 		vty_out(vty, "  BGP allow martian next hop debugging is on\n");
+
+	if (BGP_DEBUG(flowspec, FLOWSPEC))
+		vty_out(vty, "  BGP flowspec debugging is on\n");
+
 	vty_out(vty, "\n");
 	return CMD_SUCCESS;
 }
@@ -1690,6 +1698,9 @@ int bgp_debug_count(void)
 		ret++;
 
 	if (BGP_DEBUG(allow_martians, ALLOW_MARTIANS))
+		ret++;
+
+	if (BGP_DEBUG(flowspec, FLOWSPEC))
 		ret++;
 
 	return ret;
@@ -1767,6 +1778,9 @@ static int bgp_config_write_debug(struct vty *vty)
 		vty_out(vty, "debug bgp allow-martians\n");
 		write++;
 	}
+
+	if (CONF_BGP_DEBUG(flowspec, FLOWSPEC))
+		vty_out(vty, "debug bgp flowspec\n");
 
 	return write;
 }
@@ -2062,7 +2076,17 @@ const char *bgp_debug_rdpfxpath2str(afi_t afi, safi_t safi,
 			 prefix_rd2str(prd, rd_buf, sizeof(rd_buf)),
 			 prefix2str(pu, pfx_buf, sizeof(pfx_buf)), tag_buf,
 			 pathid_buf, afi2str(afi), safi2str(safi));
-	else
+	else if (safi == SAFI_FLOWSPEC) {
+		char return_string[BGP_FLOWSPEC_NLRI_STRING_MAX];
+		const struct prefix_fs *fs = pu.fs;
+
+		bgp_fs_nlri_get_string((unsigned char *)fs->prefix.ptr,
+				       fs->prefix.prefixlen,
+				       return_string,
+				       NLRI_STRING_FORMAT_DEBUG);
+		snprintf(str, size, "FS %s Match{%s}", afi2str(afi),
+			 return_string);
+	} else
 		snprintf(str, size, "%s%s%s %s %s",
 			 prefix2str(pu, pfx_buf, sizeof(pfx_buf)), tag_buf,
 			 pathid_buf, afi2str(afi), safi2str(safi));
