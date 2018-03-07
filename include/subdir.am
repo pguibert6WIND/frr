@@ -8,4 +8,5 @@ noinst_HEADERS += \
 	include/linux/socket.h \
 	include/linux/net_namespace.h \
 	include/linux/fib_rules.h \
+	include/linux/libipset/linux_ip_set.h \
 	# end

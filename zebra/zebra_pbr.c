@@ -139,9 +139,14 @@ static struct zapi_pbr_rule *pbr_rule_lookup_unique(struct zebra_ns *zns,
 void zebra_pbr_ipset_free(void *arg)
 {
 	struct zebra_pbr_ipset *ipset;
+	struct zebra_ns *zns;
 
 	ipset = (struct zebra_pbr_ipset *)arg;
-
+	if (vrf_is_backend_netns())
+		zns = zebra_ns_lookup(ipset->vrf_id);
+	else
+		zns = zebra_ns_lookup(NS_DEFAULT);
+	kernel_destroy_pbr_ipset(zns, ipset);
 	XFREE(MTYPE_TMP, ipset);
 }
 
@@ -173,8 +178,16 @@ int zebra_pbr_ipset_hash_equal(const void *arg1, const void *arg2)
 void zebra_pbr_ipset_entry_free(void *arg)
 {
 	struct zebra_pbr_ipset_entry *ipset;
+	struct zebra_ns *zns;
 
 	ipset = (struct zebra_pbr_ipset_entry *)arg;
+	if (ipset->backpointer && vrf_is_backend_netns()) {
+		struct zebra_pbr_ipset *ips = ipset->backpointer;
+
+		zns = zebra_ns_lookup((ns_id_t)ips->vrf_id);
+	} else
+		zns = zebra_ns_lookup(NS_DEFAULT);
+	kernel_del_pbr_ipset_entry(zns, ipset);
 
 	XFREE(MTYPE_TMP, ipset);
 }
@@ -339,9 +352,7 @@ void zebra_pbr_create_ipset(struct zebra_ns *zns,
 			    struct zebra_pbr_ipset *ipset)
 {
 	(void)hash_get(zns->ipset_hash, ipset, pbr_ipset_alloc_intern);
-	/* TODO:
-	 * - Netlink call
-	 */
+	kernel_create_pbr_ipset(zns, ipset);
 }
 
 void zebra_pbr_destroy_ipset(struct zebra_ns *zns,
@@ -350,10 +361,7 @@ void zebra_pbr_destroy_ipset(struct zebra_ns *zns,
 	struct zebra_pbr_ipset *lookup;
 
 	lookup = hash_lookup(zns->ipset_hash, ipset);
-	/* TODO:
-	 * - Netlink destroy from kernel
-	 * - ?? destroy ipset entries before
-	 */
+	kernel_destroy_pbr_ipset(zns, ipset);
 	if (lookup)
 		XFREE(MTYPE_TMP, lookup);
 	else
@@ -414,10 +422,7 @@ void zebra_pbr_add_ipset_entry(struct zebra_ns *zns,
 {
 	(void)hash_get(zns->ipset_entry_hash, ipset,
 		       pbr_ipset_entry_alloc_intern);
-	/* TODO:
-	 * - attach to ipset list
-	 * - Netlink add to kernel
-	 */
+	kernel_add_pbr_ipset_entry(zns, ipset);
 }
 
 void zebra_pbr_del_ipset_entry(struct zebra_ns *zns,
@@ -426,11 +431,7 @@ void zebra_pbr_del_ipset_entry(struct zebra_ns *zns,
 	struct zebra_pbr_ipset_entry *lookup;
 
 	lookup = hash_lookup(zns->ipset_entry_hash, ipset);
-	/* TODO:
-	 * - Netlink destroy
-	 * - detach from ipset list
-	 * - ?? if no more entres, delete ipset
-	 */
+	kernel_del_pbr_ipset_entry(zns, ipset);
 	if (lookup)
 		XFREE(MTYPE_TMP, lookup);
 	else
