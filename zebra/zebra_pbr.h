@@ -157,6 +157,19 @@ extern void kernel_add_pbr_rule(struct zebra_pbr_rule *rule);
 extern void kernel_del_pbr_rule(struct zebra_pbr_rule *rule);
 
 /*
+ * Install specified ipset and ipset entries into the kernel
+ */
+extern void kernel_create_pbr_ipset(struct zebra_ns *zns,
+				    struct zebra_pbr_ipset *rule);
+extern void kernel_destroy_pbr_ipset(struct zebra_ns *zns,
+				     struct zebra_pbr_ipset *rule);
+extern void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
+				struct zebra_pbr_ipset_entry *rule);
+extern void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
+				struct zebra_pbr_ipset_entry *rule);
+
+
+/*
  * Get to know existing PBR rules in the kernel - typically called at startup.
  */
 extern void kernel_read_pbr_rules(struct zebra_ns *zns);

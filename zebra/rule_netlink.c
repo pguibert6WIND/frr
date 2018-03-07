@@ -28,8 +28,10 @@
 #include "if.h"
 #include "prefix.h"
 #include "vrf.h"
+#include "log.h"
 
 #include <linux/fib_rules.h>
+#include <linux/libipset/linux_ip_set.h>
 #include "zebra/zserv.h"
 #include "zebra/zebra_ns.h"
 #include "zebra/zebra_vrf.h"
@@ -42,10 +44,24 @@
 #include "zebra/zebra_pbr.h"
 
 /* definitions */
+#define IPSET_DEFAULT_HASHSIZE 64
+#define IPSET_PRE_HASH "hash:"
+
+static const struct message netlink_ipset_type_msg[] = {
+	{IPSET_NET_PORT_NET, "net,port,net"},
+	{IPSET_NET_NET, "net,net"},
+	{IPSET_NET, "net"},
+	{0}};
 
 /* static function declarations */
 
 /* Private functions */
+
+static const char *netlink_ipset_type2str(uint32_t type)
+{
+	return lookup_msg(netlink_ipset_type_msg, type,
+			  "Unrecognized IPset Type");
+}
 
 /* Install or uninstall specified rule for a specific interface.
  * Form netlink message and ship it. Currently, notify status after
@@ -130,6 +146,75 @@ static int netlink_rule_update(int cmd, struct zebra_pbr_rule *rule)
 }
 
 
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int netlink_ipset_update(int cmd,
+				struct zebra_pbr_ipset *ipset,
+				struct zebra_ns *zns)
+{
+	char buf[256];
+
+	if (cmd == IPSET_CMD_CREATE) {
+		sprintf(buf, "ipset create %s %s%s hashsize %u",
+			ipset->ipset_name, IPSET_PRE_HASH,
+			netlink_ipset_type2str(ipset->type),
+			IPSET_DEFAULT_HASHSIZE);
+	} else
+		sprintf(buf, "ipset destroy %s",
+			ipset->ipset_name);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	system(buf);
+	return 0;
+}
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int netlink_ipset_entry_update(int cmd,
+			struct zebra_pbr_ipset_entry *ipset,
+			struct zebra_ns *zns)
+{
+	char buf[256];
+	char buf_src[PREFIX2STR_BUFFER];
+	char buf_dst[PREFIX2STR_BUFFER];
+	char *psrc = NULL, *pdst = NULL;
+	struct zebra_pbr_ipset *bp;
+
+	if (ipset->filter_bm & PBR_FILTER_SRC_IP) {
+		psrc = (char *)prefix2str(&ipset->src, buf_src, PREFIX2STR_BUFFER);
+		if (psrc == NULL)
+			return -1;
+	}
+	if (ipset->filter_bm & PBR_FILTER_DST_IP) {
+		pdst = (char *)prefix2str(&ipset->dst, buf_dst, PREFIX2STR_BUFFER);
+		if (pdst == NULL)
+			return -1;
+	}
+	bp = ipset->backpointer;
+	if (!bp)
+		return -1;
+	if (bp->type == IPSET_NET_NET)
+		sprintf(buf, "ipset %s %s %s,%s",
+			cmd == IPSET_CMD_ADD ? "add" : "del",
+			bp->ipset_name,
+			psrc, pdst);
+	else if (bp->type == IPSET_NET)
+		sprintf(buf, "ipset %s %s %s",
+			cmd == IPSET_CMD_ADD ? "add" : "del",
+			bp->ipset_name,
+			pdst == NULL ? psrc : pdst);
+	else
+		return -1;
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	system(buf);
+	return 0;
+}
+
 /* Public functions */
 /*
  * Install specified rule for a specific interface. The preference is what
@@ -155,6 +240,56 @@ void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
 
 	ret = netlink_rule_update(RTM_DELRULE, rule);
 	kernel_pbr_rule_add_del_status(rule,
+				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
+					      : SOUTHBOUND_DELETE_FAILURE);
+}
+
+void kernel_create_pbr_ipset(struct zebra_ns *zns,
+			     struct zebra_pbr_ipset *ipset)
+{
+	int ret = 0;
+
+	ret = netlink_ipset_update(IPSET_CMD_CREATE, ipset, zns);
+	kernel_pbr_ipset_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+}
+
+/*
+ * Uninstall specified ipset for a specific interface.
+ */
+void kernel_destroy_pbr_ipset(struct zebra_ns *zns,
+			      struct zebra_pbr_ipset *ipset)
+{
+	int ret = 0;
+
+	ret = netlink_ipset_update(IPSET_CMD_DESTROY, ipset, zns);
+	kernel_pbr_ipset_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
+					      : SOUTHBOUND_DELETE_FAILURE);
+}
+
+void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
+				struct zebra_pbr_ipset_entry *ipset)
+{
+	int ret = 0;
+
+	ret = netlink_ipset_entry_update(IPSET_CMD_ADD, ipset, zns);
+	kernel_pbr_ipset_entry_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+}
+
+/*
+ * Uninstall specified ipset for a specific interface.
+ */
+void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
+				struct zebra_pbr_ipset_entry *ipset)
+{
+	int ret = 0;
+
+	ret = netlink_ipset_entry_update(IPSET_CMD_DESTROY, ipset, zns);
+	kernel_pbr_ipset_entry_add_del_status(ipset,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
 }

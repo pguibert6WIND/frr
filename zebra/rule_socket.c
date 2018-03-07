@@ -47,5 +47,18 @@ void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
 void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
 {
 }
-
+void kernel_destroy_pbr_ipset(ns_id_t ns_id, struct zebra_pbr_ipset *ipset)
+{
+}
+void kernel_create_pbr_ipset(ns_id_t ns_id, struct zebra_pbr_ipset *ipset)
+{
+}
+void kernel_add_pbr_ipset_entry(ns_id_t ns_id,
+				struct zebra_pbr_ipset_entry *ipset)
+{
+}
+void kernel_del_pbr_ipset_entry(ns_id_t ns_id,
+				struct zebra_pbr_ipset_entry *ipset)
+{
+}
 #endif
