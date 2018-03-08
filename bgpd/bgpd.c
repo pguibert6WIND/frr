@@ -81,7 +81,7 @@
 #include "bgpd/bgp_io.h"
 #include "bgpd/bgp_ecommunity.h"
 #include "bgpd/bgp_flowspec.h"
-
+#include "bgpd/bgp_pbr.h"
 
 DEFINE_MTYPE_STATIC(BGPD, PEER_TX_SHUTDOWN_MSG, "Peer shutdown message (TX)");
 DEFINE_QOBJ_TYPE(bgp_master)
@@ -2996,6 +2996,7 @@ static struct bgp *bgp_create(as_t *as, const char *name,
 
 	update_bgp_group_init(bgp);
 	bgp_evpn_init(bgp);
+	bgp_pbr_init(bgp);
 	return bgp;
 }
 

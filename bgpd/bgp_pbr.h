@@ -31,10 +31,32 @@ struct bgp_pbr_match {
 	 */
 	uint32_t type;
 
+#define MATCH_IP_SRC_SET    1 << 0
+#define MATCH_IP_DST_SET    1 << 1
+	uint32_t flags;
+
+	vrf_id_t vrf_id;
+
+	/* unique identifier for ipset create transaction
+	 *
+	 */
 	uint32_t unique;
+
+	/* unique identifier for iptable add transaction
+	 *
+	 */
+	uint32_t unique2;
 
 	bool installed;
 	bool install_in_progress;
+
+	bool installed2;
+	bool install2_in_progress;
+
+	struct hash *entry_hash;
+
+	struct bgp_pbr_action *action;
+
 };
 
 struct bgp_pbr_match_entry {
@@ -67,6 +89,11 @@ struct bgp_pbr_action {
 	uint32_t table_id;
 
 	/*
+	 * The rate
+	 */
+	float rate;
+
+	/*
 	 * nexthop information, or drop information
 	 * contains src vrf_id and nh contains dest vrf_id
 	 */
@@ -76,7 +103,6 @@ struct bgp_pbr_action {
 	bool installed;
 	bool install_in_progress;
 
-	struct bgp_pbr_match *match;
 };
 
 extern struct bgp_pbr_action *bgp_pbr_action_rule_lookup(uint32_t unique);
@@ -86,4 +112,18 @@ extern struct bgp_pbr_match *bgp_pbr_match_ipset_lookup(vrf_id_t, uint32_t uniqu
 extern struct bgp_pbr_match_entry *bgp_pbr_match_ipset_entry_lookup(
 					    vrf_id_t vrf_id, char *name,
 					    uint32_t unique);
+
+struct bgp;
+extern void bgp_pbr_init(struct bgp *bgp);
+
+extern uint32_t bgp_pbr_action_hash_key(void *arg);
+extern int bgp_pbr_action_hash_equal(const void *arg1,
+				     const void *arg2);
+extern uint32_t bgp_pbr_match_entry_hash_key(void *arg);
+extern int bgp_pbr_match_entry_hash_equal(const void *arg1,
+					  const void *arg2);
+extern uint32_t bgp_pbr_match_hash_key(void *arg);
+extern int bgp_pbr_match_hash_equal(const void *arg1,
+				    const void *arg2);
+
 #endif /* __BGP_PBR_H__ */
