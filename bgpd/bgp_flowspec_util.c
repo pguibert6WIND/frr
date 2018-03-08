@@ -554,10 +554,11 @@ int bgp_flowspec_match_rules_fill(u_char *nlri_content, int len,
 			offset += ret;
 			break;
 		case FLOWSPEC_TCP_FLAGS:
-			ret = bgp_flowspec_tcpflags_decode(BGP_FLOWSPEC_CONVERT_TO_NON_OPAQUE,
-							   nlri_content+offset,
-							   len - offset,
-							   &bpem->tcpflags, &error);
+			ret = bgp_flowspec_tcpflags_decode(
+						BGP_FLOWSPEC_CONVERT_TO_NON_OPAQUE,
+						nlri_content+offset,
+						len - offset,
+						&bpem->tcpflags, &error);
 			if (error < 0)
 				zlog_err("%s: flowspec_tcpflags_decode error %d",
 					 __func__, error);
@@ -567,10 +568,11 @@ int bgp_flowspec_match_rules_fill(u_char *nlri_content, int len,
 			offset += ret;
 			break;
 		case FLOWSPEC_FRAGMENT:
-			ret = bgp_flowspec_fragment_type_decode(BGP_FLOWSPEC_CONVERT_TO_NON_OPAQUE,
-								nlri_content+offset,
-								len - offset, &bpem->fragment,
-								&error);
+			ret = bgp_flowspec_fragment_type_decode(
+							BGP_FLOWSPEC_CONVERT_TO_NON_OPAQUE,
+							nlri_content+offset,
+							len - offset, &bpem->fragment,
+							&error);
 			if (error < 0)
 				zlog_err("%s: flowspec_fragment_type_decode error %d",
 					 __func__, error);
