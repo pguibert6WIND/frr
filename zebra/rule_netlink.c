@@ -78,7 +78,8 @@ static int netlink_rule_update(int cmd, struct zapi_pbr_rule *rule)
 	req.frh.action = FR_ACT_TO_TBL;
 
 	/* rule's pref # */
-	addattr32(&req.n, sizeof(req), FRA_PRIORITY, rule->priority);
+	if (rule->priority)
+		addattr32(&req.n, sizeof(req), FRA_PRIORITY, rule->priority);
 
 	/* interface on which applied */
 	if (rule->ifp)
@@ -97,7 +98,11 @@ static int netlink_rule_update(int cmd, struct zapi_pbr_rule *rule)
 		addattr_l(&req.n, sizeof(req), FRA_DST,
 			  &rule->filter.dst_ip.u.prefix, bytelen);
 	}
-
+	/* fwmark, if specified */
+	if (IS_RULE_FILTERING_ON_FWMARK(rule)) {
+		addattr32(&req.n, sizeof(req), FRA_FWMARK,
+			  rule->filter.fwmark);
+	}
 	/* Route table to use to forward, if filter criteria matches. */
 	if (rule->action.table < 256)
 		req.frh.table = rule->action.table;
@@ -109,22 +114,33 @@ static int netlink_rule_update(int cmd, struct zapi_pbr_rule *rule)
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug(
-			"Tx %s family %s IF %s(%u) Pref %u Src %s Dst %s Table %u",
+			"Tx %s family %s IF %s(%u) Pref %u Src %s Dst %s"
+			" Fwmark %u Table %u",
 			nl_msg_type_to_str(cmd), nl_family_to_str(family),
 			rule->ifp ? rule->ifp->name : "Unknown",
 			rule->ifp ? rule->ifp->ifindex : 0, rule->priority,
 			prefix2str(&rule->filter.src_ip, buf1, sizeof(buf1)),
 			prefix2str(&rule->filter.dst_ip, buf2, sizeof(buf2)),
-			rule->action.table);
-
+			rule->filter.fwmark, rule->action.table);
 	/* Ship off the message.
 	 * Note: Currently, netlink_talk() is a blocking call which returns
 	 * back the status.
 	 */
 	memset(&snl, 0, sizeof(snl));
 	snl.nl_family = AF_NETLINK;
-	return netlink_talk(netlink_talk_filter, &req.n,
-			    &zns->netlink_cmd, zns, 0);
+	if (rule->action.table && IS_RULE_FILTERING_ON_FWMARK(rule)) {
+		char buf[255];
+		snprintf(buf, 255, "ip rule %s fwmark %d table %d",
+			 cmd == RTM_NEWRULE ? "add" : "del",
+			 rule->filter.fwmark, rule->action.table);
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug("PBR: %s", buf);
+		system(buf);
+		return 0;
+	} else {
+		return netlink_talk(netlink_talk_filter, &req.n,
+				    &zns->netlink_cmd, zns, 0);
+	}
 }
 
 

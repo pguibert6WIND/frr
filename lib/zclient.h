@@ -428,6 +428,8 @@ struct zapi_pbr_filter {
 	(r->filter.filter_bm & PBR_FILTER_SRC_PORT)
 #define IS_RULE_FILTERING_ON_DST_PORT(r) \
 	(r->filter.filter_bm & PBR_FILTER_DST_PORT)
+#define IS_RULE_FILTERING_ON_FWMARK(r) \
+	(r->filter.filter_bm & PBR_FILTER_FWMARK)
 
 /*
  * A PBR action
