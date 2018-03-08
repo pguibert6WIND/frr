@@ -170,4 +170,8 @@ extern int ecommunity_add_val(struct ecommunity *, struct ecommunity_val *);
 extern int ecommunity_strip(struct ecommunity *ecom, uint8_t type,
 			    uint8_t subtype);
 extern struct ecommunity *ecommunity_new(void);
+struct bgp_pbr_entry_action;
+extern int ecommunity_fill_pbr_action(struct ecommunity_val *ecom_eval,
+			       struct bgp_pbr_entry_action *api);
+
 #endif /* _QUAGGA_BGP_ECOMMUNITY_H */
