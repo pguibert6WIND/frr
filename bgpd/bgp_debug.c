@@ -58,6 +58,7 @@ unsigned long conf_bgp_debug_nht;
 unsigned long conf_bgp_debug_update_groups;
 unsigned long conf_bgp_debug_vpn;
 unsigned long conf_bgp_debug_flowspec;
+unsigned long conf_bgp_debug_pbr;
 
 unsigned long term_bgp_debug_as4;
 unsigned long term_bgp_debug_neighbor_events;
@@ -73,6 +74,7 @@ unsigned long term_bgp_debug_nht;
 unsigned long term_bgp_debug_update_groups;
 unsigned long term_bgp_debug_vpn;
 unsigned long term_bgp_debug_flowspec;
+unsigned long term_bgp_debug_pbr;
 
 struct list *bgp_debug_neighbor_events_peers = NULL;
 struct list *bgp_debug_keepalive_peers = NULL;
@@ -1651,7 +1653,40 @@ DEFUN (no_debug_bgp_vpn,
 
 	if (vty->node != CONFIG_NODE)
 		vty_out(vty, "disabled debug bgp vpn %s\n", argv[idx]->text);
+	return CMD_SUCCESS;
+}
 
+/* debug bgp pbr */
+DEFUN (debug_bgp_pbr,
+       debug_bgp_pbr_cmd,
+       "debug bgp pbr",
+       DEBUG_STR
+       BGP_STR
+       "BGP policy based routing\n")
+{
+	if (vty->node == CONFIG_NODE)
+		DEBUG_ON(pbr, PBR);
+	else {
+		TERM_DEBUG_ON(pbr, PBR);
+		vty_out(vty, "BGP policy based routing is on\n");
+	}
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_debug_bgp_pbr,
+       no_debug_bgp_pbr_cmd,
+       "no debug bgp pbr",
+       NO_STR
+       DEBUG_STR
+       BGP_STR
+       "BGP policy based routing\n")
+{
+	if (vty->node == CONFIG_NODE)
+		DEBUG_OFF(pbr, PBR);
+	else {
+		TERM_DEBUG_OFF(pbr, PBR);
+		vty_out(vty, "BGP policy based routing is off\n");
+	}
 	return CMD_SUCCESS;
 }
 
@@ -1692,6 +1727,7 @@ DEFUN (no_debug_bgp,
 	TERM_DEBUG_OFF(vpn, VPN_LEAK_RMAP_EVENT);
 	TERM_DEBUG_OFF(vpn, VPN_LEAK_LABEL);
 	TERM_DEBUG_OFF(flowspec, FLOWSPEC);
+	TERM_DEBUG_OFF(pbr, PBR);
 	vty_out(vty, "All possible debugging has been turned off\n");
 
 	return CMD_SUCCESS;
@@ -1765,6 +1801,9 @@ DEFUN_NOSH (show_debugging_bgp,
 	if (BGP_DEBUG(flowspec, FLOWSPEC))
 		vty_out(vty, "  BGP flowspec debugging is on\n");
 
+	if (BGP_DEBUG(pbr, PBR))
+		vty_out(vty, "  BGP policy based routing debugging is on\n");
+
 	vty_out(vty, "\n");
 	return CMD_SUCCESS;
 }
@@ -1818,6 +1857,9 @@ int bgp_debug_count(void)
 	if (BGP_DEBUG(vpn, VPN_LEAK_LABEL))
 		ret++;
 	if (BGP_DEBUG(flowspec, FLOWSPEC))
+		ret++;
+
+	if (BGP_DEBUG(pbr, PBR))
 		ret++;
 
 	return ret;
@@ -1917,6 +1959,10 @@ static int bgp_config_write_debug(struct vty *vty)
 		write++;
 	}
 
+	if (CONF_BGP_DEBUG(pbr, PBR)) {
+		vty_out(vty, "debug bgp pbr\n");
+		write++;
+	}
 	return write;
 }
 
@@ -2015,6 +2061,13 @@ void bgp_debug_init(void)
 	install_element(CONFIG_NODE, &debug_bgp_vpn_cmd);
 	install_element(ENABLE_NODE, &no_debug_bgp_vpn_cmd);
 	install_element(CONFIG_NODE, &no_debug_bgp_vpn_cmd);
+
+	/* debug bgp pbr */
+	install_element(ENABLE_NODE, &debug_bgp_pbr_cmd);
+	install_element(CONFIG_NODE, &debug_bgp_pbr_cmd);
+	install_element(ENABLE_NODE, &no_debug_bgp_pbr_cmd);
+	install_element(CONFIG_NODE, &no_debug_bgp_pbr_cmd);
+
 }
 
 /* Return true if this prefix is on the per_prefix_list of prefixes to debug
