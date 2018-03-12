@@ -1990,7 +1990,12 @@ static int iptable_notify_owner(int command, struct zclient *zclient,
 					&unique,
 					&note))
 		return -1;
-
+	bgpm = bgp_pbr_match_iptable_lookup(vrf_id, unique);
+	if (!bgpm) {
+		zlog_debug("%s: Failure to lookup BGP pb iptable based upon %u",
+			   __PRETTY_FUNCTION__, unique);
+		return 0;
+	}
 	switch (note) {
 	case ZAPI_RULE_FAIL_INSTALL:
 		zlog_debug("%s: Received RULE_FAIL_INSTALL",
