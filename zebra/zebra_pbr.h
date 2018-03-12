@@ -168,6 +168,13 @@ extern void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
 extern void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
 				struct zebra_pbr_ipset_entry *rule);
 
+/*
+ * Install specified iptable entries into kernel
+ */
+extern void kernel_add_pbr_iptable(struct zebra_ns *zns,
+				   struct zebra_pbr_iptable *iptable);
+extern void kernel_del_pbr_iptable(struct zebra_ns *zns,
+				   struct zebra_pbr_iptable *iptable);
 
 /*
  * Get to know existing PBR rules in the kernel - typically called at startup.
@@ -193,6 +200,12 @@ extern void kernel_pbr_ipset_entry_add_del_status(
 
 extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
 			      enum southbound_results res);
+
+/*
+ * Handle success or failure of iptables (un)install in the kernel.
+ */
+extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
+					      enum southbound_results res);
 
 /*
  * Handle rule delete notification from kernel.
