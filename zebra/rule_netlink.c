@@ -29,6 +29,7 @@
 #include "prefix.h"
 #include "vrf.h"
 #include "log.h"
+#include "zclient.h"
 
 #include <linux/fib_rules.h>
 #include <linux/libipset/linux_ip_set.h>
@@ -229,6 +230,42 @@ static int netlink_ipset_entry_update(int cmd,
 	return 0;
 }
 
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int netlink_iptable_update(int cmd,
+		      struct zebra_pbr_iptable *iptable,
+		      struct zebra_ns *zns)
+{
+	char buf[256];
+	char buf2[32];
+	char *ptr = buf;
+
+	if (iptable->type == IPSET_NET_NET) {
+		sprintf(buf2, "src,dst");
+	} else if (iptable->type == IPSET_NET) {
+		if (iptable->filter_bm & PBR_FILTER_DST_IP)
+			sprintf(buf2, "dst");
+		else
+			sprintf(buf2, "src");
+	}
+
+	ptr+=sprintf(ptr, "iptables -t mangle -%s FORWARD -m set",
+		     cmd ? "I":"D");
+	ptr+=sprintf(ptr, " --match-set %s %s",
+		     iptable->ipset_name, buf2);
+	if (iptable->action == ZEBRA_IPTABLES_DROP)
+		ptr+=sprintf(ptr, " -j DROP");
+	else
+		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
+			     iptable->fwmark);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	system(buf);
+	return 0;
+}
+
 /* Public functions */
 /*
  * Install specified rule for a specific interface. The preference is what
@@ -304,6 +341,29 @@ void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
 
 	ret = netlink_ipset_entry_update(IPSET_CMD_DESTROY, ipset, zns);
 	kernel_pbr_ipset_entry_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
+					      : SOUTHBOUND_DELETE_FAILURE);
+}
+
+
+void kernel_add_pbr_iptable(struct zebra_ns *zns,
+			    struct zebra_pbr_iptable *iptable)
+{
+	int ret = 0;
+
+	ret = netlink_iptable_update(1, iptable, zns);
+	kernel_pbr_iptable_add_del_status(iptable,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+}
+
+void kernel_del_pbr_iptable(struct zebra_ns *zns,
+			    struct zebra_pbr_iptable *iptable)
+{
+	int ret = 0;
+
+	ret = netlink_iptable_update(0, iptable, zns);
+	kernel_pbr_iptable_add_del_status(iptable,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
 }

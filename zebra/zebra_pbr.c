@@ -227,8 +227,14 @@ int zebra_pbr_ipset_entry_hash_equal(const void *arg1, const void *arg2)
 void zebra_pbr_iptable_free(void *arg)
 {
 	struct zebra_pbr_iptable *iptable;
+	struct zebra_ns *zns;
 
 	iptable = (struct zebra_pbr_iptable *)arg;
+	if (vrf_is_backend_netns())
+		zns = zebra_ns_lookup((ns_id_t)iptable->vrf_id);
+	else
+		zns =  zebra_ns_lookup(NS_DEFAULT);
+	kernel_del_pbr_iptable(zns, iptable);
 
 	XFREE(MTYPE_TMP, iptable);
 }
@@ -458,7 +464,7 @@ void zebra_pbr_add_iptable(struct zebra_ns *zns,
 {
 	(void)hash_get(zns->iptable_hash, iptable,
 		       pbr_iptable_alloc_intern);
-	/* TODO call netlink layer */
+	kernel_add_pbr_iptable(zns, iptable);
 }
 
 void zebra_pbr_del_iptable(struct zebra_ns *zns,
@@ -467,10 +473,7 @@ void zebra_pbr_del_iptable(struct zebra_ns *zns,
 	struct zebra_pbr_ipset_entry *lookup;
 
 	lookup = hash_lookup(zns->iptable_hash, iptable);
-	/* TODO:
-	 * - call netlink layer
-	 * - detach from iptable list
-	 */
+	kernel_del_pbr_iptable(zns, iptable);
 	if (lookup)
 		XFREE(MTYPE_TMP, lookup);
 	else
