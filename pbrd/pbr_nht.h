@@ -25,6 +25,8 @@
 #include <lib/zclient.h>
 #include <lib/nexthop_group.h>
 
+#include "pbr_map.h"
+
 struct pbr_nexthop_group_cache {
 	char name[100];
 
@@ -43,7 +45,7 @@ struct pbr_nexthop_group_cache {
 struct pbr_nexthop_cache {
 	struct pbr_nexthop_group_cache *parent;
 
-	struct nexthop nexthop;
+	struct nexthop *nexthop;
 
 	bool valid;
 };
@@ -78,12 +80,12 @@ extern void pbr_nhgroup_delete_cb(const char *name);
 extern bool pbr_nht_nexthop_valid(struct nexthop_group *nhg);
 extern bool pbr_nht_nexthop_group_valid(const char *name);
 
-extern void pbr_nht_add_group(const char *name);
+extern struct pbr_nexthop_group_cache *pbr_nht_add_group(const char *name);
 extern void pbr_nht_change_group(const char *name);
 extern void pbr_nht_delete_group(const char *name);
 
-extern void pbr_nht_add_individual_nexthop(const char *name, uint32_t seqno);
-extern void pbr_nht_delete_individual_nexthop(const char *name, uint32_t seqno);
+extern void pbr_nht_add_individual_nexthop(struct pbr_map_sequence *pbrms);
+extern void pbr_nht_delete_individual_nexthop(struct pbr_map_sequence *pbrms);
 /*
  * Given the tableid of the installed default
  * route, find the nexthop-group associated with
