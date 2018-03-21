@@ -391,6 +391,84 @@ enum zapi_route_notify_owner {
 	ZAPI_ROUTE_REMOVE_FAIL,
 };
 
+/*
+ * A PBR filter
+ *
+ * The filter or match criteria in a PBR rule.
+ * For simplicity, all supported filters are grouped into a structure rather
+ * than delineating further. A bitmask denotes which filters are actually
+ * specified.
+ */
+struct zapi_pbr_filter {
+	uint32_t filter_bm; /* not encoded by zapi
+			     */
+#define PBR_FILTER_SRC_IP     (1 << 0)
+#define PBR_FILTER_DST_IP     (1 << 1)
+#define PBR_FILTER_SRC_PORT   (1 << 2)
+#define PBR_FILTER_DST_PORT   (1 << 3)
+#define PBR_FILTER_FWMARK     (1 << 4)
+
+	/* Source and Destination IP address with masks. */
+	struct prefix src_ip;
+	struct prefix dst_ip;
+
+	/* Source and Destination higher-layer (TCP/UDP) port numbers. */
+	uint16_t src_port;
+	uint16_t dst_port;
+
+	/* Filter with fwmark */
+	uint32_t fwmark;
+};
+
+#define IS_RULE_FILTERING_ON_SRC_IP(r) \
+	(r->filter.filter_bm & PBR_FILTER_SRC_IP)
+#define IS_RULE_FILTERING_ON_DST_IP(r) \
+	(r->filter.filter_bm & PBR_FILTER_DST_IP)
+#define IS_RULE_FILTERING_ON_SRC_PORT(r) \
+	(r->filter.filter_bm & PBR_FILTER_SRC_PORT)
+#define IS_RULE_FILTERING_ON_DST_PORT(r) \
+	(r->filter.filter_bm & PBR_FILTER_DST_PORT)
+
+/*
+ * A PBR action
+ *
+ * The action corresponding to a PBR rule.
+ * While the user specifies the action in a particular way, the forwarding
+ * plane implementation (Linux only) requires that to be encoded into a
+ * route table and the rule then point to that route table; in some cases,
+ * the user criteria may directly point to a table too.
+ */
+struct zapi_pbr_action {
+	uint32_t table;
+};
+
+/*
+ * A PBR rule
+ *
+ * This is a combination of the filter criteria and corresponding action.
+ * Rules also have a user-defined sequence number which defines the relative
+ * order amongst rules.
+ */
+struct zapi_pbr_rule {
+	vrf_id_t vrf_id;
+	/*
+	 * Originating zclient sock fd, so we can know who to send
+	 * back to.
+	 */
+	int sock;
+
+	uint32_t seq;
+	uint32_t priority;
+	uint32_t unique;
+	struct zapi_pbr_filter filter;
+	struct zapi_pbr_action action;
+	uint32_t ifindex;
+
+	/* ifp is unused by zapi
+	 */
+	struct interface *ifp;
+};
+
 enum ipset_type {
 	IPSET_NET_NET = 1,
 	IPSET_NET_PORT_NET,
@@ -649,6 +727,8 @@ extern int zclient_send_rnh(struct zclient *zclient, int command,
 			    vrf_id_t vrf_id);
 extern int zapi_route_encode(uint8_t, struct stream *, struct zapi_route *);
 extern int zapi_route_decode(struct stream *, struct zapi_route *);
+extern int zapi_pbr_rule_encode(u_char cmd, struct stream *s,
+				struct zapi_pbr_rule *zrule);
 bool zapi_route_notify_decode(struct stream *s, struct prefix *p,
 			      uint32_t *tableid,
 			      enum zapi_route_notify_owner *note);
