@@ -452,10 +452,10 @@ static int zebra_pbr_client_close_cleanup(struct zserv *client)
 	if (!sock)
 		return 0;
 	hash_iterate(zns->rules_hash, zebra_pbr_cleanup_rules, &sock);
-	hash_iterate(zns->ipset_entry_hash,
-		     zebra_pbr_cleanup_ipset_entry, &sock);
 	hash_iterate(zns->iptable_hash,
 		     zebra_pbr_cleanup_iptable, &sock);
+	hash_iterate(zns->ipset_entry_hash,
+		     zebra_pbr_cleanup_ipset_entry, &sock);
 	hash_iterate(zns->ipset_hash,
 		     zebra_pbr_cleanup_ipset, &sock);
 	return 1;
