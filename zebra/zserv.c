@@ -718,7 +718,7 @@ int zsend_route_notify_owner(struct route_entry *re, struct prefix *p,
 	return zebra_server_send_message(client, s);
 }
 
-void zsend_rule_notify_owner(struct zebra_pbr_rule *rule,
+void zsend_rule_notify_owner(struct zapi_pbr_rule *rule,
 			     enum zapi_rule_notify_owner note)
 {
 	struct listnode *node;
@@ -2745,7 +2745,7 @@ stream_failure:
 
 static inline void zread_rule(ZAPI_HANDLER_ARGS)
 {
-	struct zebra_pbr_rule zpr;
+	struct zapi_pbr_rule zpr;
 	struct stream *s;
 	uint32_t total, i;
 	ifindex_t ifindex;
@@ -2757,6 +2757,7 @@ static inline void zread_rule(ZAPI_HANDLER_ARGS)
 		memset(&zpr, 0, sizeof(zpr));
 
 		zpr.sock = client->sock;
+		zpr.vrf_id = hdr->vrf_id;
 		STREAM_GETL(s, zpr.seq);
 		STREAM_GETL(s, zpr.priority);
 		STREAM_GETL(s, zpr.unique);

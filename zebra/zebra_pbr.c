@@ -36,9 +36,9 @@
 /* Public functions */
 void zebra_pbr_rules_free(void *arg)
 {
-	struct zebra_pbr_rule *rule;
+	struct zapi_pbr_rule *rule;
 
-	rule = (struct zebra_pbr_rule *)arg;
+	rule = (struct zapi_pbr_rule *)arg;
 
 	kernel_del_pbr_rule(rule);
 	XFREE(MTYPE_TMP, rule);
@@ -46,10 +46,10 @@ void zebra_pbr_rules_free(void *arg)
 
 uint32_t zebra_pbr_rules_hash_key(void *arg)
 {
-	struct zebra_pbr_rule *rule;
+	struct zapi_pbr_rule *rule;
 	uint32_t key;
 
-	rule = (struct zebra_pbr_rule *)arg;
+	rule = (struct zapi_pbr_rule *)arg;
 	key = jhash_3words(rule->seq, rule->priority, rule->action.table,
 			   prefix_hash_key(&rule->filter.src_ip));
 	if (rule->ifp)
@@ -68,10 +68,10 @@ uint32_t zebra_pbr_rules_hash_key(void *arg)
 
 int zebra_pbr_rules_hash_equal(const void *arg1, const void *arg2)
 {
-	const struct zebra_pbr_rule *r1, *r2;
+	const struct zapi_pbr_rule *r1, *r2;
 
-	r1 = (const struct zebra_pbr_rule *)arg1;
-	r2 = (const struct zebra_pbr_rule *)arg2;
+	r1 = (const struct zapi_pbr_rule *)arg1;
+	r2 = (const struct zapi_pbr_rule *)arg2;
 
 	if (r1->seq != r2->seq)
 		return 0;
@@ -107,14 +107,14 @@ int zebra_pbr_rules_hash_equal(const void *arg1, const void *arg2)
 }
 
 struct pbr_unique_lookup {
-	struct zebra_pbr_rule *rule;
+	struct zapi_pbr_rule *rule;
 	uint32_t unique;
 };
 
 static int pbr_rule_lookup_unique_walker(struct hash_backet *b, void *data)
 {
 	struct pbr_unique_lookup *pul = data;
-	struct zebra_pbr_rule *rule = b->data;
+	struct zapi_pbr_rule *rule = b->data;
 
 	if (pul->unique == rule->unique) {
 		pul->rule = rule;
@@ -124,7 +124,7 @@ static int pbr_rule_lookup_unique_walker(struct hash_backet *b, void *data)
 	return HASHWALK_CONTINUE;
 }
 
-static struct zebra_pbr_rule *pbr_rule_lookup_unique(struct zebra_ns *zns,
+static struct zapi_pbr_rule *pbr_rule_lookup_unique(struct zebra_ns *zns,
 						     uint32_t unique)
 {
 	struct pbr_unique_lookup pul;
@@ -258,10 +258,10 @@ int zebra_pbr_iptable_hash_equal(const void *arg1, const void *arg2)
 
 static void *pbr_rule_alloc_intern(void *arg)
 {
-	struct zebra_pbr_rule *zpr;
-	struct zebra_pbr_rule *new;
+	struct zapi_pbr_rule *zpr;
+	struct zapi_pbr_rule *new;
 
-	zpr = (struct zebra_pbr_rule *)arg;
+	zpr = (struct zapi_pbr_rule *)arg;
 
 	new = XCALLOC(MTYPE_TMP, sizeof(*new));
 
@@ -270,9 +270,9 @@ static void *pbr_rule_alloc_intern(void *arg)
 	return new;
 }
 
-void zebra_pbr_add_rule(struct zebra_ns *zns, struct zebra_pbr_rule *rule)
+void zebra_pbr_add_rule(struct zebra_ns *zns, struct zapi_pbr_rule *rule)
 {
-	struct zebra_pbr_rule *unique =
+	struct zapi_pbr_rule *unique =
 		pbr_rule_lookup_unique(zns, rule->unique);
 
 	(void)hash_get(zns->rules_hash, rule, pbr_rule_alloc_intern);
@@ -286,9 +286,9 @@ void zebra_pbr_add_rule(struct zebra_ns *zns, struct zebra_pbr_rule *rule)
 		zebra_pbr_del_rule(zns, unique);
 }
 
-void zebra_pbr_del_rule(struct zebra_ns *zns, struct zebra_pbr_rule *rule)
+void zebra_pbr_del_rule(struct zebra_ns *zns, struct zapi_pbr_rule *rule)
 {
-	struct zebra_pbr_rule *lookup;
+	struct zapi_pbr_rule *lookup;
 
 	lookup = hash_lookup(zns->rules_hash, rule);
 	kernel_del_pbr_rule(rule);
@@ -304,7 +304,7 @@ void zebra_pbr_del_rule(struct zebra_ns *zns, struct zebra_pbr_rule *rule)
 static void zebra_pbr_cleanup_rules(struct hash_backet *b, void *data)
 {
 	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
-	struct zebra_pbr_rule *rule = b->data;
+	struct zapi_pbr_rule *rule = b->data;
 	int *sock = data;
 
 	if (rule->sock == *sock) {
@@ -470,7 +470,7 @@ void zebra_pbr_del_iptable(struct zebra_ns *zns,
 /*
  * Handle success or failure of rule (un)install in the kernel.
  */
-void kernel_pbr_rule_add_del_status(struct zebra_pbr_rule *rule,
+void kernel_pbr_rule_add_del_status(struct zapi_pbr_rule *rule,
 				    enum southbound_results res)
 {
 	switch (res) {
@@ -553,7 +553,7 @@ void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
 /*
  * Handle rule delete notification from kernel.
  */
-int kernel_pbr_rule_del(struct zebra_pbr_rule *rule)
+int kernel_pbr_rule_del(struct zapi_pbr_rule *rule)
 {
 	return 0;
 }

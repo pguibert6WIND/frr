@@ -187,11 +187,10 @@ extern int zsend_pw_update(struct zserv *, struct zebra_pw *);
 extern int zsend_route_notify_owner(struct route_entry *re, struct prefix *p,
 				    enum zapi_route_notify_owner note);
 
-struct zebra_pbr_rule;
 struct zebra_pbr_ipset;
 struct zebra_pbr_ipset_entry;
 struct zebra_pbr_iptable;
-extern void zsend_rule_notify_owner(struct zebra_pbr_rule *rule,
+extern void zsend_rule_notify_owner(struct zapi_pbr_rule *rule,
 				    enum zapi_rule_notify_owner note);
 extern void zsend_ipset_notify_owner(
 			struct zebra_pbr_ipset *ipset,

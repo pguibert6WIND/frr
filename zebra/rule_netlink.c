@@ -51,7 +51,7 @@
  * Form netlink message and ship it. Currently, notify status after
  * waiting for netlink status.
  */
-static int netlink_rule_update(int cmd, struct zebra_pbr_rule *rule)
+static int netlink_rule_update(int cmd, struct zapi_pbr_rule *rule)
 {
 	int family;
 	int bytelen;
@@ -134,7 +134,7 @@ static int netlink_rule_update(int cmd, struct zebra_pbr_rule *rule)
  * goes in the rule to denote relative ordering; it may or may not be the
  * same as the rule's user-defined sequence number.
  */
-void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
+void kernel_add_pbr_rule(struct zapi_pbr_rule *rule)
 {
 	int ret = 0;
 
@@ -147,7 +147,7 @@ void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
 /*
  * Uninstall specified rule for a specific interface.
  */
-void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
+void kernel_del_pbr_rule(struct zapi_pbr_rule *rule)
 {
 	int ret = 0;
 
@@ -172,7 +172,7 @@ int netlink_rule_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	struct rtattr *tb[FRA_MAX + 1];
 	int len;
 	char *ifname;
-	struct zebra_pbr_rule rule;
+	struct zapi_pbr_rule rule;
 	char buf1[PREFIX_STRLEN];
 	char buf2[PREFIX_STRLEN];
 

@@ -41,10 +41,10 @@
 #include "zebra/rule_netlink.h"
 #include "zebra/zebra_pbr.h"
 
-void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
+void kernel_add_pbr_rule(struct zapi_pbr_rule *rule)
 {
 }
-void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
+void kernel_del_pbr_rule(struct zapi_pbr_rule *rule)
 {
 }
 
