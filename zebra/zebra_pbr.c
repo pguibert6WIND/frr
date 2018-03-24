@@ -106,14 +106,14 @@ int zebra_pbr_rules_hash_equal(const void *arg1, const void *arg2)
 	return 1;
 }
 
-struct pbr_unique_lookup {
+struct pbr_rule_unique_lookup {
 	struct zapi_pbr_rule *rule;
 	uint32_t unique;
 };
 
 static int pbr_rule_lookup_unique_walker(struct hash_backet *b, void *data)
 {
-	struct pbr_unique_lookup *pul = data;
+	struct pbr_rule_unique_lookup *pul = data;
 	struct zapi_pbr_rule *rule = b->data;
 
 	if (pul->unique == rule->unique) {
@@ -127,7 +127,7 @@ static int pbr_rule_lookup_unique_walker(struct hash_backet *b, void *data)
 static struct zapi_pbr_rule *pbr_rule_lookup_unique(struct zebra_ns *zns,
 						     uint32_t unique)
 {
-	struct pbr_unique_lookup pul;
+	struct pbr_rule_unique_lookup pul;
 
 	pul.unique = unique;
 	pul.rule = NULL;
