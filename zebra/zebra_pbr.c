@@ -389,7 +389,8 @@ struct zebra_pbr_ipset *zebra_pbr_lookup_ipset_pername(struct zebra_ns *zns,
 	if (!ipsetname)
 		return NULL;
 	memset(ptr, 0, sizeof(struct pbr_ipset_name_lookup));
-	snprintf((char *)ptr->ipset_name, ZEBRA_IPSET_NAME_SIZE, "%s", ipsetname);
+	snprintf((char *)ptr->ipset_name, ZEBRA_IPSET_NAME_SIZE, "%s",
+		ipsetname);
 	hash_walk(zns->ipset_hash, zebra_pbr_ipset_pername_walkcb, ptr);
 	return ptr->ipset;
 }
