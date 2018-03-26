@@ -479,11 +479,8 @@ static void pbr_encode_pbr_map_sequence(struct stream *s,
 	u_char family;
 
 	family = AF_INET;
-	if (pbrms->src)
-		family = pbrms->src->family;
-
-	if (pbrms->dst)
-		family = pbrms->dst->family;
+	if (pbrms->family)
+		family = pbrms->family;
 
 	stream_putl(s, pbrms->seqno);
 	stream_putl(s, pbrms->ruleno);

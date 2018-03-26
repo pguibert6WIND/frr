@@ -97,6 +97,8 @@ DEFPY(pbr_map_match_src, pbr_map_match_src_cmd,
 {
 	struct pbr_map_sequence *pbrms = VTY_GET_CONTEXT(pbr_map_sequence);
 
+	pbrms->family = prefix->family;
+
 	if (!no) {
 		if (prefix_same(pbrms->src, prefix))
 			return CMD_SUCCESS;
@@ -123,6 +125,8 @@ DEFPY(pbr_map_match_dst, pbr_map_match_dst_cmd,
 	"v6 Prefix\n")
 {
 	struct pbr_map_sequence *pbrms = VTY_GET_CONTEXT(pbr_map_sequence);
+
+	pbrms->family = prefix->family;
 
 	if (!no) {
 		if (prefix_same(pbrms->dst, prefix))

@@ -87,6 +87,11 @@ struct pbr_map_sequence {
 	struct prefix *dst;
 
 	/*
+	 * Family of the src/dst.  Needed when deleting since we clear them
+	 */
+	u_char family;
+
+	/*
 	 * The nexthop group we auto create
 	 * for when the user specifies a individual
 	 * nexthop
