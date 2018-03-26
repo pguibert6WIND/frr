@@ -65,7 +65,7 @@ struct ns_map_nsid {
 	ns_id_t ns_id;
 };
 
-static __inline int ns_map_compare(const struct ns_map_nsid *a,
+static inline int ns_map_compare(const struct ns_map_nsid *a,
 				   const struct ns_map_nsid *b)
 {
 	return (a->ns_id - b->ns_id);
