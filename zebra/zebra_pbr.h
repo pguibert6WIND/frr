@@ -44,6 +44,8 @@ struct zebra_pbr_ipset {
 	 */
 	int sock;
 
+	vrf_id_t vrf_id;
+
 	uint32_t unique;
 
 	/* type is encoded as uint32_t
@@ -86,6 +88,8 @@ struct zebra_pbr_iptable {
 	 * back to.
 	 */
 	int sock;
+
+	vrf_id_t vrf_id;
 
 	uint32_t unique;
 
