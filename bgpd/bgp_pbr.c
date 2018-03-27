@@ -32,6 +32,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_zebra.h"
+#include "bgpd/bgp_mplsvpn.h"
 
 static int bgp_pbr_match_counter_unique;
 static int bgp_pbr_match_entry_counter_unique;
@@ -229,9 +230,18 @@ static int bgp_pbr_build_and_validate_entry(struct prefix *p,
 			    (ecom_eval->val[0] == (char )ECOMMUNITY_ENCODE_TRANS_EXP ||
 			     ecom_eval->val[0] == (char )ECOMMUNITY_EXTENDED_COMMUNITY_PART_2 ||
 			     ecom_eval->val[0] == (char )ECOMMUNITY_EXTENDED_COMMUNITY_PART_3)) {
+				struct ecommunity *eckey = ecommunity_new();
+				struct ecommunity_val ecom_copy;
+
+				memcpy(&ecom_copy, ecom_eval, sizeof(struct ecommunity_val));
+				ecom_copy.val[0] &= ~ECOMMUNITY_ENCODE_TRANS_EXP;
+				ecom_copy.val[1] = ECOMMUNITY_ROUTE_TARGET;
+				ecommunity_add_val(eckey, &ecom_copy);
+
 				api_action->action = ACTION_REDIRECT;
-				/* TODO get associated VRF */
-				api_action->u.redirect_vrf = VRF_UNKNOWN;
+				api_action->u.redirect_vrf = get_first_vrf_for_redirect_with_rt(
+								eckey);
+				ecommunity_free(&eckey);
 			} else if ((ecom_eval->val[0] == (char )ECOMMUNITY_ENCODE_TRANS_EXP) &&
 				   (ecom_eval->val[0] == (char )ECOMMUNITY_REDIRECT_IP_NH)) {
 				api_action->action = ACTION_REDIRECT_IP;
