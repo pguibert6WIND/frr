@@ -2836,6 +2836,7 @@ static inline void zread_ipset(ZAPI_HANDLER_ARGS)
 		memset(&zpi, 0, sizeof(zpi));
 
 		zpi.sock = client->sock;
+		zpi.vrf_id = zvrf->vrf->vrf_id;
 		STREAM_GETL(s, zpi.unique);
 		STREAM_GETL(s, zpi.type);
 		STREAM_GET(&zpi.ipset_name, s,
@@ -2907,6 +2908,7 @@ static inline void zread_iptable(ZAPI_HANDLER_ARGS)
 	memset(&zpi, 0, sizeof(zpi));
 
 	zpi.sock = client->sock;
+	zpi.vrf_id = zvrf->vrf->vrf_id;
 	STREAM_GETL(s, zpi.unique);
 	STREAM_GETL(s, zpi.type);
 	STREAM_GETL(s, zpi.filter_bm);
