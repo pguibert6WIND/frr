@@ -328,25 +328,34 @@ int zebra_vrf_has_config(struct zebra_vrf *zvrf)
 }
 
 /* Lookup the routing table in a VRF based on both VRF-Id and table-id.
- * NOTE: Table-id is relevant only in the Default VRF.
+ * NOTE: Table-id is relevant on two modes:
+ * - case VRF backend is default : on default VRF only
+ * - case VRF backend is netns : on all VRFs
  */
 struct route_table *zebra_vrf_table_with_table_id(afi_t afi, safi_t safi,
 						  vrf_id_t vrf_id,
 						  uint32_t table_id)
 {
 	struct route_table *table = NULL;
-	struct zebra_vrf *zvrf;
 
 	if (afi >= AFI_MAX || safi >= SAFI_MAX)
 		return NULL;
 
-	zvrf = zebra_vrf_lookup_by_id(vrf_id);
-	if ((zvrf->table_id == RT_TABLE_MAIN ||
-	     zvrf->table_id == zebrad.rtm_table_default)
-	    && table_id)
-		table = zebra_vrf_other_route_table(afi, table_id,
-						    vrf_id);
-	else
+	if (vrf_id == VRF_DEFAULT) {
+		if (table_id == RT_TABLE_MAIN
+		    || table_id == zebrad.rtm_table_default)
+			table = zebra_vrf_table(afi, safi, vrf_id);
+		else
+			table = zebra_vrf_other_route_table(afi, table_id,
+							    vrf_id);
+	} else if (vrf_is_backend_netns()) {
+		if (table_id == RT_TABLE_MAIN
+		    || table_id == zebrad.rtm_table_default)
+			table = zebra_vrf_table(afi, safi, vrf_id);
+		else
+			table = zebra_vrf_other_route_table(afi, table_id,
+							    vrf_id);
+	} else
 		table = zebra_vrf_table(afi, safi, vrf_id);
 
 	return table;

@@ -163,8 +163,6 @@ void static_install_route(afi_t afi, safi_t safi, struct prefix *p,
 		else
 			rib_queue_add(rn);
 	} else {
-		struct zebra_vrf *zvrf;
-
 		/* This is new static route. */
 		re = XCALLOC(MTYPE_RE, sizeof(struct route_entry));
 
@@ -174,13 +172,20 @@ void static_install_route(afi_t afi, safi_t safi, struct prefix *p,
 		re->metric = 0;
 		re->mtu = 0;
 		re->vrf_id = si->vrf_id;
-		zvrf = zebra_vrf_lookup_by_id(si->vrf_id);
-		if ((zvrf->table_id == RT_TABLE_MAIN ||
-		    zvrf->table_id == zebrad.rtm_table_default)
-		    && si->table_id)
-			re->table = si->table_id;
-		else
-			re->table = zvrf->table_id;
+		if (!vrf_is_backend_netns()) {
+			re->table =
+				(si->vrf_id != VRF_DEFAULT)
+				? (zebra_vrf_lookup_by_id(si->vrf_id))->table_id
+				: zebrad.rtm_table_default;
+		} else {
+			struct zebra_vrf *zvrf = zebra_vrf_lookup_by_id(si->vrf_id);
+
+			if (zvrf->table_id != RT_TABLE_MAIN ||
+			    zvrf->table_id != zebrad.rtm_table_default)
+				re->table = zvrf->table_id;
+			else
+				re->table = zebrad.rtm_table_default;
+		}
 		re->nexthop_num = 0;
 		re->tag = si->tag;
 
