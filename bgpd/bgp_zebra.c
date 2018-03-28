@@ -2484,3 +2484,59 @@ void bgp_send_pbr_iptable(struct bgp_pbr_action *pba,
 	if (!zclient_send_message(zclient) && install)
 		pbm->install2_in_progress = true;
 }
+
+/* inject in table <table_id> a default route to:
+ * - if nexthop IP is present : to this nexthop
+ * - if vrf is different from local : to the matching VRF
+ */
+void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
+				afi_t afi, uint32_t table_id, bool announce)
+{
+	struct zapi_nexthop *api_nh;
+	struct zapi_route api;
+	struct prefix p;
+
+	if (!nh || nh->type != NEXTHOP_TYPE_IPV4
+	    || nh->vrf_id == VRF_UNKNOWN)
+		return;
+	memset(&p, 0, sizeof(struct prefix));
+	/* default route */
+	p.family = AF_INET;
+	memset(&api, 0, sizeof(api));
+	api.vrf_id = bgp->vrf_id;
+	api.type = ZEBRA_ROUTE_BGP;
+	api.safi = SAFI_UNICAST;
+	api.prefix = p;
+	api.tableid = table_id;
+	api.nexthop_num = 1;
+	SET_FLAG(api.message, ZAPI_MESSAGE_TABLEID);
+
+	/* redirect IP */
+	if (nh->gate.ipv4.s_addr) {
+		char buff[PREFIX_STRLEN];
+
+		SET_FLAG(api.message, ZAPI_MESSAGE_NEXTHOP);
+		api_nh = &api.nexthops[0];
+		api_nh->vrf_id = nh->vrf_id;
+		api_nh->gate.ipv4 = nh->gate.ipv4;
+		api_nh->type = NEXTHOP_TYPE_IPV4;
+
+		inet_ntop(AF_INET, &(nh->gate.ipv4), buff, INET_ADDRSTRLEN);
+		zlog_info("BGP: sending default route to %s table %d (redirect IP)",
+			  buff, table_id);
+		zclient_route_send(announce ? ZEBRA_ROUTE_ADD
+				   : ZEBRA_ROUTE_DELETE,
+				   zclient, &api);
+	} else if (nh->vrf_id != bgp->vrf_id) {
+		struct vrf *vrf;
+		vrf = vrf_lookup_by_id(nh->vrf_id);
+
+		if (!vrf)
+			return;
+		/* find default route for vrf
+		 * BGP may not have default route distributed in
+		 * its context. This use case is not handled for now
+		 */
+		return;
+	}
+}
