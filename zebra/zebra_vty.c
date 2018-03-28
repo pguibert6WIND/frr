@@ -92,6 +92,7 @@ struct static_hold_route {
 	char *tag_str;
 	char *distance_str;
 	char *label_str;
+	char *table_str;
 
 	/* processed & masked destination, used for config display */
 	struct prefix dest;
@@ -193,6 +194,11 @@ static int static_list_compare(void *arg1, void *arg2)
 	if (ret)
 		return ret;
 
+	ret = static_list_compare_helper(shr1->table_str,
+					 shr2->table_str);
+	if (ret)
+		return ret;
+
 	return static_list_compare_helper(shr1->label_str, shr2->label_str);
 }
 
@@ -203,7 +209,8 @@ static int zebra_static_route_holdem(
 	safi_t safi, const char *negate, struct prefix *dest,
 	const char *dest_str, const char *mask_str, const char *src_str,
 	const char *gate_str, const char *ifname, const char *flag_str,
-	const char *tag_str, const char *distance_str, const char *label_str)
+	const char *tag_str, const char *distance_str, const char *label_str,
+	const char *table_str)
 {
 	struct static_hold_route *shr, *lookup;
 	struct listnode *node;
@@ -233,6 +240,8 @@ static int zebra_static_route_holdem(
 		shr->distance_str = XSTRDUP(MTYPE_STATIC_ROUTE, distance_str);
 	if (label_str)
 		shr->label_str = XSTRDUP(MTYPE_STATIC_ROUTE, label_str);
+	if (table_str)
+		shr->table_str = XSTRDUP(MTYPE_STATIC_ROUTE, table_str);
 
 	for (ALL_LIST_ELEMENTS_RO(static_list, node, lookup)) {
 		if (static_list_compare(shr, lookup) == 0)
@@ -269,7 +278,7 @@ static int zebra_static_route_leak(
 	afi_t afi, safi_t safi, const char *negate, const char *dest_str,
 	const char *mask_str, const char *src_str, const char *gate_str,
 	const char *ifname, const char *flag_str, const char *tag_str,
-	const char *distance_str, const char *label_str)
+	const char *distance_str, const char *label_str, const char *table_str)
 {
 	int ret;
 	uint8_t distance;
@@ -282,6 +291,7 @@ static int zebra_static_route_leak(
 	route_tag_t tag = 0;
 	uint8_t type;
 	struct static_nh_label snh_label;
+	uint32_t table_id = 0;
 
 	ret = str2prefix(dest_str, &p);
 	if (ret <= 0) {
@@ -340,7 +350,7 @@ static int zebra_static_route_leak(
 		return zebra_static_route_holdem(
 			zvrf, nh_zvrf, afi, safi, negate, &p, dest_str,
 			mask_str, src_str, gate_str, ifname, flag_str, tag_str,
-			distance_str, label_str);
+			distance_str, label_str, table_str);
 	}
 
 	/* Administrative distance. */
@@ -407,6 +417,9 @@ static int zebra_static_route_leak(
 			return CMD_WARNING_CONFIG_FAILED;
 		}
 	}
+	/* TableID */
+	if (table_str)
+		table_id = atol(table_str);
 
 	/* Null0 static route.  */
 	if (ifname != NULL) {
@@ -483,12 +496,12 @@ static int zebra_static_route_leak(
 	if (!negate) {
 		static_add_route(afi, safi, type, &p, src_p, gatep, ifname,
 				 bh_type, tag, distance, zvrf, nh_zvrf,
-				 &snh_label);
+				 &snh_label, table_id);
 		/* Mark as having FRR configuration */
 		vrf_set_user_cfged(zvrf->vrf);
 	} else {
 		static_delete_route(afi, safi, type, &p, src_p, gatep, ifname,
-				    tag, distance, zvrf, &snh_label);
+				    tag, distance, zvrf, &snh_label, table_id);
 		/* If no other FRR config for this VRF, mark accordingly. */
 		if (!zebra_vrf_has_config(zvrf))
 			vrf_reset_user_cfged(zvrf->vrf);
@@ -531,7 +544,7 @@ static int zebra_static_route(struct vty *vty, afi_t afi, safi_t safi,
 			      const char *gate_str, const char *ifname,
 			      const char *flag_str, const char *tag_str,
 			      const char *distance_str, const char *vrf_name,
-			      const char *label_str)
+			      const char *label_str, const char *table_str)
 {
 	struct zebra_vrf *zvrf;
 
@@ -554,7 +567,8 @@ static int zebra_static_route(struct vty *vty, afi_t afi, safi_t safi,
 	}
 	return zebra_static_route_leak(
 		vty, zvrf, zvrf, afi, safi, negate, dest_str, mask_str, src_str,
-		gate_str, ifname, flag_str, tag_str, distance_str, label_str);
+		gate_str, ifname, flag_str, tag_str, distance_str, label_str,
+		table_str);
 }
 
 void static_config_install_delayed_routes(struct zebra_vrf *zvrf)
@@ -579,7 +593,7 @@ void static_config_install_delayed_routes(struct zebra_vrf *zvrf)
 			NULL, ozvrf, nh_zvrf, shr->afi, shr->safi, NULL,
 			shr->dest_str, shr->mask_str, shr->src_str,
 			shr->gate_str, shr->ifname, shr->flag_str, shr->tag_str,
-			shr->distance_str, shr->label_str);
+			shr->distance_str, shr->label_str, shr->table_str);
 
 		if (installed != CMD_SUCCESS)
 			zlog_debug(
@@ -603,7 +617,7 @@ DEFPY (ip_mroute_dist,
 {
 	return zebra_static_route(vty, AFI_IP, SAFI_MULTICAST, no, prefix_str,
 				  NULL, NULL, gate_str, ifname, NULL, NULL,
-				  distance_str, NULL, NULL);
+				  distance_str, NULL, NULL, NULL);
 }
 
 DEFUN (ip_multicast_mode,
@@ -710,6 +724,7 @@ DEFPY(ip_route_blackhole,
 	  |(1-255)$distance                                                   \
 	  |vrf NAME                                                           \
 	  |label WORD                                                         \
+	  |table (1-4294967295)                                               \
           }]",
       NO_STR IP_STR
       "Establish static routes\n"
@@ -722,11 +737,13 @@ DEFPY(ip_route_blackhole,
       "Tag value\n"
       "Distance value for this route\n"
       VRF_CMD_HELP_STR
-      MPLS_LABEL_HELPSTR)
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n")
 {
 	return zebra_static_route(vty, AFI_IP, SAFI_UNICAST, no, prefix,
 				  mask_str, NULL, NULL, NULL, flag, tag_str,
-				  distance_str, vrf, label);
+				  distance_str, vrf, label, table_str);
 }
 
 DEFPY(ip_route_blackhole_vrf,
@@ -761,8 +778,47 @@ DEFPY(ip_route_blackhole_vrf,
 	 */
 	assert(prefix);
 	return zebra_static_route_leak(vty, zvrf, zvrf, AFI_IP, SAFI_UNICAST,
-				       no, prefix, mask_str, NULL, NULL, NULL,
-				       flag, tag_str, distance_str, label);
+			       no, prefix, mask_str, NULL, NULL, NULL,
+			       flag, tag_str, distance_str, label, NULL);
+}
+
+DEFPY(ip_route_blackhole_namespace_vrf,
+      ip_route_blackhole_namespace_vrf_cmd,
+      "[no] ip route\
+	<A.B.C.D/M$prefix|A.B.C.D$prefix A.B.C.D$mask>                        \
+	<reject|blackhole>$flag                                               \
+	[{                                                                    \
+	  tag (1-4294967295)                                                  \
+	  |(1-255)$distance                                                   \
+	  |label WORD                                                         \
+	  |table (1-4294967295)                                               \
+          }]",
+      NO_STR IP_STR
+      "Establish static routes\n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "IP destination prefix\n"
+      "IP destination prefix mask\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this route\n"
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n")
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	struct zebra_vrf *zvrf = vrf->info;
+
+	/*
+	 * Coverity is complaining that prefix could
+	 * be dereferenced, but we know that prefix will
+	 * valid.  Add an assert to make it happy
+	 */
+	assert(prefix);
+	return zebra_static_route_leak(vty, zvrf, zvrf, AFI_IP, SAFI_UNICAST,
+			       no, prefix, mask_str, NULL, NULL, NULL,
+			       flag, tag_str, distance_str, label, table_str);
 }
 
 DEFPY(ip_route_address_interface,
@@ -776,6 +832,7 @@ DEFPY(ip_route_address_interface,
 	  |(1-255)$distance                            \
 	  |vrf NAME                                    \
 	  |label WORD                                  \
+	  |table (1-4294967295)                        \
 	  |nexthop-vrf NAME                            \
           }]",
       NO_STR IP_STR
@@ -791,6 +848,8 @@ DEFPY(ip_route_address_interface,
       "Distance value for this route\n"
       VRF_CMD_HELP_STR
       MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
       VRF_CMD_HELP_STR)
 {
 	struct zebra_vrf *zvrf;
@@ -820,7 +879,8 @@ DEFPY(ip_route_address_interface,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
-		NULL, gate_str, ifname, flag, tag_str, distance_str, label);
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ip_route_address_interface_vrf,
@@ -871,7 +931,63 @@ DEFPY(ip_route_address_interface_vrf,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
-		NULL, gate_str, ifname, flag, tag_str, distance_str, label);
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		NULL);
+}
+
+DEFPY(ip_route_address_interface_namespace_vrf,
+      ip_route_address_interface_namespace_vrf_cmd,
+      "[no] ip route\
+	<A.B.C.D/M$prefix|A.B.C.D$prefix A.B.C.D$mask> \
+	A.B.C.D$gate                                   \
+	INTERFACE$ifname                               \
+	[{                                             \
+	  tag (1-4294967295)                           \
+	  |(1-255)$distance                            \
+	  |label WORD                                  \
+	  |table (1-4294967295)                        \
+	  |nexthop-vrf NAME                            \
+          }]",
+      NO_STR IP_STR
+      "Establish static routes\n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "IP destination prefix\n"
+      "IP destination prefix mask\n"
+      "IP gateway address\n"
+      "IP gateway interface name. Specify 'Null0' (case-insensitive) for a \
+      null route.\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this route\n"
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
+      VRF_CMD_HELP_STR)
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	const char *flag = NULL;
+	struct zebra_vrf *zvrf = vrf->info;
+	struct zebra_vrf *nh_zvrf;
+
+	if (ifname && !strncasecmp(ifname, "Null0", 5)) {
+		flag = "Null0";
+		ifname = NULL;
+	}
+
+	if (nexthop_vrf)
+		nh_zvrf = zebra_vty_get_unknown_vrf(vty, nexthop_vrf);
+	else
+		nh_zvrf = zvrf;
+
+	if (!nh_zvrf) {
+		vty_out(vty, "%% nexthop vrf %s is not defined\n", nexthop_vrf);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	return zebra_static_route_leak(
+		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ip_route,
@@ -884,6 +1000,7 @@ DEFPY(ip_route,
 	  |(1-255)$distance                            \
 	  |vrf NAME                                    \
 	  |label WORD                                  \
+	  |table (1-4294967295)                        \
 	  |nexthop-vrf NAME                            \
           }]",
       NO_STR IP_STR
@@ -898,6 +1015,8 @@ DEFPY(ip_route,
       "Distance value for this route\n"
       VRF_CMD_HELP_STR
       MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
       VRF_CMD_HELP_STR)
 {
 	struct zebra_vrf *zvrf;
@@ -928,11 +1047,12 @@ DEFPY(ip_route,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
-		NULL, gate_str, ifname, flag, tag_str, distance_str, label);
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		table_str);
 }
 
-DEFPY(ip_route_vrf,
-      ip_route_vrf_cmd,
+DEFPY(ip_route_namespace_vrf,
+      ip_route_namespace_vrf_cmd,
       "[no] ip route\
 	<A.B.C.D/M$prefix|A.B.C.D$prefix A.B.C.D$mask> \
 	<A.B.C.D$gate|INTERFACE$ifname>                \
@@ -977,7 +1097,61 @@ DEFPY(ip_route_vrf,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
-		NULL, gate_str, ifname, flag, tag_str, distance_str, label);
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		NULL);
+}
+
+DEFPY(ip_route_vrf,
+      ip_route_vrf_cmd,
+      "[no] ip route\
+	<A.B.C.D/M$prefix|A.B.C.D$prefix A.B.C.D$mask> \
+	<A.B.C.D$gate|INTERFACE$ifname>                \
+	[{                                             \
+	  tag (1-4294967295)                           \
+	  |(1-255)$distance                            \
+	  |label WORD                                  \
+	  |table (1-4294967295)                        \
+	  |nexthop-vrf NAME                            \
+          }]",
+      NO_STR IP_STR
+      "Establish static routes\n"
+      "IP destination prefix (e.g. 10.0.0.0/8)\n"
+      "IP destination prefix\n"
+      "IP destination prefix mask\n"
+      "IP gateway address\n"
+      "IP gateway interface name\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this route\n"
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
+      VRF_CMD_HELP_STR)
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	struct zebra_vrf *zvrf = vrf->info;
+	struct zebra_vrf *nh_zvrf;
+
+	const char *flag = NULL;
+	if (ifname && !strncasecmp(ifname, "Null0", 5)) {
+		flag = "Null0";
+		ifname = NULL;
+	}
+
+	if (nexthop_vrf)
+		nh_zvrf = zebra_vty_get_unknown_vrf(vty, nexthop_vrf);
+	else
+		nh_zvrf = zvrf;
+
+	if (!nh_zvrf) {
+		vty_out(vty, "%% nexthop vrf %s is not defined\n", nexthop_vrf);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	return zebra_static_route_leak(
+		vty, zvrf, nh_zvrf, AFI_IP, SAFI_UNICAST, no, prefix, mask_str,
+		NULL, gate_str, ifname, flag, tag_str, distance_str, label,
+		table_str);
 }
 
 /* New RIB.  Detailed information for IPv4 route. */
@@ -2248,6 +2422,8 @@ int static_config(struct vty *vty, struct zebra_vrf *zvrf, afi_t afi,
 			vty_out(vty, "%s ", shr->distance_str);
 		if (shr->label_str)
 			vty_out(vty, "label %s ", shr->label_str);
+		if (shr->table_str)
+			vty_out(vty, "table %s ", shr->table_str);
 		if (strcmp(shr->vrf_name, shr->nhvrf_name) != 0)
 			vty_out(vty, "nexthop-vrf %s", shr->nhvrf_name);
 		vty_out(vty, "\n");
@@ -2330,6 +2506,7 @@ DEFPY(ipv6_route_blackhole,
             |(1-255)$distance                              \
             |vrf NAME                                      \
             |label WORD                                    \
+	    |table (1-4294967295)                          \
           }]",
       NO_STR
       IPV6_STR
@@ -2344,11 +2521,13 @@ DEFPY(ipv6_route_blackhole,
       "Tag value\n"
       "Distance value for this prefix\n"
       VRF_CMD_HELP_STR
-      MPLS_LABEL_HELPSTR)
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n")
 {
 	return zebra_static_route(vty, AFI_IP6, SAFI_UNICAST, no, prefix_str,
 				  NULL, from_str, NULL, NULL, flag, tag_str,
-				  distance_str, vrf, label);
+				  distance_str, vrf, label, table_str);
 }
 
 DEFPY(ipv6_route_blackhole_vrf,
@@ -2385,7 +2564,49 @@ DEFPY(ipv6_route_blackhole_vrf,
 	assert(prefix);
 	return zebra_static_route_leak(
 		vty, zvrf, zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
-		from_str, NULL, NULL, flag, tag_str, distance_str, label);
+		from_str, NULL, NULL, flag, tag_str, distance_str, label,
+		NULL);
+}
+
+DEFPY(ipv6_route_blackhole_namespace_vrf,
+      ipv6_route_blackhole_namespace_vrf_cmd,
+      "[no] ipv6 route X:X::X:X/M$prefix [from X:X::X:X/M] \
+          <Null0|reject|blackhole>$flag                    \
+          [{                                               \
+            tag (1-4294967295)                             \
+            |(1-255)$distance                              \
+            |label WORD                                    \
+            |table (1-4294967295)                          \
+          }]",
+      NO_STR
+      IPV6_STR
+      "Establish static routes\n"
+      "IPv6 destination prefix (e.g. 3ffe:506::/32)\n"
+      "IPv6 source-dest route\n"
+      "IPv6 source prefix\n"
+      "Null interface\n"
+      "Emit an ICMP unreachable when matched\n"
+      "Silently discard pkts when matched\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this prefix\n"
+      MPLS_LABEL_HELPSTR
+	"Table to configure\n"
+	"The table number to configure\n")
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	struct zebra_vrf *zvrf = vrf->info;
+
+	/*
+	 * Coverity is complaining that prefix could
+	 * be dereferenced, but we know that prefix will
+	 * valid.  Add an assert to make it happy
+	 */
+	assert(prefix);
+	return zebra_static_route_leak(
+		vty, zvrf, zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
+		from_str, NULL, NULL, flag, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ipv6_route_address_interface,
@@ -2398,6 +2619,7 @@ DEFPY(ipv6_route_address_interface,
             |(1-255)$distance                              \
             |vrf NAME                                      \
             |label WORD                                    \
+	    |table (1-4294967295)                          \
             |nexthop-vrf NAME                              \
           }]",
       NO_STR
@@ -2413,6 +2635,8 @@ DEFPY(ipv6_route_address_interface,
       "Distance value for this prefix\n"
       VRF_CMD_HELP_STR
       MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
       VRF_CMD_HELP_STR)
 {
 	struct zebra_vrf *zvrf;
@@ -2436,7 +2660,8 @@ DEFPY(ipv6_route_address_interface,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
-		from_str, gate_str, ifname, NULL, tag_str, distance_str, label);
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ipv6_route_address_interface_vrf,
@@ -2480,7 +2705,56 @@ DEFPY(ipv6_route_address_interface_vrf,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
-		from_str, gate_str, ifname, NULL, tag_str, distance_str, label);
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		NULL);
+}
+
+DEFPY(ipv6_route_address_interface_namespace_vrf,
+      ipv6_route_address_interface_namespace_vrf_cmd,
+      "[no] ipv6 route X:X::X:X/M$prefix [from X:X::X:X/M] \
+          X:X::X:X$gate                                    \
+          INTERFACE$ifname                                 \
+          [{                                               \
+            tag (1-4294967295)                             \
+            |(1-255)$distance                              \
+            |label WORD                                    \
+	    |table (1-4294967295)                          \
+            |nexthop-vrf NAME                              \
+          }]",
+      NO_STR
+      IPV6_STR
+      "Establish static routes\n"
+      "IPv6 destination prefix (e.g. 3ffe:506::/32)\n"
+      "IPv6 source-dest route\n"
+      "IPv6 source prefix\n"
+      "IPv6 gateway address\n"
+      "IPv6 gateway interface name\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this prefix\n"
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
+      VRF_CMD_HELP_STR)
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	struct zebra_vrf *zvrf = vrf->info;
+	struct zebra_vrf *nh_zvrf;
+
+	if (nexthop_vrf)
+		nh_zvrf = zebra_vty_get_unknown_vrf(vty, nexthop_vrf);
+	else
+		nh_zvrf = zvrf;
+
+	if (!nh_zvrf) {
+		vty_out(vty, "%% nexthop vrf %s is not defined\n", nexthop_vrf);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	return zebra_static_route_leak(
+		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ipv6_route,
@@ -2492,6 +2766,7 @@ DEFPY(ipv6_route,
             |(1-255)$distance                              \
             |vrf NAME                                      \
             |label WORD                                    \
+	    |table (1-4294967295)                          \
             |nexthop-vrf NAME                              \
           }]",
       NO_STR
@@ -2507,6 +2782,8 @@ DEFPY(ipv6_route,
       "Distance value for this prefix\n"
       VRF_CMD_HELP_STR
       MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
       VRF_CMD_HELP_STR)
 {
 	struct zebra_vrf *zvrf;
@@ -2530,7 +2807,8 @@ DEFPY(ipv6_route,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
-		from_str, gate_str, ifname, NULL, tag_str, distance_str, label);
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		table_str);
 }
 
 DEFPY(ipv6_route_vrf,
@@ -2573,7 +2851,55 @@ DEFPY(ipv6_route_vrf,
 
 	return zebra_static_route_leak(
 		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
-		from_str, gate_str, ifname, NULL, tag_str, distance_str, label);
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		NULL);
+}
+
+DEFPY(ipv6_route_namespace_vrf,
+      ipv6_route_namespace_vrf_cmd,
+      "[no] ipv6 route X:X::X:X/M$prefix [from X:X::X:X/M] \
+          <X:X::X:X$gate|INTERFACE$ifname>                 \
+          [{                                               \
+            tag (1-4294967295)                             \
+            |(1-255)$distance                              \
+            |label WORD                                    \
+	    |table (1-4294967295)                          \
+            |nexthop-vrf NAME                              \
+          }]",
+      NO_STR
+      IPV6_STR
+      "Establish static routes\n"
+      "IPv6 destination prefix (e.g. 3ffe:506::/32)\n"
+      "IPv6 source-dest route\n"
+      "IPv6 source prefix\n"
+      "IPv6 gateway address\n"
+      "IPv6 gateway interface name\n"
+      "Set tag for this route\n"
+      "Tag value\n"
+      "Distance value for this prefix\n"
+      MPLS_LABEL_HELPSTR
+      "Table to configure\n"
+      "The table number to configure\n"
+      VRF_CMD_HELP_STR)
+{
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+	struct zebra_vrf *zvrf = vrf->info;
+	struct zebra_vrf *nh_zvrf;
+
+	if (nexthop_vrf)
+		nh_zvrf = zebra_vty_get_unknown_vrf(vty, nexthop_vrf);
+	else
+		nh_zvrf = zvrf;
+
+	if (!nh_zvrf) {
+		vty_out(vty, "%% nexthop vrf %s is not defined\n", nexthop_vrf);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	return zebra_static_route_leak(
+		vty, zvrf, nh_zvrf, AFI_IP6, SAFI_UNICAST, no, prefix_str, NULL,
+		from_str, gate_str, ifname, NULL, tag_str, distance_str, label,
+		table_str);
 }
 
 /*
@@ -3720,11 +4046,20 @@ void zebra_vty_init(void)
 	install_element(CONFIG_NODE, &ip_multicast_mode_cmd);
 	install_element(CONFIG_NODE, &no_ip_multicast_mode_cmd);
 	install_element(CONFIG_NODE, &ip_route_blackhole_cmd);
-	install_element(VRF_NODE, &ip_route_blackhole_vrf_cmd);
+	if (vrf_is_backend_netns()) {
+		install_element(VRF_NODE,
+				&ip_route_blackhole_namespace_vrf_cmd);
+		install_element(VRF_NODE,
+				&ip_route_address_interface_namespace_vrf_cmd);
+		install_element(VRF_NODE, &ip_route_namespace_vrf_cmd);
+	} else {
+		install_element(VRF_NODE, &ip_route_blackhole_vrf_cmd);
+		install_element(VRF_NODE, &ip_route_address_interface_vrf_cmd);
+		install_element(VRF_NODE, &ip_route_vrf_cmd);
+	}
 	install_element(CONFIG_NODE, &ip_route_address_interface_cmd);
-	install_element(VRF_NODE, &ip_route_address_interface_vrf_cmd);
 	install_element(CONFIG_NODE, &ip_route_cmd);
-	install_element(VRF_NODE, &ip_route_vrf_cmd);
+
 	install_element(CONFIG_NODE, &ip_zebra_import_table_distance_cmd);
 	install_element(CONFIG_NODE, &no_ip_zebra_import_table_cmd);
 	install_element(CONFIG_NODE, &zebra_workqueue_timer_cmd);
@@ -3747,11 +4082,21 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_ip_rpf_addr_cmd);
 
 	install_element(CONFIG_NODE, &ipv6_route_blackhole_cmd);
-	install_element(VRF_NODE, &ipv6_route_blackhole_vrf_cmd);
+	if (vrf_is_backend_netns()) {
+		install_element(VRF_NODE,
+				&ipv6_route_blackhole_namespace_vrf_cmd);
+
+		install_element(VRF_NODE,
+		      &ipv6_route_address_interface_namespace_vrf_cmd);
+		install_element(VRF_NODE, &ipv6_route_namespace_vrf_cmd);
+	} else {
+		install_element(VRF_NODE, &ipv6_route_blackhole_vrf_cmd);
+		install_element(VRF_NODE,
+				&ipv6_route_address_interface_vrf_cmd);
+		install_element(VRF_NODE, &ipv6_route_vrf_cmd);
+	}
 	install_element(CONFIG_NODE, &ipv6_route_address_interface_cmd);
-	install_element(VRF_NODE, &ipv6_route_address_interface_vrf_cmd);
 	install_element(CONFIG_NODE, &ipv6_route_cmd);
-	install_element(VRF_NODE, &ipv6_route_vrf_cmd);
 	install_element(CONFIG_NODE, &ip_nht_default_route_cmd);
 	install_element(CONFIG_NODE, &no_ip_nht_default_route_cmd);
 	install_element(CONFIG_NODE, &ipv6_nht_default_route_cmd);
