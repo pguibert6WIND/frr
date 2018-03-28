@@ -786,6 +786,8 @@ static void bgp_pbr_policyroute_remove_from_zebra(struct bgp *bgp,
 		bgp_pbr_flush_entry(bgp, local_bpa,
 				    local_bpm, bpmer.bpme_found);
 	}
+	/* XXX remove ip rule if noone uses it
+	 */
 }
 
 static void bgp_pbr_policyroute_add_to_zebra(struct bgp *bgp,
