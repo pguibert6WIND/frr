@@ -747,6 +747,8 @@ static void bgp_pbr_policyroute_remove_from_zebra(struct bgp *bgp, struct bgp_in
 		bgp_pbr_flush_entry(bgp, local_bpa,
 				    local_bpm, bpmer.bpme_found);
 	}
+	/* XXX remove ip rule if noone uses it
+	 */
 }
 
 static void bgp_pbr_policyroute_add_to_zebra(struct bgp *bgp, struct bgp_info *binfo,
@@ -853,8 +855,11 @@ static void bgp_pbr_policyroute_add_to_zebra(struct bgp *bgp, struct bgp_info *b
 	 * it will be suppressed subsequently
 	 */
 	/* ip rule add */
-	if (!bpa->installed)
+	if (!bpa->installed) {
 		bgp_send_pbr_rule_action(bpa, true);
+		bgp_zebra_announce_default(bgp, nh,
+					   AF_INET, bpa->table_id, true);
+	}
 
 	/* ipset create */
 	if (!bpm->installed)

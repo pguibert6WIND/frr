@@ -2439,3 +2439,111 @@ void bgp_send_pbr_iptable(struct bgp_pbr_action *pba,
 	if (!zclient_send_message(zclient) && install)
 		pbm->install2_in_progress = true;
 }
+
+#define CROSS_VRF
+/* inject in table <table_id> a default route to:
+ * - if nexthop IP is present : to this nexthop
+ * - if vrf is different from local : to the matching xvrf
+ */
+void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
+				afi_t afi, uint32_t table_id, bool announce)
+{
+	struct zapi_nexthop *api_nh;
+	struct zapi_route api;
+	struct prefix p;
+
+	if (!nh || nh->type != NEXTHOP_TYPE_IPV4
+	    || nh->vrf_id == VRF_UNKNOWN)
+		return;
+	memset(&p, 0, sizeof(struct prefix));
+	/* default route */
+	p.family = AF_INET;
+	memset(&api, 0, sizeof(api));
+	api.vrf_id = bgp->vrf_id;
+	api.type = ZEBRA_ROUTE_BGP;
+	api.safi = SAFI_UNICAST;
+	api.prefix = p;
+	api.tableid = table_id;
+	api.nexthop_num = 1;
+	SET_FLAG(api.message, ZAPI_MESSAGE_TABLEID);
+
+	/* redirect IP */
+	if (nh->gate.ipv4.s_addr) {
+		char buff[PREFIX_STRLEN];
+
+		SET_FLAG(api.message, ZAPI_MESSAGE_NEXTHOP);
+		api_nh = &api.nexthops[0];
+		api_nh->vrf_id = nh->vrf_id;
+		api_nh->gate.ipv4 = nh->gate.ipv4;
+		api_nh->type = NEXTHOP_TYPE_IPV4;
+
+		inet_ntop(AF_INET, &(nh->gate.ipv4), buff, INET_ADDRSTRLEN);
+		zlog_info("BGP: sending default route to %s table %d (redirect IP)",
+			  buff, table_id);
+		zclient_route_send(announce ? ZEBRA_ROUTE_ADD
+				   : ZEBRA_ROUTE_DELETE,
+				   zclient, &api);
+	} else if (nh->vrf_id != bgp->vrf_id) {
+		struct prefix_ipv4 p4;
+		char buff[PREFIX_STRLEN];
+		struct vrf *vrf;
+#ifdef CROSS_VRF
+		char *cp;
+		int len, stop_on_error = 0, stop_on_success = 0;
+
+		/* an xvrf interface will be found
+		* then inside that xvrf interface,
+		* a nexthop will be found:
+		* semantic :
+		* interface xvrf<x>, where x belongs to VRF vrf<x>
+		*   xvrf0 stands for interface in default VRF
+		* NH = 169.254.128.<y>, where y belongs to dst VRF vrf<y>
+		*/
+		/* default route */
+		vrf = vrf_lookup_by_id(nh->vrf_id);
+		if (!vrf)
+			return;
+		len = strlen(vrf->data.l.netns_name);
+		cp = vrf->data.l.netns_name + len;
+		len--;
+		do {
+			if (len <= 0) {
+				stop_on_error = 1;
+			} else if (isalpha(*cp)) {
+				stop_on_success = 1;
+				cp++;
+			} else {
+				cp--;
+				len--;
+			}
+		} while(stop_on_error || stop_on_success);
+		if (stop_on_error)
+			return;
+		sprintf(buff, "169.254.128.%s/32", cp);
+#else
+		vrf = vrf_lookup_by_id(nh->vrf_id);
+		if (!vrf)
+			return;
+		/* find default route for vrf
+		 * hardcode it to 30.0.0.2
+		 */
+		sprintf(buff, "30.0.0.2/32");
+#endif
+		SET_FLAG(api.message, ZAPI_MESSAGE_NEXTHOP);
+		memset(&p4, 0, sizeof(struct prefix_ipv4));
+		str2prefix_ipv4(buff, &p4);
+		api_nh = &api.nexthops[0];
+#ifdef CROSS_VRF
+		api_nh->vrf_id = bgp->vrf_id;
+#else
+		api_nh->vrf_id = nh->vrf_id;
+#endif
+		api_nh->gate.ipv4 = p4.prefix;
+		api_nh->type = NEXTHOP_TYPE_IPV4;
+		zlog_info("BGP: sending default route to %s table %d (redirect VRF %s)",
+			  buff, table_id, vrf->data.l.netns_name);
+		zclient_route_send(announce ? ZEBRA_ROUTE_ADD
+				   : ZEBRA_ROUTE_DELETE,
+				   zclient, &api);
+	}
+}
