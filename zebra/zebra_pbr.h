@@ -167,6 +167,7 @@ extern void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
 				struct zebra_pbr_ipset_entry *rule);
 extern void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
 				struct zebra_pbr_ipset_entry *rule);
+extern const char *netlink_ipset_type2str(uint32_t type);
 
 /*
  * Install specified iptable entries into kernel
@@ -234,5 +235,7 @@ extern int zebra_pbr_ipset_entry_hash_equal(const void *arg1, const void *arg2);
 extern void zebra_pbr_iptable_free(void *arg);
 extern uint32_t zebra_pbr_iptable_hash_key(void *arg);
 extern int zebra_pbr_iptable_hash_equal(const void *arg1, const void *arg2);
+
+extern void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname);
 
 #endif /* _ZEBRA_PBR_H */
