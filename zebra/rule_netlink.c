@@ -58,7 +58,7 @@ static const struct message netlink_ipset_type_msg[] = {
 
 /* Private functions */
 
-static const char *netlink_ipset_type2str(uint32_t type)
+const char *netlink_ipset_type2str(uint32_t type)
 {
 	return lookup_msg(netlink_ipset_type_msg, type,
 			  "Unrecognized IPset Type");
