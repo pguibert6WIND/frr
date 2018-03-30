@@ -173,7 +173,7 @@ static int netlink_ipset_update(int cmd,
 	char buf[256];
 
 	if (cmd == IPSET_CMD_CREATE) {
-		sprintf(buf, "ipset create %s %s%s hashsize %u",
+		sprintf(buf, "ipset create %s %s%s hashsize %u counters",
 			ipset->ipset_name, IPSET_PRE_HASH,
 			netlink_ipset_type2str(ipset->type),
 			IPSET_DEFAULT_HASHSIZE);
