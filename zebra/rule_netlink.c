@@ -44,6 +44,8 @@
 #include "zebra/rule_netlink.h"
 #include "zebra/zebra_pbr.h"
 
+extern struct zebra_privs_t zserv_privs;
+
 /* definitions */
 #define IPSET_DEFAULT_HASHSIZE 64
 #define IPSET_PRE_HASH "hash:"
@@ -168,7 +170,13 @@ static int netlink_ipset_update(int cmd,
 			ipset->ipset_name);
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug("PBR: %s", buf);
+	if (zserv_privs.change(ZPRIVS_RAISE))
+		zlog_err("%s : Can't raise privileges",
+			 __func__);
 	system(buf);
+	if (zserv_privs.change(ZPRIVS_LOWER))
+		zlog_err("%s : Can't lower privileges",
+			 __func__);
 	return 0;
 }
 
@@ -317,7 +325,13 @@ static int netlink_iptable_update_unit(int cmd,
 			     iptable->fwmark);
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug("PBR: %s", buf);
+	if (zserv_privs.change(ZPRIVS_RAISE))
+		zlog_err("%s : Can't raise privileges",
+			 __func__);
 	system(buf);
+	if (zserv_privs.change(ZPRIVS_LOWER))
+		zlog_err("%s : Can't lower privileges",
+			 __func__);
 	return 0;
 }
 
