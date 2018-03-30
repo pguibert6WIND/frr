@@ -201,6 +201,11 @@ uint32_t zebra_pbr_ipset_entry_hash_key(void *arg)
 	key = prefix_hash_key(&ipset->src);
 	key = jhash_1word(ipset->unique, key);
 	key = jhash_1word(prefix_hash_key(&ipset->dst), key);
+	key = jhash(&ipset->dst_port_min, 2, key);
+	key = jhash(&ipset->dst_port_max, 2, key);
+	key = jhash(&ipset->src_port_min, 2, key);
+	key = jhash(&ipset->src_port_max, 2, key);
+	key = jhash(&ipset->proto, 1, key);
 
 	return key;
 }
@@ -221,6 +226,20 @@ int zebra_pbr_ipset_entry_hash_equal(const void *arg1, const void *arg2)
 	if (!prefix_same(&r1->dst, &r2->dst))
 		return 0;
 
+	if (r1->src_port_min != r2->src_port_min)
+		return 0;
+
+	if (r1->src_port_max != r2->src_port_max)
+		return 0;
+
+	if (r1->dst_port_min != r2->dst_port_min)
+		return 0;
+
+	if (r1->dst_port_max != r2->dst_port_max)
+		return 0;
+
+	if (r1->proto != r2->proto)
+		return 0;
 	return 1;
 }
 
@@ -444,6 +463,7 @@ struct zebra_pbr_ipset *zebra_pbr_lookup_ipset_pername(struct zebra_ns *zns,
 	memset(ptr, 0, sizeof(struct pbr_ipset_name_lookup));
 	snprintf((char *)ptr->ipset_name, ZEBRA_IPSET_NAME_SIZE, "%s",
 		ipsetname);
+	ptr->ipset = NULL;
 	hash_walk(zns->ipset_hash, zebra_pbr_ipset_pername_walkcb, ptr);
 	return ptr->ipset;
 }
@@ -621,6 +641,29 @@ struct zebra_pbr_ipset_unique_display {
 	struct vty *vty;
 };
 
+
+static void zebra_pbr_display_port(struct vty *vty, uint32_t filter_bm,
+			    uint16_t port_min, uint16_t port_max,
+			    uint8_t proto)
+{
+	if (!(filter_bm & PBR_FILTER_PROTO)) {
+		if (port_max)
+			vty_out(vty, ":udp/tcp:%d-%d",
+				port_min, port_max);
+		else
+			vty_out(vty, ":udp/tcp:%d",
+				port_min);
+	} else {
+		if (port_max)
+			vty_out(vty, ":proto %d:%d-%d",
+				proto, port_min, port_max);
+		else
+			vty_out(vty, ":proto %d:%d",
+				proto, port_min);
+	}
+}
+
+
 static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *arg)
 {
 	struct zebra_pbr_ipset_entry_unique_display *unique =
@@ -632,23 +675,47 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 	if (zpie->backpointer != zpi)
 		return HASHWALK_CONTINUE;
 
-	if (zpi->type == IPSET_NET_NET) {
+	if ((zpi->type == IPSET_NET_NET) ||
+	    (zpi->type == IPSET_NET_PORT_NET)) {
 		char buf[PREFIX_STRLEN];
 
 		prefix2str(&(zpie->src), buf, sizeof(buf));
-		vty_out(vty, "\tfrom %s to ", buf);
+		vty_out(vty, "\tfrom %s", buf);
+		if (zpie->filter_bm & PBR_FILTER_SRC_PORT)
+			zebra_pbr_display_port(vty, zpie->filter_bm,
+					       zpie->src_port_min,
+					       zpie->src_port_max,
+					       zpie->proto);
+		vty_out(vty, " to ");
 		prefix2str(&(zpie->dst), buf, sizeof(buf));
 		vty_out(vty, "%s", buf);
-	} else if (zpi->type == IPSET_NET) {
+		if (zpie->filter_bm & PBR_FILTER_DST_PORT)
+			zebra_pbr_display_port(vty, zpie->filter_bm,
+					       zpie->dst_port_min,
+					       zpie->dst_port_max,
+					       zpie->proto);
+	} else if ((zpi->type == IPSET_NET) ||
+		   (zpi->type == IPSET_NET_PORT)) {
 		char buf[PREFIX_STRLEN];
 
 		if (zpie->filter_bm & PBR_FILTER_SRC_IP) {
 			prefix2str(&(zpie->src), buf, sizeof(buf));
 			vty_out(vty, "\tfrom %s", buf);
-		} else if (zpie->filter_bm & PBR_FILTER_SRC_IP) {
+		}
+		if (zpie->filter_bm & PBR_FILTER_SRC_PORT)
+			zebra_pbr_display_port(vty, zpie->filter_bm,
+					       zpie->src_port_min,
+					       zpie->src_port_max,
+					       zpie->proto);
+		if (zpie->filter_bm & PBR_FILTER_DST_IP) {
 			prefix2str(&(zpie->dst), buf, sizeof(buf));
 			vty_out(vty, "\tto %s", buf);
 		}
+		if (zpie->filter_bm & PBR_FILTER_DST_PORT)
+			zebra_pbr_display_port(vty, zpie->filter_bm,
+					       zpie->dst_port_min,
+					       zpie->dst_port_max,
+					       zpie->proto);
 	}
 	vty_out(vty, " (%u)\n", zpie->unique);
 	return HASHWALK_CONTINUE;
