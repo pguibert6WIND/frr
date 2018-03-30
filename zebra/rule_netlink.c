@@ -50,6 +50,7 @@
 
 static const struct message netlink_ipset_type_msg[] = {
 	{IPSET_NET_PORT_NET, "net,port,net"},
+	{IPSET_NET_PORT, "net,port"},
 	{IPSET_NET_NET, "net,net"},
 	{IPSET_NET, "net"},
 	{0}};
@@ -171,6 +172,28 @@ static int netlink_ipset_update(int cmd,
 	return 0;
 }
 
+static int netlink_ipset_entry_update_unit(int cmd,
+					   struct zebra_pbr_ipset_entry *ipset,
+					   char *buf)
+{
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	system(buf);
+	return 0;
+}
+
+static void netlink_ipset_entry_port(char *strtofill, int lenstr,
+				     uint32_t filter_bm,
+				     uint16_t port_min, uint16_t port_max)
+{
+	if (port_max)
+		sprintf(strtofill, "%d-%d",
+			port_min, port_max);
+	else
+		sprintf(strtofill, "%d",
+			port_min);
+}
+
 /*
  * Form netlink message and ship it. Currently, notify status after
  * waiting for netlink status.
@@ -184,7 +207,17 @@ static int netlink_ipset_entry_update(int cmd,
 	char buf_dst[PREFIX2STR_BUFFER];
 	char *psrc = NULL, *pdst = NULL;
 	struct zebra_pbr_ipset *bp;
+	uint16_t port = 0;
+	uint16_t port_max = 0;
 
+	if (ipset->filter_bm & PBR_FILTER_SRC_PORT)
+		port = ipset->src_port_min;
+	else if (ipset->filter_bm & PBR_FILTER_DST_PORT)
+		port = ipset->dst_port_min;
+	if (ipset->filter_bm & PBR_FILTER_SRC_PORT_RANGE)
+		port_max = ipset->src_port_max;
+	else if (ipset->filter_bm & PBR_FILTER_DST_PORT_RANGE)
+		port_max = ipset->dst_port_max;
 	if (ipset->filter_bm & PBR_FILTER_SRC_IP) {
 		psrc = (char *)prefix2str(&ipset->src, buf_src, PREFIX2STR_BUFFER);
 		if (psrc == NULL)
@@ -198,18 +231,90 @@ static int netlink_ipset_entry_update(int cmd,
 	bp = ipset->backpointer;
 	if (!bp)
 		return -1;
-	if (bp->type == IPSET_NET_NET)
+	if (bp->type == IPSET_NET_NET) {
 		sprintf(buf, "ipset %s %s %s,%s",
 			cmd == IPSET_CMD_ADD ? "add" : "del",
 			bp->ipset_name,
 			psrc, pdst);
-	else if (bp->type == IPSET_NET)
+		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else if (bp->type == IPSET_NET) {
 		sprintf(buf, "ipset %s %s %s",
 			cmd == IPSET_CMD_ADD ? "add" : "del",
 			bp->ipset_name,
 			pdst == NULL ? psrc : pdst);
+		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else if (bp->type == IPSET_NET_PORT) {
+		char strtofill[32];
+
+		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
+					 ipset->filter_bm,
+					 port, port_max);
+		/* apply it to udp and tcp */
+		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
+			sprintf(buf, "ipset %s %s %s,udp:%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, strtofill);
+			netlink_ipset_entry_update_unit(cmd, ipset, buf);
+			sprintf(buf, "ipset %s %s %s,tcp:%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, strtofill);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		} else {
+			sprintf(buf, "ipset %s %s %s,%d:%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, ipset->proto,
+				strtofill);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		}
+	} else if (bp->type == IPSET_NET_PORT_NET) {
+		char strtofill[32];
+
+		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
+					 ipset->filter_bm,
+					 port, port_max);
+		/* apply it to udp and tcp */
+		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
+			sprintf(buf, "ipset %s %s %s,tcp:%s,%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				psrc, strtofill, pdst);
+			netlink_ipset_entry_update_unit(cmd, ipset, buf);
+			sprintf(buf, "ipset %s %s %s,udp:%s,%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				psrc, strtofill, pdst);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		} else {
+			sprintf(buf, "ipset %s %s %s,%d:%s,%s",
+				cmd == IPSET_CMD_ADD ? "add" : "del",
+				bp->ipset_name,
+				psrc, ipset->proto, strtofill, pdst);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		}
+	}
+	return -1;
+}
+
+
+static int netlink_iptable_update_unit(int cmd,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	char buf[256];
+	char *ptr = buf;
+
+	ptr+=sprintf(ptr, "iptables -t mangle -%s PREROUTING -m set",
+		     cmd ? "I":"D");
+	ptr+=sprintf(ptr, " --match-set %s %s",
+		     iptable->ipset_name, combi);
+	if (iptable->action == ZEBRA_IPTABLES_DROP)
+		ptr+=sprintf(ptr, " -j DROP");
 	else
-		return -1;
+		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
+			     iptable->fwmark);
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug("PBR: %s", buf);
 	system(buf);
@@ -224,31 +329,56 @@ static int netlink_iptable_update(int cmd,
 		      struct zebra_pbr_iptable *iptable,
 		      struct zebra_ns *zns)
 {
-	char buf[256];
 	char buf2[32];
-	char *ptr = buf;
 
 	if (iptable->type == IPSET_NET_NET) {
 		sprintf(buf2, "src,dst");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
 	} else if (iptable->type == IPSET_NET) {
 		if (iptable->filter_bm & PBR_FILTER_DST_IP)
 			sprintf(buf2, "dst");
 		else
 			sprintf(buf2, "src");
-	}
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET_PORT) {
+		char *ptr = buf2;
 
-	ptr+=sprintf(ptr, "iptables -t mangle -%s FORWARD -m set",
-		     cmd ? "I":"D");
-	ptr+=sprintf(ptr, " --match-set %s %s",
-		     iptable->ipset_name, buf2);
-	if (iptable->action == ZEBRA_IPTABLES_DROP)
-		ptr+=sprintf(ptr, " -j DROP");
-	else
-		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
-			     iptable->fwmark);
-	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("PBR: %s", buf);
-	system(buf);
+		if (iptable->filter_bm & PBR_FILTER_DST_IP)
+			ptr += sprintf(ptr, "dst");
+		else
+			ptr += sprintf(ptr, "src");
+
+		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
+		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
+			/* iptable rule will be called twice.
+			 * one for each side
+			 */
+			sprintf(ptr, ",dst");
+			netlink_iptable_update_unit(cmd, iptable, buf2);
+			sprintf(ptr, ",src");
+		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
+			sprintf(ptr, ",dst");
+		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
+			sprintf(ptr, ",src");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET_PORT_NET) {
+		char *ptr = buf2;
+
+		ptr += sprintf(ptr, "src");
+
+		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
+		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
+			sprintf(ptr, ",dst,dst");
+			netlink_iptable_update_unit(cmd, iptable, buf2);
+			ptr += sprintf(ptr, ",src");
+		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
+			ptr += sprintf(ptr, ",dst");
+		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
+			ptr += sprintf(ptr, ",src");
+		ptr += sprintf(ptr, ",dst");
+
+		netlink_iptable_update_unit(cmd, iptable, buf2);
+	}
 	return 0;
 }
 
