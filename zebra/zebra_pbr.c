@@ -636,7 +636,7 @@ struct zebra_pbr_ipset_entry_unique_display {
 	struct vty *vty;
 };
 
-struct zebra_pbr_ipset_unique_display {
+struct zebra_pbr_env_display {
 	struct zebra_ns *zns;
 	struct vty *vty;
 };
@@ -723,8 +723,8 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 
 static int zebra_pbr_show_ipset_walkcb(struct hash_backet *backet, void *arg)
 {
-	struct zebra_pbr_ipset_unique_display *uniqueipset =
-		(struct zebra_pbr_ipset_unique_display *)arg;
+	struct zebra_pbr_env_display *uniqueipset =
+		(struct zebra_pbr_env_display *)arg;
 	struct zebra_pbr_ipset *zpi = (struct zebra_pbr_ipset *)backet->data;
 	struct zebra_pbr_ipset_entry_unique_display unique;
 	struct vty *vty = uniqueipset->vty;
@@ -747,7 +747,7 @@ void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname)
 	struct zebra_pbr_ipset *zpi;
 	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
 	struct zebra_pbr_ipset_entry_unique_display unique;
-	struct zebra_pbr_ipset_unique_display uniqueipset;
+	struct zebra_pbr_env_display uniqueipset;
 
 
 	if(ipsetname) {
@@ -769,3 +769,58 @@ void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname)
 	hash_walk(zns->ipset_hash, zebra_pbr_show_ipset_walkcb,
 		  &uniqueipset);
 }
+
+struct pbr_rule_fwmark_lookup {
+	struct zapi_pbr_rule *ptr;
+	uint32_t fwmark;
+};
+
+static int zebra_pbr_rule_lookup_fwmark_walkcb(struct hash_backet *backet, void *arg)
+{
+	struct pbr_rule_fwmark_lookup *iprule = (struct pbr_rule_fwmark_lookup *)arg;
+	struct zapi_pbr_rule *zpr = (struct zapi_pbr_rule *)backet->data;
+
+	if (iprule->fwmark == zpr->filter.fwmark) {
+		iprule->ptr = zpr;
+		return HASHWALK_ABORT;
+	}
+	return HASHWALK_CONTINUE;
+}
+
+static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
+{
+	struct zebra_pbr_iptable *iptable = (struct zebra_pbr_iptable *)backet->data;
+	struct zebra_pbr_env_display *env = (struct zebra_pbr_env_display *)arg;
+	struct vty *vty = env->vty;
+	struct zebra_ns *zns = env->zns;
+
+	vty_out(vty, "IPtable %s action %s (%u)\n", iptable->ipset_name,
+		iptable->action == ZEBRA_IPTABLES_DROP ? "drop" : "redirect",
+		iptable->unique);
+	if (iptable->action != ZEBRA_IPTABLES_DROP) {
+		struct pbr_rule_fwmark_lookup prfl;
+
+		prfl.fwmark = iptable->fwmark;
+		prfl.ptr = NULL;
+		hash_walk(zns->rules_hash, &zebra_pbr_rule_lookup_fwmark_walkcb, &prfl);
+		if (prfl.ptr) {
+			struct zapi_pbr_rule *zpr = prfl.ptr;
+			vty_out(vty, "\t table %u, fwmark %u\n", zpr->action.table,
+				prfl.fwmark);
+		}
+	}
+	return HASHWALK_CONTINUE;
+}
+
+void zebra_pbr_show_iptable(struct vty *vty)
+{
+	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
+	struct zebra_pbr_env_display env;
+
+	env.vty = vty;
+	env.zns = zns;
+
+	hash_walk(zns->iptable_hash, zebra_pbr_show_iptable_walkcb,
+		  &env);
+}
+
