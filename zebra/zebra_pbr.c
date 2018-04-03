@@ -23,9 +23,11 @@
 
 #include <jhash.h>
 #include <hash.h>
+#include <json.h>
 
 #include "zebra/zebra_pbr.h"
 #include "zebra/rt.h"
+#include "zebra/zebra_wrap_script.h"
 
 /* definitions */
 
@@ -639,6 +641,7 @@ struct zebra_pbr_ipset_entry_unique_display {
 struct zebra_pbr_env_display {
 	struct zebra_ns *zns;
 	struct vty *vty;
+	struct json_object *json;
 };
 
 
@@ -793,10 +796,45 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 	struct zebra_pbr_env_display *env = (struct zebra_pbr_env_display *)arg;
 	struct vty *vty = env->vty;
 	struct zebra_ns *zns = env->zns;
+	int ret;
 
 	vty_out(vty, "IPtable %s action %s (%u)\n", iptable->ipset_name,
 		iptable->action == ZEBRA_IPTABLES_DROP ? "drop" : "redirect",
 		iptable->unique);
+	if (env->json) {
+		struct json *json;
+		struct json_object *json_misc = NULL;
+		int i = 0;
+		bool found = false;
+		char buff[10];
+
+		do {
+			json_bool ret;
+
+			snprintf(buff, sizeof(buff), "%d", i);
+			json = json_object_object_get(env->json, buff);
+			if (json && json_object_object_get_ex(json, "misc", &json_misc)) {
+				/* get misc string */
+				if (json_object_get_string(json_misc) &&
+				    strstr(json_object_get_string(json_misc),
+					   iptable->ipset_name))
+					found = true;
+			}
+			if (!found)
+				i++;
+		} while ((found == false) && i < 2000);
+		if (found && json) {
+			struct json_object *json_temp;
+
+			if (json_object_object_get_ex(json, "pkts", &json_temp))
+				vty_out(vty, "\t pkts %s",
+					json_object_get_string(json_temp));
+			if (json_object_object_get_ex(json, "bytes", &json_temp))
+				vty_out(vty, "\t bytes %s",
+					json_object_get_string(json_temp));
+			vty_out(vty,"\n");
+		}
+	}
 	if (iptable->action != ZEBRA_IPTABLES_DROP) {
 		struct pbr_rule_fwmark_lookup prfl;
 
@@ -805,6 +843,7 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 		hash_walk(zns->rules_hash, &zebra_pbr_rule_lookup_fwmark_walkcb, &prfl);
 		if (prfl.ptr) {
 			struct zapi_pbr_rule *zpr = prfl.ptr;
+
 			vty_out(vty, "\t table %u, fwmark %u\n", zpr->action.table,
 				prfl.fwmark);
 		}
@@ -816,9 +855,29 @@ void zebra_pbr_show_iptable(struct vty *vty)
 {
 	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
 	struct zebra_pbr_env_display env;
+	struct json_object *list;
+	char input[120];
+	int ret = 0;
 
 	env.vty = vty;
 	env.zns = zns;
+
+	list = json_object_new_object();
+	snprintf(input, sizeof(input),
+		 "iptables -t mangle -L PREROUTING -v");
+	/*
+	  pkts bytes target     prot opt in     out     source               destination
+	  0     0     MARK       all --  any    any     anywhere             anywhere \
+	  match-set match0x44af320 dst,dst MARK set 0x100
+	  =>
+	  "<IDx>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr1> ..."},
+	  "<IDy>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr2> ..."},
+	 */
+	ret = zebra_wrap_script(input, true, 1, list);
+	if (ret < 0)
+		env.json = NULL;
+	else
+		env.json = list;
 
 	hash_walk(zns->iptable_hash, zebra_pbr_show_iptable_walkcb,
 		  &env);
