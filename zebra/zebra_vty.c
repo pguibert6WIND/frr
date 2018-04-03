@@ -3265,6 +3265,19 @@ DEFUN (show_pbr_ipset,
 	return CMD_SUCCESS;
 }
 
+/* policy routing contexts
+ */
+DEFUN (show_pbr_iptable,
+       show_pbr_iptable_cmd,
+       "show pbr iptable",
+       SHOW_STR
+       "Policy-Based Routing\n"
+       "IPtable Context information\n")
+{
+	zebra_pbr_show_iptable(vty);
+	return CMD_SUCCESS;
+}
+
 /* Static ip route configuration write function. */
 static int zebra_ip_config(struct vty *vty)
 {
@@ -3768,6 +3781,7 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_evpn_neigh_vni_vtep_cmd);
 
 	install_element(VIEW_NODE, &show_pbr_ipset_cmd);
+	install_element(VIEW_NODE, &show_pbr_iptable_cmd);
 
 	install_element(CONFIG_NODE, &default_vrf_vni_mapping_cmd);
 	install_element(CONFIG_NODE, &no_default_vrf_vni_mapping_cmd);
