@@ -28,6 +28,7 @@
 
 #include "prefix.h"
 #include "if.h"
+#include "hook.h"
 
 #include "rt.h"
 #include "pbr.h"
@@ -226,7 +227,7 @@ extern void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname);
 extern void zebra_pbr_show_iptable(struct vty *vty);
 extern void zebra_pbr_iptable_update_interfacelist(struct stream *s,
 				   struct zebra_pbr_iptable *zpi);
-
+struct json_object;
 DECLARE_HOOK(zebra_pbr_ipset_entry_wrap_script_get_stat, (struct zebra_ns *zns,
 				    struct zebra_pbr_ipset_entry *ipset,
 				    uint64_t *pkts, uint64_t *bytes),
