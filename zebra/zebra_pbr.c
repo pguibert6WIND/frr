@@ -973,17 +973,16 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 		iptable->action == ZEBRA_IPTABLES_DROP ? "drop" : "redirect",
 		iptable->unique);
 	if (env->json) {
-		struct json *json;
+		struct json_object *json;
 		struct json_object *json_misc = NULL;
 		int i = 0;
 		bool found = false;
 		char buff[10];
 
 		do {
-			json_bool ret;
-
+			json = NULL;
 			snprintf(buff, sizeof(buff), "%d", i);
-			json = json_object_object_get(env->json, buff);
+			json_object_object_get_ex(env->json, buff, &json);
 			if (!json)
 				break;
 			if (json_object_object_get_ex(json, "data", &json_misc)) {
