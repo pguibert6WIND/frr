@@ -322,15 +322,10 @@ static int netlink_ipset_entry_update(int cmd,
 }
 
 
-static int netlink_iptable_update_unit(int cmd,
+static int netlink_iptable_update_unit_2(char *buf, char *ptr,
 				  struct zebra_pbr_iptable *iptable,
 				  char *combi)
 {
-	char buf[256];
-	char *ptr = buf;
-
-	ptr+=sprintf(ptr, "iptables -t mangle -%s PREROUTING -m set",
-		     cmd ? "I":"D");
 	ptr+=sprintf(ptr, " --match-set %s %s",
 		     iptable->ipset_name, combi);
 	if (iptable->action == ZEBRA_IPTABLES_DROP)
@@ -347,6 +342,29 @@ static int netlink_iptable_update_unit(int cmd,
 	if (zserv_privs.change(ZPRIVS_LOWER))
 		zlog_err("%s : Can't lower privileges",
 			 __func__);
+}
+
+static int netlink_iptable_update_unit(int cmd,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	char buf[256];
+	char *ptr = buf;
+	struct pbr_interface *pbr_if;
+
+	if (pbr_interface_any) {
+		ptr+=sprintf(ptr, "iptables -t mangle -%s PREROUTING -m set",
+		     cmd ? "I":"D");
+		return netlink_iptable_update_unit_2(buf, ptr,
+						     iptable, combi);
+	}
+
+	RB_FOREACH (pbr_if, pbr_interface_head, &pbr_interface_list) {
+		ptr+=sprintf(ptr, "iptables -i %s -t mangle -%s PREROUTING -m set",
+			     pbr_if->name, cmd ? "I":"D");
+		netlink_iptable_update_unit_2(buf, ptr,
+					      iptable, combi);
+	}
 	return 0;
 }
 
