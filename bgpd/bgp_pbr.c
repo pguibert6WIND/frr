@@ -327,8 +327,8 @@ static int bgp_pbr_build_and_validate_entry(struct prefix *p,
 				api_action->u.redirect_vrf = get_first_vrf_for_redirect_with_rt(
 								eckey);
 				ecommunity_free(&eckey);
-			} else if ((ecom_eval->val[0] == (char )ECOMMUNITY_ENCODE_TRANS_EXP) &&
-				   (ecom_eval->val[0] == (char )ECOMMUNITY_REDIRECT_IP_NH)) {
+			} else if ((ecom_eval->val[0] == (char )ECOMMUNITY_ENCODE_REDIRECT_IP_NH) &&
+				   (ecom_eval->val[1] == (char )ECOMMUNITY_REDIRECT_IP_NH)) {
 				api_action->action = ACTION_REDIRECT_IP;
 				api_action->u.zr.redirect_ip_v4.s_addr = info->attr->nexthop.s_addr;
 				api_action->u.zr.duplicate = ecom_eval->val[7];
