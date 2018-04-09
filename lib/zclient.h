@@ -155,6 +155,7 @@ typedef enum {
 	ZEBRA_IPTABLE_ADD,
 	ZEBRA_IPTABLE_DELETE,
 	ZEBRA_IPTABLE_NOTIFY_OWNER,
+	ZEBRA_IPSET_GET_STATS,
 } zebra_message_types_t;
 
 struct redist_proto {
