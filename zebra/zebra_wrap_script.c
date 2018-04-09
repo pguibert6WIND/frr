@@ -192,6 +192,18 @@ static int handle_field_line(struct json_object *json_obj,
 	return 0;
 }
 
+/*
+ * Name: match0x39ea2d0
+ * Type: hash:net,net
+ * Revision: 2
+ * Header: family inet hashsize 64 maxelem 65536 counters
+ * Size in memory: 824
+ * References: 1
+ * Number of entries: 2
+ * Members:
+ * 1.1.1.2,2.2.2.2 packets 0 bytes 0
+ * 172.17.0.0/24,172.17.0.31 packets 0 bytes 0
+ */
 /* script : command line to execute in a shell script
  * return_data : set to true if want to get back some information
  * begin_at_line : the line number where to begin parsing headers and other
