@@ -636,6 +636,7 @@ int kernel_pbr_rule_del(struct zapi_pbr_rule *rule)
 struct zebra_pbr_ipset_entry_unique_display {
 	struct zebra_pbr_ipset *zpi;
 	struct vty *vty;
+	struct json_object *json;
 };
 
 struct zebra_pbr_env_display {
@@ -644,6 +645,24 @@ struct zebra_pbr_env_display {
 	struct json_object *json;
 };
 
+static int zebra_pbr_sprint_port(char *str,
+				 uint16_t port_min,
+				 uint16_t port_max,
+				 uint8_t proto)
+{
+	char *ptr = str;
+
+	ptr += sprintf(ptr, ",");
+	if(proto)
+		ptr += sprintf(ptr, "%d:", proto);
+	else
+		ptr += sprintf(ptr, "tcp:"); /* arbitrary */
+	if (port_max)
+		ptr += sprintf(ptr, "%d-%d", port_min, port_max);
+	else
+		ptr += sprintf(ptr, "%d", port_min);
+	return (int)(ptr - str);
+}
 
 static void zebra_pbr_display_port(struct vty *vty, uint32_t filter_bm,
 			    uint16_t port_min, uint16_t port_max,
@@ -674,10 +693,71 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 	struct zebra_pbr_ipset *zpi = unique->zpi;
 	struct vty *vty = unique->vty;
 	struct zebra_pbr_ipset_entry *zpie = (struct zebra_pbr_ipset_entry *)backet->data;
+	char json_data_str[100];
 
 	if (zpie->backpointer != zpi)
 		return HASHWALK_CONTINUE;
 
+	if (unique->json) {
+		/* create data string
+		 */
+		char *ptr = json_data_str;
+		int len = sizeof(json_data_str);
+
+		memset(ptr, 0, sizeof(json_data_str));
+		if ((zpi->type == IPSET_NET_NET) ||
+		    (zpi->type == IPSET_NET_PORT_NET)) {
+			char buf[PREFIX_STRLEN];
+			int len_temp;
+
+			prefix2str(&(zpie->src), buf, sizeof(buf));
+			len_temp = snprintf(ptr, len, "%s", buf);
+			ptr += len_temp;
+			len -= len_temp;
+			if (zpie->filter_bm & PBR_FILTER_SRC_PORT) {
+				len_temp = zebra_pbr_sprint_port(ptr, zpie->src_port_min,
+								 zpie->src_port_max,
+								 zpie->proto);
+				ptr += len_temp;
+				len -= len_temp;
+			} else if (zpie->filter_bm & PBR_FILTER_DST_PORT) {
+				len_temp = zebra_pbr_sprint_port(ptr, zpie->dst_port_min,
+								 zpie->dst_port_max,
+								 zpie->proto);
+				ptr += len_temp;
+				len -= len_temp;
+			}
+			prefix2str(&(zpie->dst), buf, sizeof(buf));
+			len_temp = snprintf(ptr, len, ",%s", buf);
+			ptr += len_temp;
+			len -= len_temp;
+		} else if ((zpi->type == IPSET_NET) ||
+			   (zpi->type == IPSET_NET_PORT)) {
+			char buf[PREFIX_STRLEN];
+			int len_temp;
+
+			if (zpie->filter_bm & PBR_FILTER_SRC_IP)
+				prefix2str(&(zpie->src), buf, sizeof(buf));
+			else
+				prefix2str(&(zpie->dst), buf, sizeof(buf));
+			len_temp = snprintf(ptr, len, "%s", buf);
+			ptr += len_temp;
+			len -= len_temp;
+			if (zpie->filter_bm & PBR_FILTER_SRC_PORT) {
+				len_temp = zebra_pbr_sprint_port(ptr, zpie->src_port_min,
+								 zpie->src_port_max,
+								 zpie->proto);
+				ptr += len_temp;
+				len -= len_temp;
+			} else if (zpie->filter_bm & PBR_FILTER_DST_PORT) {
+				len_temp = zebra_pbr_sprint_port(ptr, zpie->dst_port_min,
+								 zpie->dst_port_max,
+								 zpie->proto);
+				ptr += len_temp;
+				len -= len_temp;
+			}
+		}
+	}
 	if ((zpi->type == IPSET_NET_NET) ||
 	    (zpi->type == IPSET_NET_PORT_NET)) {
 		char buf[PREFIX_STRLEN];
@@ -721,6 +801,44 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 					       zpie->proto);
 	}
 	vty_out(vty, " (%u)\n", zpie->unique);
+	if (unique->json) {
+		int i = 1;
+		char buff[10];
+		bool found = false;
+		struct json_objet *json_data;
+		struct json_object *json;
+
+		/* get pkts and bytes */
+		do {
+			json_bool ret;
+			struct json_object *json_data;
+
+			snprintf(buff, sizeof(buff), "%d", i);
+			json = json_object_object_get(unique->json, buff);
+			if (!json)
+				return HASHWALK_CONTINUE;
+			if (json_object_object_get_ex(json, "data", &json_data)) {
+				/* get misc string */
+				if (json_object_get_string(json_data) &&
+				    strstr(json_object_get_string(json_data),
+					   json_data_str))
+					found = true;
+			}
+			if (!found)
+				i++;
+		} while (found == false);
+		if (found && json) {
+			struct json_object *json_temp;
+
+			if (json_object_object_get_ex(json, "packets", &json_temp))
+				vty_out(vty, "\t packets %s",
+					json_object_get_string(json_temp));
+			if (json_object_object_get_ex(json, "bytes", &json_temp))
+				vty_out(vty, "\t bytes %s",
+					json_object_get_string(json_temp));
+			vty_out(vty,"\n");
+		}
+	}
 	return HASHWALK_CONTINUE;
 }
 
@@ -751,7 +869,9 @@ void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname)
 	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
 	struct zebra_pbr_ipset_entry_unique_display unique;
 	struct zebra_pbr_env_display uniqueipset;
-
+	struct json_object *list;
+	const char input[120];
+	int ret = 0;
 
 	if(ipsetname) {
 		zpi = zebra_pbr_lookup_ipset_pername(zns, ipsetname);
@@ -763,8 +883,34 @@ void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname)
 
 		unique.vty = vty;
 		unique.zpi = zpi;
+		list = json_object_new_object();
+		snprintf(input, sizeof(input),
+			 "ipset --list %s", ipsetname);
+		/*
+		 * Name: match0x39ea2d0
+		 * Type: hash:net,net
+		 * Revision: 2
+		 * Header: family inet hashsize 64 maxelem 65536 counters
+		 * Size in memory: 824
+		 * References: 1
+		 * Number of entries: 2
+		 * Members:
+		 * 1.1.1.2,2.2.2.2 packets 0 bytes 0
+		 * 172.17.0.0/24,172.17.0.31 packets 0 bytes 0
+		 * =>
+		 * "0":{"Name":"match0x39ea2d0", "Type":"hash:net,net",
+		 * "Revision":"2","Header":"...", ...,"Number of entries":"2"}
+		 * "1":{"data":"1.1.1.2,2.2.2.2","packets":"0","bytes":"0"}
+		 * "2":{"data":"172.17.0.0/24,172.17.0.31","packets":"0","bytes":"0"}
+		 */
+		ret = zebra_wrap_script_column(input, 1, list, "Members");
+		if (ret < 0)
+			unique.json = NULL;
+		else
+			unique.json = list;
 		hash_walk(zns->ipset_entry_hash, zebra_pbr_show_ipset_entry_walkcb,
 			  &unique);
+		json_object_free(list);
 		return;
 	}
 	uniqueipset.zns = zns;
@@ -796,7 +942,6 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 	struct zebra_pbr_env_display *env = (struct zebra_pbr_env_display *)arg;
 	struct vty *vty = env->vty;
 	struct zebra_ns *zns = env->zns;
-	int ret;
 
 	vty_out(vty, "IPtable %s action %s (%u)\n", iptable->ipset_name,
 		iptable->action == ZEBRA_IPTABLES_DROP ? "drop" : "redirect",
@@ -813,7 +958,9 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 
 			snprintf(buff, sizeof(buff), "%d", i);
 			json = json_object_object_get(env->json, buff);
-			if (json && json_object_object_get_ex(json, "misc", &json_misc)) {
+			if (!json)
+				break;
+			if (json_object_object_get_ex(json, "data", &json_misc)) {
 				/* get misc string */
 				if (json_object_get_string(json_misc) &&
 				    strstr(json_object_get_string(json_misc),
@@ -822,7 +969,7 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 			}
 			if (!found)
 				i++;
-		} while ((found == false) && i < 2000);
+		} while (found == false);
 		if (found && json) {
 			struct json_object *json_temp;
 
@@ -873,7 +1020,7 @@ void zebra_pbr_show_iptable(struct vty *vty)
 	  "<IDx>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr1> ..."},
 	  "<IDy>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr2> ..."},
 	 */
-	ret = zebra_wrap_script(input, true, 1, list);
+	ret = zebra_wrap_script_rows(input, 1, list);
 	if (ret < 0)
 		env.json = NULL;
 	else
@@ -881,6 +1028,7 @@ void zebra_pbr_show_iptable(struct vty *vty)
 
 	hash_walk(zns->iptable_hash, zebra_pbr_show_iptable_walkcb,
 		  &env);
+	json_object_free(list);
 }
 
 struct cmd_node pbr_node = {PBR_NODE, "%s(config-pbr)# ", 1};
