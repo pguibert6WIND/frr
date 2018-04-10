@@ -23,11 +23,22 @@
 
 #include <zebra.h>
 
-struct json_object;
-extern int zebra_wrap_script(char *script, bool return_data,
-			     int begin_at_line, struct json_object *json);
+enum zebra_wrap_type_data {
+	ZEBRA_WRAP_ROWS_MODE,
+	ZEBRA_WRAP_COLUMN_MODE
+};
 
-extern int zebra_wrap_script_call_only(char *script);
+struct json_object;
+extern int zebra_wrap_script_rows(const char *script,
+				  int begin_at_line,
+				  struct json_object *json);
+
+extern int zebra_wrap_script_column(const char *script,
+				    int begin_at_line,
+				    struct json_object *json,
+				    char *switch_to_mode_row_at);
+
+extern int zebra_wrap_script_call_only(const char *script);
 
 extern void zebra_wrap_init(void);
 

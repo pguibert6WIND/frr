@@ -59,10 +59,25 @@ void zebra_wrap_init(void)
 	zebra_wrap_debug = 0;
 }
 
-static int search_current_word(char *current_str, int init,
-			       char current_word[])
+static bool isseparator(char car, char separator_list[])
 {
-	bool search_word = false;
+	int i = 0;
+
+	do {
+		if (separator_list[i] == '\0')
+			return false;
+		if (separator_list[i] == car)
+			return true;
+		i++;
+	} while (1);
+	/* should never occur */
+	return false;
+}
+
+static int search_current_word(char *current_str, int init,
+			       char current_word[],
+			       char separator[])
+{
 	bool word_began = false;
 	char *ptr_word;
 	int k, l = 0, m = 0;
@@ -84,7 +99,7 @@ static int search_current_word(char *current_str, int init,
 		}
 		if (word_began == false)
 			continue;
-		if (!isspace(current_str[k])) {
+		if (!isseparator(current_str[k], separator)) {
 			l += 1;
 			continue;
 		}
@@ -97,9 +112,109 @@ static int search_current_word(char *current_str, int init,
 	return -1;
 }
 
-static int handle_field_line(struct json_object *json_obj,
-			      char *current_str,
-			     struct item_list item[])
+/*
+ * 1.1.1.2,2.2.2.2 packets 0 bytes 0
+ * 172.17.0.0/24,172.17.0.31 packets 0 bytes 0
+ */
+static int handle_field_line_special(struct json_object *json_obj,
+				    char *current_str, char separator[])
+{
+	int k, l = 0;
+	char current_field[DATA_LINE_MAX];
+	char current_attribute[DATA_LINE_MAX];
+	const char *data = "data";
+
+	/* get headers from current_str */
+	for (k = 0; k < (int)strlen(current_str);) {
+		/* first has no field. use data
+		 */
+		l = search_current_word(current_str, k,
+					current_attribute, separator);
+		if (l < 0)
+			break;
+		k += l;
+		json_object_string_add(json_obj,
+				       data,
+				       current_attribute);
+		if (zebra_wrap_debug
+		    & SCRIPT_ELEMENT_LIST)
+			zlog_err("ITEM Obtained "
+				 "for %s is %s",
+				 data,
+				 current_attribute);
+
+		l = search_current_word(current_str, k,
+					current_field, separator);
+		if (l < 0)
+			break;
+		k += l;
+		json_object_string_add(json_obj,
+				       data,
+				       current_attribute);
+		if (zebra_wrap_debug
+		    & SCRIPT_ELEMENT_LIST)
+			zlog_err("ITEM Obtained "
+				 "for %s is %s",
+				 current_field,
+				 current_attribute);
+		l = search_current_word(current_str, k,
+					current_field, separator);
+		if (l < 0)
+			break;
+		k += l;
+		l = search_current_word(current_str, k,
+					current_field, separator);
+		if (l < 0)
+			break;
+		k += l;
+		json_object_string_add(json_obj,
+				       current_field,
+				       current_attribute);
+		if (zebra_wrap_debug
+		    & SCRIPT_ELEMENT_LIST)
+			zlog_err("ITEM Obtained "
+				 "for %s is %s",
+				 current_field,
+				 current_attribute);
+	}
+	return 0;
+}
+
+static int handle_field_line_column(struct json_object *json_obj,
+				    char *current_str, char separator[])
+{
+	int k, l = 0;
+	char current_field[DATA_LINE_MAX];
+	int nb_items = 0;
+
+	/* get headers from current_str */
+	for (k = 0; k < (int)strlen(current_str);) {
+		l = search_current_word(current_str, k,
+					current_field, separator);
+		if (l < 0)
+			break;
+		k += l;
+		/* first word obtained
+		 * now grab rest of the line
+		 */
+		json_object_string_add(json_obj,
+				       current_field,
+				       &current_str[k]);
+		if (zebra_wrap_debug
+		    & SCRIPT_ELEMENT_LIST)
+			zlog_err("(%d)ITEM Obtained "
+				 "for %s is %s",
+				 nb_items,
+				 current_field,
+				 &current_str[k]);
+	}
+	return 0;
+}
+
+static int handle_field_line_row(struct json_object *json_obj,
+				 char *current_str,
+				 struct item_list item[],
+				 char separator[])
 {
 	int k, l = 0;
 	char current_word[DATA_LINE_MAX];
@@ -109,7 +224,7 @@ static int handle_field_line(struct json_object *json_obj,
 	/* get headers from current_str */
 	for (k = 0; k < (int)strlen(current_str);) {
 		l = search_current_word(current_str, k,
-					current_word);
+					current_word, separator);
 		if (l < 0)
 			break;
 		k += l;
@@ -204,6 +319,92 @@ static int handle_field_line(struct json_object *json_obj,
  * 1.1.1.2,2.2.2.2 packets 0 bytes 0
  * 172.17.0.0/24,172.17.0.31 packets 0 bytes 0
  */
+int zebra_wrap_script_column(const char *script,
+			     int begin_at_line,
+			     struct json_object *json_obj_list,
+			     char *switch_to_mode_row_at)
+{
+	FILE *fp;
+	char data[DATA_LEN];
+	char *current_str = NULL;
+	int line_nb = 0;
+	int nb_entries = 0;
+
+	if (IS_ZEBRA_DEBUG_KERNEL_MSGDUMP_SEND)
+		zlog_debug("SCRIPT : %s", script);
+	fp = popen(script, "r");
+	if (!fp) {
+		zlog_err("SCRIPT: error calling %s", script);
+		return -1;
+	}
+	do {
+		json_object *json_obj = NULL;
+		char separator[5];
+		bool column_mode = true;
+
+		memset(separator, 0, sizeof(separator));
+		separator[0] = ': ';
+		memset(data, 0, DATA_LEN);
+		current_str = fgets(data, DATA_LEN, fp);
+		if (current_str) {
+			char line[10];
+
+			/* data contains the line
+			 */
+			current_str = data;
+			if (zebra_wrap_debug & SCRIPT_DEBUG)
+				zlog_debug("SCRIPT : [%d/%d] %s",
+					   line_nb,
+					   (int)strlen(current_str),
+					   current_str);
+			if ((strlen(current_str) <= 1) ||
+			    line_nb < begin_at_line) {
+				line_nb++;
+				continue;
+			}
+			/* column mode, same json obj is reused
+			 */
+			if (!json_obj)
+				json_obj = json_object_new_object();
+			if (column_mode == true &&
+			    handle_field_line_column(json_obj,
+						     current_str,
+						     separator) < 0) {
+				/* check if switch_to_mode_row_at
+				 * is eligible
+				 */
+				if (!switch_to_mode_row_at ||
+				    !strstr(current_str,
+					    switch_to_mode_row_at)) {
+					json_object_free(json_obj);
+					return -1;
+				}
+				column_mode = false;
+				snprintf(line, sizeof(line), "%d", nb_entries);
+				json_object_object_add(json_obj_list, line, json_obj);
+				json_obj = NULL;
+				nb_entries++;
+				continue;
+			}
+			if (column_mode == false) {
+				if (handle_field_line_special(json_obj,
+							      current_str,
+							      separator) < 0) {
+					json_object_free(json_obj);
+					return -1;
+				}
+				snprintf(line, sizeof(line), "%d", nb_entries);
+				json_object_object_add(json_obj_list, line, json_obj);
+				json_obj = NULL;
+				nb_entries++;
+			}
+		}
+	} while (current_str != NULL);
+	if (pclose(fp))
+		zlog_err("SCRIPT: error closing stream with %s", script);
+	return 0;
+}
+
 /* script : command line to execute in a shell script
  * return_data : set to true if want to get back some information
  * begin_at_line : the line number where to begin parsing headers and other
@@ -218,9 +419,9 @@ static int handle_field_line(struct json_object *json_obj,
  * { "2":{"pkts":"0","bytes":"0","target":"MARK","prot":"all", \
  *           "opt":"--","in":"any",..}}
  */
-
-int zebra_wrap_script(char *script, bool return_data,
-		      int begin_at_line, struct json_object *json_obj_list)
+int zebra_wrap_script_rows(const char *script,
+			   int begin_at_line,
+			   struct json_object *json_obj_list)
 {
 	FILE *fp;
 	char data[DATA_LEN];
@@ -237,18 +438,15 @@ int zebra_wrap_script(char *script, bool return_data,
 		zlog_debug("SCRIPT : %s", script);
 	fp = popen(script, "r");
 	if (!fp) {
-		zlog_err("NETLINK: error calling %s", script);
-		return -1;
-	}
-	if (!return_data) {
-		if (pclose(fp))
-			zlog_err("SCRIPT: error with %s: closing stream",
-				 script);
+		zlog_err("SCRIPT: error calling %s", script);
 		return -1;
 	}
 	do {
 		json_object *json_obj = NULL;
+		char separator[5];
 
+		memset(separator, 0, sizeof(separator));
+		separator[0] = ' ';
 		memset(data, 0, DATA_LEN);
 		current_str = fgets(data, DATA_LEN, fp);
 		if (current_str) {
@@ -269,8 +467,8 @@ int zebra_wrap_script(char *script, bool return_data,
 				json_obj = json_object_new_object();
 			else
 				json_obj = NULL;
-			if (handle_field_line(json_obj, current_str,
-					      item) < 0)
+			if (handle_field_line_row(json_obj, current_str,
+						  item, separator) < 0)
 				return -1;
 			if (json_obj) {
 				char line[10];
@@ -291,12 +489,23 @@ int zebra_wrap_script(char *script, bool return_data,
 		}
 	}
 	if (pclose(fp))
-		zlog_err("NETLINK: error closing stream with %s", script);
+		zlog_err("SCRIPT: error closing stream with %s", script);
 	return 0;
 }
 
-int zebra_wrap_script_call_only(char *script)
+int zebra_wrap_script_call_only(const char *script)
 {
-	zebra_wrap_script(script, false, 0, NULL);
+	FILE *fp;
+
+	if (IS_ZEBRA_DEBUG_KERNEL_MSGDUMP_SEND)
+		zlog_debug("SCRIPT : %s", script);
+	fp = popen(script, "r");
+	if (!fp) {
+		zlog_err("SCRIPT: error calling %s", script);
+		return -1;
+	}
+	if (pclose(fp))
+		zlog_err("SCRIPT: error with %s: closing stream",
+			 script);
 	return 0;
 }
