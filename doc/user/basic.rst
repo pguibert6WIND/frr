@@ -445,6 +445,18 @@ specifying the encapsulation to use. ``Netlink`` is the default, and
 ``protobuf`` may not be available if the module was built without protobuf
 support. Refer to :ref:`zebra-fib-push-interface` for more information.
 
+The Script WRAP Module
+----------------------
+
+If Wrap Script is enabled during compile-time and installed as part of the package,
+the ``wrap_script`` module can be loaded for the *zebra* daemon. This provides the
+Zebra Script Wrapper interface that permits calling a script for configuring and
+monitoring some Linux tools. This interface permits faster integration for usage,
+than using Netlink since it avoids the pain of adding the full netlink layer. Also,
+this benefits also for systems not using Netlink. At the time of the writing, the
+interface is used for configuring iptables, ipset, and iprule tools. Also it is used
+to return under json format some information from the previous configuration.
+
 .. _virtual-terminal-interfaces:
 
 Virtual Terminal Interfaces
