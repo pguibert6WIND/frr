@@ -30,6 +30,7 @@
 #include "vrf.h"
 #include "log.h"
 #include "zclient.h"
+#include "hook.h"
 
 #include <linux/fib_rules.h>
 #include <linux/libipset/linux_ip_set.h>
@@ -43,7 +44,6 @@
 #include "zebra/kernel_netlink.h"
 #include "zebra/rule_netlink.h"
 #include "zebra/zebra_pbr.h"
-#include "zebra/zebra_wrap_script.h"
 
 extern struct zebra_privs_t zserv_privs;
 
@@ -61,6 +61,8 @@ static const struct message netlink_ipset_type_msg[] = {
 /* static function declarations */
 
 /* Private functions */
+DEFINE_HOOK(rule_netlink_wrap_script_call_only, (const char *script),
+	    (script))
 
 const char *netlink_ipset_type2str(uint32_t type)
 {
@@ -153,7 +155,7 @@ static int netlink_rule_update(int cmd, struct zebra_pbr_rule *rule)
 			 rule->rule.filter.fwmark, rule->rule.action.table);
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("PBR: %s", buf);
-		zebra_wrap_script_call_only(buf);
+		hook_call(rule_netlink_wrap_script_call_only, buf);
 		return 0;
 	} else {
 		return netlink_talk(netlink_talk_filter, &req.n,
@@ -185,7 +187,7 @@ static int netlink_ipset_update(int cmd,
 	if (zserv_privs.change(ZPRIVS_RAISE))
 		zlog_err("%s : Can't raise privileges",
 			 __func__);
-	zebra_wrap_script_call_only(buf);
+	hook_call(rule_netlink_wrap_script_call_only, buf);
 	if (zserv_privs.change(ZPRIVS_LOWER))
 		zlog_err("%s : Can't lower privileges",
 			 __func__);
@@ -198,7 +200,7 @@ static int netlink_ipset_entry_update_unit(int cmd,
 {
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug("PBR: %s", buf);
-	zebra_wrap_script_call_only(buf);
+	hook_call(rule_netlink_wrap_script_call_only, buf);
 	return 0;
 }
 
@@ -335,7 +337,7 @@ static int netlink_iptable_update_unit_2(char *buf, char *ptr,
 	if (zserv_privs.change(ZPRIVS_RAISE))
 		zlog_err("%s : Can't raise privileges",
 			 __func__);
-	zebra_wrap_script_call_only(buf);
+	hook_call(rule_netlink_wrap_script_call_only, buf);
 	if (zserv_privs.change(ZPRIVS_LOWER))
 		zlog_err("%s : Can't lower privileges",
 			 __func__);

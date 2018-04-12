@@ -16,6 +16,10 @@ if FPM
 module_LTLIBRARIES += zebra/zebra_fpm.la
 endif
 
+if WRAP_SCRIPT
+module_LTLIBRARIES += zebra/zebra_wrap_script.la
+endif
+
 ## endif ZEBRA
 endif
 
@@ -71,8 +75,7 @@ zebra_zebra_SOURCES = \
 	zebra/zebra_netns_id.c \
 	zebra/zebra_netns_notify.c \
 	zebra/table_manager.c \
-	zebra/zebra_wrap_script.c \
-	# end
+	#end
 
 zebra/zebra_vty_clippy.c: $(CLIPPY_DEPS)
 zebra/zebra_vty.$(OBJEXT): zebra/zebra_vty_clippy.c
@@ -116,8 +119,7 @@ noinst_HEADERS += \
 	zebra/zebra_netns_id.h \
 	zebra/zebra_netns_notify.h \
 	zebra/table_manager.h \
-	zebra/zebra_wrap_script.h \
-	# end
+	#end
 
 zebra_zebra_irdp_la_SOURCES = \
 	zebra/irdp_interface.c \
@@ -140,6 +142,11 @@ zebra_zebra_fpm_la_SOURCES += zebra/zebra_fpm_protobuf.c
 if DEV_BUILD
 zebra_zebra_fpm_la_SOURCES += zebra/zebra_fpm_dt.c
 endif
+endif
+
+if WRAP_SCRIPT
+zebra_zebra_wrap_script_la_SOURCES = zebra/zebra_wrap_script.c
+zebra_zebra_wrap_script_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 endif
 
 EXTRA_DIST += \

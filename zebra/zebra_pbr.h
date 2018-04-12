@@ -28,6 +28,7 @@
 
 #include "prefix.h"
 #include "if.h"
+#include "hook.h"
 
 #include "rt.h"
 #include "pbr.h"
@@ -263,5 +264,15 @@ extern void zebra_pbr_show_iptable(struct vty *vty);
 
 extern void zebra_pbr_terminate(void);
 extern void zebra_pbr_cmd_init(void);
+
+struct json_object;
+DECLARE_HOOK(zebra_pbr_wrap_script_column, (const char *script, int begin_at_line,
+					   struct json_object *json, char *str),
+	    (script, begin_at_line, json, str))
+DECLARE_HOOK(zebra_pbr_wrap_script_rows, (const char *script, int begin_at_line,
+					   struct json_object *json),
+	     (script, begin_at_line, json))
+DECLARE_HOOK(rule_netlink_wrap_script_call_only, (const char *script),
+	    (script))
 
 #endif /* _ZEBRA_PBR_H */

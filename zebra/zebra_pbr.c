@@ -24,10 +24,11 @@
 #include <jhash.h>
 #include <hash.h>
 #include <json.h>
+#include <hook.h>
 
 #include "zebra/zebra_pbr.h"
 #include "zebra/rt.h"
-#include "zebra/zebra_wrap_script.h"
+#include "zebra_pbr.h"
 
 /* definitions */
 
@@ -854,6 +855,14 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 	return HASHWALK_CONTINUE;
 }
 
+DEFINE_HOOK(zebra_pbr_wrap_script_column, (const char *script, int begin_at_line,
+					   struct json_object *json, const char *str),
+	    (script, begin_at_line, json, str))
+
+DEFINE_HOOK(zebra_pbr_wrap_script_rows, (const char *script, int begin_at_line,
+					   struct json_object *json),
+	     (script, begin_at_line, json))
+
 static int zebra_pbr_get_json_from_ipset(char *ipsetname, struct json_object *list)
 {
 	const char input[120];
@@ -1044,7 +1053,7 @@ void zebra_pbr_show_iptable(struct vty *vty)
 	  "<IDx>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr1> ..."},
 	  "<IDy>":{ "pkts":"<X>","bytes":"<Y>"",...,"misc":".. match0x<ptr2> ..."},
 	 */
-	ret = zebra_wrap_script_rows(input, 1, list);
+	ret = hook_call(zebra_pbr_wrap_script_rows, input, 1, list);
 	if (ret < 0)
 		env.json = NULL;
 	else

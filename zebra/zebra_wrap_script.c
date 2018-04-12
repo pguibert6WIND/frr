@@ -19,11 +19,13 @@
  */
 
 #include <zebra.h>
-
 #include "json.h"
+#include "version.h"
+#include "hook.h"
+#include "libfrr.h"
 
 #include "zebra/debug.h"
-#include "zebra/zebra_wrap_script.h"
+#include "zebra/zebra_pbr.h"
 
 /* this struct temporarily stores the list of headers
  * - name is used to store the name of the header field
@@ -53,11 +55,37 @@ struct item_list {
 
 static int zebra_wrap_debug;
 
+static int zebra_wrap_script_column(const char *script,
+				     int begin_at_line,
+				     struct json_object *json_obj_list,
+				     char *switch_to_mode_row_at);
+static int zebra_wrap_script_rows(const char *script,
+			    int begin_at_line,
+			    struct json_object *json_obj_list);
 
-void zebra_wrap_init(void)
+static int zebra_wrap_script_call_only(const char *script);
+
+static int zebra_wrap_script_init(struct thread_master *t)
 {
 	zebra_wrap_debug = 0;
+	return 0;
 }
+
+static int zebra_wrap_script_module_init(void)
+{
+	hook_register(rule_netlink_wrap_script_call_only, zebra_wrap_script_call_only);
+	hook_register(zebra_pbr_wrap_script_rows, zebra_wrap_script_rows);
+	hook_register(zebra_pbr_wrap_script_column, zebra_wrap_script_column);
+	hook_register(frr_late_init, zebra_wrap_script_init);
+	return 0;
+}
+
+FRR_MODULE_SETUP(
+		 .name = "zebra_wrap",
+		 .version = FRR_VERSION,
+		 .description = "zebra wrap script module",
+		 .init = zebra_wrap_script_module_init
+		 )
 
 static bool isseparator(char car, char separator_list[])
 {
@@ -343,9 +371,9 @@ static int handle_field_line_row(struct json_object *json_obj,
  * "Number of Entries":"2"},{"1"}:{"data":"1.1.1.2,2.2.2.2",
  * "pkts":"0","bytes":"0"}
  */
-int zebra_wrap_script_column(const char *script,
-			     int begin_at_line,
-			     struct json_object *json_obj_list,
+static int zebra_wrap_script_column(const char *script,
+				    int begin_at_line,
+				    struct json_object *json_obj_list,
 			     char *switch_to_mode_row_at)
 {
 	FILE *fp;
@@ -517,7 +545,7 @@ int zebra_wrap_script_rows(const char *script,
 	return 0;
 }
 
-int zebra_wrap_script_call_only(const char *script)
+static int zebra_wrap_script_call_only(const char *script)
 {
 	FILE *fp;
 

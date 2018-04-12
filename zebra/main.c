@@ -49,7 +49,6 @@
 #include "zebra/zebra_mpls.h"
 #include "zebra/label_manager.h"
 #include "zebra/zebra_netns_notify.h"
-#include "zebra/zebra_wrap_script.h"
 #include "zebra/zebra_pbr.h"
 
 #define ZEBRA_PTM_SUPPORT
@@ -308,8 +307,6 @@ int main(int argc, char **argv)
 	vty_config_lockless();
 	zebrad.master = frr_init();
 
-	/* Zebra related initialize. */
-	zebra_wrap_init();
 	zserv_init();
 	rib_init();
 	zebra_if_init();
