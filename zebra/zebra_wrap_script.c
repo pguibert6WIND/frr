@@ -62,6 +62,10 @@ static int zebra_wrap_script_column(const char *script,
 static int zebra_wrap_script_rows(const char *script,
 			    int begin_at_line,
 			    struct json_object *json_obj_list);
+static int zebra_wrap_script_get_stat(struct json_object *json_input,
+				      const char *pattern,
+				      const char *match,
+				      uint64_t *pkts, uint64_t *bytes);
 
 static int zebra_wrap_script_call_only(const char *script);
 
@@ -76,6 +80,7 @@ static int zebra_wrap_script_module_init(void)
 	hook_register(rule_netlink_wrap_script_call_only, zebra_wrap_script_call_only);
 	hook_register(zebra_pbr_wrap_script_rows, zebra_wrap_script_rows);
 	hook_register(zebra_pbr_wrap_script_column, zebra_wrap_script_column);
+	hook_register(zebra_pbr_wrap_script_get_stat, zebra_wrap_script_get_stat);
 	hook_register(frr_late_init, zebra_wrap_script_init);
 	return 0;
 }
@@ -561,3 +566,84 @@ static int zebra_wrap_script_call_only(const char *script)
 			 script);
 	return 0;
 }
+
+/* convert string <NUM>[K,M,G] into int64 value
+ * last letter of the word is a multiplier
+ * remove it and apply atoll
+ */
+static void zebra_wrap_script_convert_stat(const char *from, uint64_t *to,
+					   uint64_t multiplier)
+{
+	char buff_tmp[64];
+	char *ptr;
+
+	if (!from) {
+		*to = 0;
+		return;
+	}
+	strncpy(buff_tmp, from, sizeof(buff_tmp));
+	ptr = strchr(buff_tmp, 'K');
+	if (ptr != NULL) {
+		*ptr = '\0';
+		*to = atoll(buff_tmp) * 1000;
+		return;
+	}
+	ptr = strchr(buff_tmp, 'M');
+	if (ptr != NULL) {
+		*ptr = '\0';
+		*to = atoll(buff_tmp) * 1000000;
+		return;
+	}
+	ptr = strchr(buff_tmp, 'G');
+	if (ptr != NULL) {
+		*ptr = '\0';
+		*to = atoll(buff_tmp) * 1000000000;
+		return;
+	}
+	*to = atoll(buff_tmp);
+}
+
+static int zebra_wrap_script_get_stat(struct json_object *json_input,
+				      const char *pattern,
+				      const char *match,
+				      uint64_t *pkts, uint64_t *bytes)
+{
+	struct json_object *json;
+	struct json_object *json_misc = NULL;
+	int i = 0;
+	char buff[10];
+	struct json_object *json_temp;
+
+	if (zebra_wrap_debug & SCRIPT_DEBUG)
+		zlog_debug("SCRIPT : get_stat pattern %s match %s",
+			   pattern, match);
+	if (!json_input)
+		return -1;
+
+	do {
+		json = NULL;
+		snprintf(buff, sizeof(buff), "%d", i);
+		json_object_object_get_ex(json_input, buff, &json);
+		if (!json)
+			return -1;
+		if (json_object_object_get_ex(json, pattern, &json_misc)) {
+			/* get misc string */
+			if (json_object_get_string(json_misc) &&
+			    strstr(json_object_get_string(json_misc),
+				   match))
+				break;
+		}
+		i++;
+	} while (1);
+
+	if (json_object_object_get_ex(json, "pkts", &json_temp))
+		zebra_wrap_script_convert_stat(
+			       json_object_get_string(json_temp),
+			       pkts, 1000);
+	if (json_object_object_get_ex(json, "bytes", &json_temp))
+		zebra_wrap_script_convert_stat(
+			       json_object_get_string(json_temp),
+			       bytes, 1024);
+	return 0;
+}
+

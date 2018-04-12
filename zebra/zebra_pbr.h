@@ -274,5 +274,9 @@ DECLARE_HOOK(zebra_pbr_wrap_script_rows, (const char *script, int begin_at_line,
 	     (script, begin_at_line, json))
 DECLARE_HOOK(rule_netlink_wrap_script_call_only, (const char *script),
 	    (script))
+DECLARE_HOOK(zebra_pbr_wrap_script_get_stat, (struct json_object *json_input,
+				    const char *pattern, const char *match,
+				    uint64_t *pkts, uint64_t *bytes),
+	     (json_input, pattern, match, pkts, bytes))
 
 #endif /* _ZEBRA_PBR_H */

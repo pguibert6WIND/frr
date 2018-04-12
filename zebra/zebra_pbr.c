@@ -33,6 +33,11 @@
 /* definitions */
 
 /* static function declarations */
+DEFINE_HOOK(zebra_pbr_wrap_script_get_stat, (struct json_object *json_input,
+				      const char *pattern,
+				      const char *match,
+				      uint64_t *pkts, uint64_t *bytes),
+	    (json_input, pattern, match, pkts, bytes));
 
 /* Private functions */
 
@@ -709,6 +714,8 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 	struct vty *vty = unique->vty;
 	struct zebra_pbr_ipset_entry *zpie = (struct zebra_pbr_ipset_entry *)backet->data;
 	char json_data_str[100];
+	uint64_t pkts = 0, bytes = 0;
+	int ret;
 
 	if (zpie->backpointer != zpi)
 		return HASHWALK_CONTINUE;
@@ -816,42 +823,10 @@ static int zebra_pbr_show_ipset_entry_walkcb(struct hash_backet *backet, void *a
 					       zpie->proto);
 	}
 	vty_out(vty, " (%u)\n", zpie->unique);
-	if (unique->json) {
-		int i = 1;
-		char buff[10];
-		bool found = false;
-		struct json_object *json;
-		struct json_object *json_data;
-
-		/* get pkts and bytes */
-		do {
-			json = NULL;
-			snprintf(buff, sizeof(buff), "%d", i);
-			json_object_object_get_ex(unique->json, buff, &json);
-			if (!json)
-				return HASHWALK_CONTINUE;
-			if (json_object_object_get_ex(json, "data", &json_data)) {
-				/* get misc string */
-				if (json_object_get_string(json_data) &&
-				    strstr(json_object_get_string(json_data),
-					   json_data_str))
-					found = true;
-			}
-			if (!found)
-				i++;
-		} while (found == false);
-		if (found && json) {
-			struct json_object *json_temp;
-
-			if (json_object_object_get_ex(json, "packets", &json_temp))
-				vty_out(vty, "\t packets %s",
-					json_object_get_string(json_temp));
-			if (json_object_object_get_ex(json, "bytes", &json_temp))
-				vty_out(vty, "\t bytes %s",
-					json_object_get_string(json_temp));
-			vty_out(vty,"\n");
-		}
-	}
+	ret = hook_call(zebra_pbr_wrap_script_get_stat, unique->json, "data",
+			json_data_str, &pkts, &bytes);
+	if (ret == 0 && pkts > 0)
+		vty_out(vty, "\t pkts %lu, bytes %lu\n", pkts, bytes);
 	return HASHWALK_CONTINUE;
 }
 
@@ -977,45 +952,17 @@ static int zebra_pbr_show_iptable_walkcb(struct hash_backet *backet, void *arg)
 	struct zebra_pbr_env_display *env = (struct zebra_pbr_env_display *)arg;
 	struct vty *vty = env->vty;
 	struct zebra_ns *zns = env->zns;
+	uint64_t pkts = 0, bytes = 0;
+	int ret;
 
 	vty_out(vty, "IPtable %s action %s (%u)\n", iptable->ipset_name,
 		iptable->action == ZEBRA_IPTABLES_DROP ? "drop" : "redirect",
 		iptable->unique);
-	if (env->json) {
-		struct json_object *json;
-		struct json_object *json_misc = NULL;
-		int i = 0;
-		bool found = false;
-		char buff[10];
 
-		do {
-			json = NULL;
-			snprintf(buff, sizeof(buff), "%d", i);
-			json_object_object_get_ex(env->json, buff, &json);
-			if (!json)
-				break;
-			if (json_object_object_get_ex(json, "data", &json_misc)) {
-				/* get misc string */
-				if (json_object_get_string(json_misc) &&
-				    strstr(json_object_get_string(json_misc),
-					   iptable->ipset_name))
-					found = true;
-			}
-			if (!found)
-				i++;
-		} while (found == false);
-		if (found && json) {
-			struct json_object *json_temp;
-
-			if (json_object_object_get_ex(json, "pkts", &json_temp))
-				vty_out(vty, "\t pkts %s",
-					json_object_get_string(json_temp));
-			if (json_object_object_get_ex(json, "bytes", &json_temp))
-				vty_out(vty, "\t bytes %s",
-					json_object_get_string(json_temp));
-			vty_out(vty,"\n");
-		}
-	}
+	ret = hook_call(zebra_pbr_wrap_script_get_stat, env->json, "misc",
+			iptable->ipset_name, &pkts, &bytes);
+	if (ret == 0 && pkts > 0)
+		vty_out(vty, "\t pkts %lu, bytes %lu\n", pkts, bytes);
 	if (iptable->action != ZEBRA_IPTABLES_DROP) {
 		struct pbr_rule_fwmark_lookup prfl;
 
