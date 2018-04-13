@@ -120,6 +120,8 @@ const char *node_names[] = {
 				     */
 	"bgp ipv6 flowspec",	    /* BGP_FLOWSPECV6_NODE
 				     */
+	"Wrap Script", /* WRAP_SCRIPT_NODE
+			*/
 };
 
 /* Command vector which includes some level of command lists. Normally
