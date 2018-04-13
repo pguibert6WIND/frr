@@ -588,8 +588,8 @@ static int zebra_wrap_script_call_only(const char *script)
 		return -1;
 	}
 	if (pclose(fp))
-		zlog_err("SCRIPT: error with %s: closing stream",
-			 script);
+		zlog_err("SCRIPT: error with %s: closing stream (errno %u)",
+			 script, errno);
 	return 0;
 }
 
