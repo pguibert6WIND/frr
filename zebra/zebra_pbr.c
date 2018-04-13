@@ -146,6 +146,19 @@ static struct zebra_pbr_rule *pbr_rule_lookup_unique(struct zebra_ns *zns,
 	return pul.rule;
 }
 
+static const struct message ipset_type_msg[] = {
+	{IPSET_NET_PORT_NET, "net,port,net"},
+	{IPSET_NET_PORT, "net,port"},
+	{IPSET_NET_NET, "net,net"},
+	{IPSET_NET, "net"},
+	{0}};
+
+const char *zebra_pbr_ipset_type2str(uint32_t type)
+{
+	return lookup_msg(ipset_type_msg, type,
+			  "Unrecognized IPset Type");
+}
+
 void zebra_pbr_ipset_free(void *arg)
 {
 	struct zebra_pbr_ipset *ipset;
@@ -879,7 +892,7 @@ static int zebra_pbr_show_ipset_walkcb(struct hash_backet *backet, void *arg)
 	struct zebra_ns *zns = uniqueipset->zns;
 
 	vty_out(vty, "IPset %s type %s\n", zpi->ipset_name,
-		netlink_ipset_type2str(zpi->type));
+		zebra_pbr_ipset_type2str(zpi->type));
 	unique.vty = vty;
 	unique.zpi = zpi;
 	list = json_object_new_object();
@@ -909,7 +922,7 @@ void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname)
 			vty_out(vty, "No IPset %s found\n", ipsetname);
 		}
 		vty_out(vty, "IPset %s type %s\n", ipsetname,
-			netlink_ipset_type2str(zpi->type));
+			zebra_pbr_ipset_type2str(zpi->type));
 
 		unique.vty = vty;
 		unique.zpi = zpi;

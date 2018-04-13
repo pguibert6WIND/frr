@@ -190,7 +190,7 @@ extern void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
 				struct zebra_pbr_ipset_entry *rule);
 extern void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
 				struct zebra_pbr_ipset_entry *rule);
-extern const char *netlink_ipset_type2str(uint32_t type);
+extern const char *zebra_pbr_ipset_type2str(uint32_t type);
 
 /*
  * Install specified iptable entries into kernel
@@ -272,11 +272,21 @@ DECLARE_HOOK(zebra_pbr_wrap_script_column, (const char *script, int begin_at_lin
 DECLARE_HOOK(zebra_pbr_wrap_script_rows, (const char *script, int begin_at_line,
 					   struct json_object *json),
 	     (script, begin_at_line, json))
-DECLARE_HOOK(rule_netlink_wrap_script_call_only, (const char *script),
-	    (script))
 DECLARE_HOOK(zebra_pbr_wrap_script_get_stat, (struct json_object *json_input,
 				    const char *pattern, const char *match,
 				    uint64_t *pkts, uint64_t *bytes),
 	     (json_input, pattern, match, pkts, bytes))
+DECLARE_HOOK(rule_iptable_wrap_script_update, (int cmd,
+					      struct zebra_pbr_iptable *iptable),
+					     (cmd, iptable))
+DECLARE_HOOK(rule_ipset_entry_wrap_script_update, (int cmd,
+				  struct zebra_pbr_ipset_entry *ipset),
+			    (cmd, ipset))
+DECLARE_HOOK(rule_ipset_wrap_script_update, (int cmd,
+				  struct zebra_pbr_ipset *ipset),
+			    (cmd, ipset))
+DECLARE_HOOK(rule_ip_wrap_script_update, (int cmd,
+				struct zebra_pbr_rule *iprule),
+			    (cmd, iprule))
 
 #endif /* _ZEBRA_PBR_H */

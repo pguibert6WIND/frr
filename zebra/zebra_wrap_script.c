@@ -22,6 +22,7 @@
 #include "json.h"
 #include "version.h"
 #include "hook.h"
+#include "log.h"
 #include "libfrr.h"
 
 #include "zebra/debug.h"
@@ -53,6 +54,14 @@ struct item_list {
 #define SCRIPT_ITEM_LIST	(1<<2)
 #define SCRIPT_ELEMENT_LIST	(1<<3)
 
+/* definitions */
+#define IPSET_DEFAULT_HASHSIZE 64
+#define IPSET_PRE_HASH "hash:"
+
+static const char *zebra_wrap_script_iptable_pathname = "iptable";
+static const char *zebra_wrap_script_ipset_pathname = "ipset";
+static const char *zebra_wrap_script_iprule_pathname = "ip rule";
+
 static int zebra_wrap_debug;
 
 static int zebra_wrap_script_column(const char *script,
@@ -69,6 +78,15 @@ static int zebra_wrap_script_get_stat(struct json_object *json_input,
 
 static int zebra_wrap_script_call_only(const char *script);
 
+static int zebra_wrap_script_iptable_update(int cmd,
+					    struct zebra_pbr_iptable *iptable);
+static int zebra_wrap_script_ipset_update(int cmd,
+					  struct zebra_pbr_ipset *ipset);
+static int zebra_wrap_script_ipset_entry_update(int cmd,
+					  struct zebra_pbr_ipset_entry *ipset);
+static int zebra_wrap_script_iprule_update(int cmd,
+					   struct zebra_pbr_rule *iprule);
+
 static int zebra_wrap_script_init(struct thread_master *t)
 {
 	zebra_wrap_debug = 0;
@@ -77,11 +95,17 @@ static int zebra_wrap_script_init(struct thread_master *t)
 
 static int zebra_wrap_script_module_init(void)
 {
-	hook_register(rule_netlink_wrap_script_call_only, zebra_wrap_script_call_only);
 	hook_register(zebra_pbr_wrap_script_rows, zebra_wrap_script_rows);
 	hook_register(zebra_pbr_wrap_script_column, zebra_wrap_script_column);
 	hook_register(zebra_pbr_wrap_script_get_stat, zebra_wrap_script_get_stat);
 	hook_register(frr_late_init, zebra_wrap_script_init);
+	hook_register(rule_iptable_wrap_script_update, zebra_wrap_script_iptable_update);
+	hook_register(rule_ipset_entry_wrap_script_update,
+		      zebra_wrap_script_ipset_entry_update);
+	hook_register(rule_ipset_wrap_script_update,
+		      zebra_wrap_script_ipset_update);
+	hook_register(rule_ip_wrap_script_update,
+		      zebra_wrap_script_iprule_update);
 	return 0;
 }
 
@@ -647,3 +671,306 @@ static int zebra_wrap_script_get_stat(struct json_object *json_input,
 	return 0;
 }
 
+/*************************************************
+ * iptable
+ *************************************************/
+static int netlink_iptable_update_unit_2(char *buf, char *ptr,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	ptr+=sprintf(ptr, " --match-set %s %s",
+		     iptable->ipset_name, combi);
+	if (iptable->action == ZEBRA_IPTABLES_DROP)
+		ptr+=sprintf(ptr, " -j DROP");
+	else
+		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
+			     iptable->fwmark);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	zebra_wrap_script_call_only(buf);
+	return 0;
+}
+
+static int netlink_iptable_update_unit(int cmd,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	char buf[256];
+	char *ptr = buf;
+	struct pbr_interface *pbr_if;
+
+	if (pbr_interface_any) {
+		ptr+=sprintf(ptr, "%s -t mangle -%s PREROUTING -m set",
+			     zebra_wrap_script_iptable_pathname,
+			     cmd ? "I":"D");
+		return netlink_iptable_update_unit_2(buf, ptr,
+						     iptable, combi);
+	}
+
+	RB_FOREACH (pbr_if, pbr_interface_head, &pbr_interface_list) {
+		ptr+=sprintf(ptr, "%s -i %s -t mangle -%s PREROUTING -m set",
+			     zebra_wrap_script_iptable_pathname,
+			     pbr_if->name, cmd ? "I":"D");
+		netlink_iptable_update_unit_2(buf, ptr,
+					      iptable, combi);
+	}
+	return 0;
+}
+
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_iptable_update(int cmd,
+					    struct zebra_pbr_iptable *iptable)
+{
+	char buf2[32];
+
+	if (!zebra_wrap_script_iptable_pathname) {
+		zlog_err("SCRIPT: script not configured for iptable\n");
+		return -1;
+	}
+	if (iptable->type == IPSET_NET_NET) {
+		sprintf(buf2, "src,dst");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET) {
+		if (iptable->filter_bm & PBR_FILTER_DST_IP)
+			sprintf(buf2, "dst");
+		else
+			sprintf(buf2, "src");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET_PORT) {
+		char *ptr = buf2;
+
+		if (iptable->filter_bm & PBR_FILTER_DST_IP)
+			ptr += sprintf(ptr, "dst");
+		else
+			ptr += sprintf(ptr, "src");
+
+		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
+		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
+			/* iptable rule will be called twice.
+			 * one for each side
+			 */
+			sprintf(ptr, ",dst");
+			netlink_iptable_update_unit(cmd, iptable, buf2);
+			sprintf(ptr, ",src");
+		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
+			sprintf(ptr, ",dst");
+		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
+			sprintf(ptr, ",src");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET_PORT_NET) {
+		char *ptr = buf2;
+
+		ptr += sprintf(ptr, "src");
+
+		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
+		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
+			sprintf(ptr, ",dst,dst");
+			netlink_iptable_update_unit(cmd, iptable, buf2);
+			ptr += sprintf(ptr, ",src");
+		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
+			ptr += sprintf(ptr, ",dst");
+		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
+			ptr += sprintf(ptr, ",src");
+		ptr += sprintf(ptr, ",dst");
+
+		netlink_iptable_update_unit(cmd, iptable, buf2);
+	}
+	return 0;
+}
+
+/*************************************************
+ * ipset
+ *************************************************/
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_ipset_update(int cmd,
+					  struct zebra_pbr_ipset *ipset)
+{
+	char buf[256];
+
+	if (!zebra_wrap_script_ipset_pathname) {
+		zlog_err("SCRIPT: script not configured for ipset\n");
+		return 0;
+	}
+	if (cmd) {
+		sprintf(buf, "ipset create %s %s%s hashsize %u counters",
+			ipset->ipset_name, IPSET_PRE_HASH,
+			zebra_pbr_ipset_type2str(ipset->type),
+			IPSET_DEFAULT_HASHSIZE);
+	} else
+		sprintf(buf, "ipset destroy %s",
+			ipset->ipset_name);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	zebra_wrap_script_call_only(buf);
+	return 0;
+}
+
+static int netlink_ipset_entry_update_unit(int cmd,
+					   struct zebra_pbr_ipset_entry *ipset,
+					   char *buf)
+{
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	zebra_wrap_script_call_only(buf);
+	return 0;
+}
+
+static void netlink_ipset_entry_port(char *strtofill, int lenstr,
+				     uint32_t filter_bm,
+				     uint16_t port_min, uint16_t port_max)
+{
+	if (port_max)
+		sprintf(strtofill, "%d-%d",
+			port_min, port_max);
+	else
+		sprintf(strtofill, "%d",
+			port_min);
+}
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_ipset_entry_update(int cmd,
+						struct zebra_pbr_ipset_entry *ipset)
+{
+	char buf[256];
+	char buf_src[PREFIX2STR_BUFFER];
+	char buf_dst[PREFIX2STR_BUFFER];
+	char *psrc = NULL, *pdst = NULL;
+	struct zebra_pbr_ipset *bp;
+	uint16_t port = 0;
+	uint16_t port_max = 0;
+
+	if (!zebra_wrap_script_ipset_pathname) {
+		zlog_err("SCRIPT: script not configured for ipset\n");
+		return -1;
+	}
+	if (ipset->filter_bm & PBR_FILTER_SRC_PORT)
+		port = ipset->src_port_min;
+	else if (ipset->filter_bm & PBR_FILTER_DST_PORT)
+		port = ipset->dst_port_min;
+	if (ipset->filter_bm & PBR_FILTER_SRC_PORT_RANGE)
+		port_max = ipset->src_port_max;
+	else if (ipset->filter_bm & PBR_FILTER_DST_PORT_RANGE)
+		port_max = ipset->dst_port_max;
+	if (ipset->filter_bm & PBR_FILTER_SRC_IP) {
+		psrc = (char *)prefix2str(&ipset->src, buf_src, PREFIX2STR_BUFFER);
+		if (psrc == NULL)
+			return -1;
+	}
+	if (ipset->filter_bm & PBR_FILTER_DST_IP) {
+		pdst = (char *)prefix2str(&ipset->dst, buf_dst, PREFIX2STR_BUFFER);
+		if (pdst == NULL)
+			return -1;
+	}
+	bp = ipset->backpointer;
+	if (!bp)
+		return -1;
+	if (bp->type == IPSET_NET_NET) {
+		sprintf(buf, "%s %s %s %s,%s",
+			zebra_wrap_script_ipset_pathname,
+			cmd ? "add" : "del",
+			bp->ipset_name,
+			psrc, pdst);
+		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else if (bp->type == IPSET_NET) {
+		sprintf(buf, "%s %s %s %s",
+			zebra_wrap_script_ipset_pathname,
+			cmd ? "add" : "del",
+			bp->ipset_name,
+			pdst == NULL ? psrc : pdst);
+		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else if (bp->type == IPSET_NET_PORT) {
+		char strtofill[32];
+
+		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
+					 ipset->filter_bm,
+					 port, port_max);
+		/* apply it to udp and tcp */
+		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
+			sprintf(buf, "%s %s %s %s,udp:%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, strtofill);
+			netlink_ipset_entry_update_unit(cmd, ipset, buf);
+			sprintf(buf, "%s %s %s %s,tcp:%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, strtofill);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		} else {
+			sprintf(buf, "%s %s %s %s,%d:%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				pdst == NULL ? psrc : pdst, ipset->proto,
+				strtofill);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		}
+	} else if (bp->type == IPSET_NET_PORT_NET) {
+		char strtofill[32];
+
+		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
+					 ipset->filter_bm,
+					 port, port_max);
+		/* apply it to udp and tcp */
+		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
+			sprintf(buf, "%s %s %s %s,tcp:%s,%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				psrc, strtofill, pdst);
+			netlink_ipset_entry_update_unit(cmd, ipset, buf);
+			sprintf(buf, "%s %s %s %s,udp:%s,%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				psrc, strtofill, pdst);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		} else {
+			sprintf(buf, "%s %s %s %s,%d:%s,%s",
+				zebra_wrap_script_ipset_pathname,
+				cmd ? "add" : "del",
+				bp->ipset_name,
+				psrc, ipset->proto, strtofill, pdst);
+			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
+		}
+	}
+	return -1;
+}
+
+/*************************************************
+ * iprule
+ *************************************************/
+
+static int zebra_wrap_script_iprule_update(int cmd,
+					   struct zebra_pbr_rule *rule)
+{
+	char buf[255];
+
+	if (!zebra_wrap_script_iprule_pathname) {
+		zlog_err("SCRIPT: script not configured for iprule\n");
+		return -1;
+	}
+	if (!(rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule)))
+		return -1;
+	snprintf(buf, 255, "%s %s fwmark %d table %d",
+		 zebra_wrap_script_iprule_pathname,
+		 cmd ? "add" : "del",
+		 rule->rule.filter.fwmark, rule->rule.action.table);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	zebra_wrap_script_call_only(buf);
+	return 0;
+}

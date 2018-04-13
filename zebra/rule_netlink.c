@@ -48,9 +48,6 @@
 extern struct zebra_privs_t zserv_privs;
 
 /* definitions */
-#define IPSET_DEFAULT_HASHSIZE 64
-#define IPSET_PRE_HASH "hash:"
-
 static const struct message netlink_ipset_type_msg[] = {
 	{IPSET_NET_PORT_NET, "net,port,net"},
 	{IPSET_NET_PORT, "net,port"},
@@ -61,14 +58,20 @@ static const struct message netlink_ipset_type_msg[] = {
 /* static function declarations */
 
 /* Private functions */
-DEFINE_HOOK(rule_netlink_wrap_script_call_only, (const char *script),
-	    (script))
+DEFINE_HOOK(rule_iptable_wrap_script_update, (int cmd,
+					     struct zebra_pbr_iptable *iptable),
+					    (cmd, iptable))
 
-const char *netlink_ipset_type2str(uint32_t type)
-{
-	return lookup_msg(netlink_ipset_type_msg, type,
-			  "Unrecognized IPset Type");
-}
+DEFINE_HOOK(rule_ipset_entry_wrap_script_update, (int cmd,
+				  struct zebra_pbr_ipset_entry *ipset),
+			    (cmd, ipset))
+DEFINE_HOOK(rule_ipset_wrap_script_update, (int cmd,
+				  struct zebra_pbr_ipset *ipset),
+			    (cmd, ipset))
+DEFINE_HOOK(rule_ip_wrap_script_update, (int cmd,
+				  struct zebra_pbr_rule *iprule),
+			    (cmd, iprule))
+
 
 /* Install or uninstall specified rule for a specific interface.
  * Form netlink message and ship it. Currently, notify status after
@@ -148,288 +151,10 @@ static int netlink_rule_update(int cmd, struct zebra_pbr_rule *rule)
 	 */
 	memset(&snl, 0, sizeof(snl));
 	snl.nl_family = AF_NETLINK;
-	if (rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule)) {
-		char buf[255];
-		snprintf(buf, 255, "ip rule %s fwmark %d table %d",
-			 cmd == RTM_NEWRULE ? "add" : "del",
-			 rule->rule.filter.fwmark, rule->rule.action.table);
-		if (IS_ZEBRA_DEBUG_KERNEL)
-			zlog_debug("PBR: %s", buf);
-		hook_call(rule_netlink_wrap_script_call_only, buf);
-		return 0;
-	} else {
-		return netlink_talk(netlink_talk_filter, &req.n,
-				    &zns->netlink_cmd, zns, 0);
-	}
+	return netlink_talk(netlink_talk_filter, &req.n,
+			    &zns->netlink_cmd, zns, 0);
 }
 
-
-/*
- * Form netlink message and ship it. Currently, notify status after
- * waiting for netlink status.
- */
-static int netlink_ipset_update(int cmd,
-				struct zebra_pbr_ipset *ipset,
-				struct zebra_ns *zns)
-{
-	char buf[256];
-
-	if (cmd == IPSET_CMD_CREATE) {
-		sprintf(buf, "ipset create %s %s%s hashsize %u counters",
-			ipset->ipset_name, IPSET_PRE_HASH,
-			netlink_ipset_type2str(ipset->type),
-			IPSET_DEFAULT_HASHSIZE);
-	} else
-		sprintf(buf, "ipset destroy %s",
-			ipset->ipset_name);
-	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("PBR: %s", buf);
-	if (zserv_privs.change(ZPRIVS_RAISE))
-		zlog_err("%s : Can't raise privileges",
-			 __func__);
-	hook_call(rule_netlink_wrap_script_call_only, buf);
-	if (zserv_privs.change(ZPRIVS_LOWER))
-		zlog_err("%s : Can't lower privileges",
-			 __func__);
-	return 0;
-}
-
-static int netlink_ipset_entry_update_unit(int cmd,
-					   struct zebra_pbr_ipset_entry *ipset,
-					   char *buf)
-{
-	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("PBR: %s", buf);
-	hook_call(rule_netlink_wrap_script_call_only, buf);
-	return 0;
-}
-
-static void netlink_ipset_entry_port(char *strtofill, int lenstr,
-				     uint32_t filter_bm,
-				     uint16_t port_min, uint16_t port_max)
-{
-	if (port_max)
-		sprintf(strtofill, "%d-%d",
-			port_min, port_max);
-	else
-		sprintf(strtofill, "%d",
-			port_min);
-}
-
-/*
- * Form netlink message and ship it. Currently, notify status after
- * waiting for netlink status.
- */
-static int netlink_ipset_entry_update(int cmd,
-			struct zebra_pbr_ipset_entry *ipset,
-			struct zebra_ns *zns)
-{
-	char buf[256];
-	char buf_src[PREFIX2STR_BUFFER];
-	char buf_dst[PREFIX2STR_BUFFER];
-	char *psrc = NULL, *pdst = NULL;
-	struct zebra_pbr_ipset *bp;
-	uint16_t port = 0;
-	uint16_t port_max = 0;
-
-	if (ipset->filter_bm & PBR_FILTER_SRC_PORT)
-		port = ipset->src_port_min;
-	else if (ipset->filter_bm & PBR_FILTER_DST_PORT)
-		port = ipset->dst_port_min;
-	if (ipset->filter_bm & PBR_FILTER_SRC_PORT_RANGE)
-		port_max = ipset->src_port_max;
-	else if (ipset->filter_bm & PBR_FILTER_DST_PORT_RANGE)
-		port_max = ipset->dst_port_max;
-	if (ipset->filter_bm & PBR_FILTER_SRC_IP) {
-		psrc = (char *)prefix2str(&ipset->src, buf_src, PREFIX2STR_BUFFER);
-		if (psrc == NULL)
-			return -1;
-	}
-	if (ipset->filter_bm & PBR_FILTER_DST_IP) {
-		pdst = (char *)prefix2str(&ipset->dst, buf_dst, PREFIX2STR_BUFFER);
-		if (pdst == NULL)
-			return -1;
-	}
-	bp = ipset->backpointer;
-	if (!bp)
-		return -1;
-	if (bp->type == IPSET_NET_NET) {
-		sprintf(buf, "ipset %s %s %s,%s",
-			cmd == IPSET_CMD_ADD ? "add" : "del",
-			bp->ipset_name,
-			psrc, pdst);
-		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-	} else if (bp->type == IPSET_NET) {
-		sprintf(buf, "ipset %s %s %s",
-			cmd == IPSET_CMD_ADD ? "add" : "del",
-			bp->ipset_name,
-			pdst == NULL ? psrc : pdst);
-		return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-	} else if (bp->type == IPSET_NET_PORT) {
-		char strtofill[32];
-
-		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
-					 ipset->filter_bm,
-					 port, port_max);
-		/* apply it to udp and tcp */
-		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
-			sprintf(buf, "ipset %s %s %s,udp:%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				pdst == NULL ? psrc : pdst, strtofill);
-			netlink_ipset_entry_update_unit(cmd, ipset, buf);
-			sprintf(buf, "ipset %s %s %s,tcp:%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				pdst == NULL ? psrc : pdst, strtofill);
-			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-		} else {
-			sprintf(buf, "ipset %s %s %s,%d:%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				pdst == NULL ? psrc : pdst, ipset->proto,
-				strtofill);
-			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-		}
-	} else if (bp->type == IPSET_NET_PORT_NET) {
-		char strtofill[32];
-
-		netlink_ipset_entry_port(strtofill, sizeof(strtofill),
-					 ipset->filter_bm,
-					 port, port_max);
-		/* apply it to udp and tcp */
-		if (!(ipset->filter_bm & PBR_FILTER_PROTO)) {
-			sprintf(buf, "ipset %s %s %s,tcp:%s,%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				psrc, strtofill, pdst);
-			netlink_ipset_entry_update_unit(cmd, ipset, buf);
-			sprintf(buf, "ipset %s %s %s,udp:%s,%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				psrc, strtofill, pdst);
-			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-		} else {
-			sprintf(buf, "ipset %s %s %s,%d:%s,%s",
-				cmd == IPSET_CMD_ADD ? "add" : "del",
-				bp->ipset_name,
-				psrc, ipset->proto, strtofill, pdst);
-			return netlink_ipset_entry_update_unit(cmd, ipset, buf);
-		}
-	}
-	return -1;
-}
-
-
-static int netlink_iptable_update_unit_2(char *buf, char *ptr,
-				  struct zebra_pbr_iptable *iptable,
-				  char *combi)
-{
-	ptr+=sprintf(ptr, " --match-set %s %s",
-		     iptable->ipset_name, combi);
-	if (iptable->action == ZEBRA_IPTABLES_DROP)
-		ptr+=sprintf(ptr, " -j DROP");
-	else
-		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
-			     iptable->fwmark);
-	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("PBR: %s", buf);
-	if (zserv_privs.change(ZPRIVS_RAISE))
-		zlog_err("%s : Can't raise privileges",
-			 __func__);
-	hook_call(rule_netlink_wrap_script_call_only, buf);
-	if (zserv_privs.change(ZPRIVS_LOWER))
-		zlog_err("%s : Can't lower privileges",
-			 __func__);
-	return 0;
-}
-
-static int netlink_iptable_update_unit(int cmd,
-				  struct zebra_pbr_iptable *iptable,
-				  char *combi)
-{
-	char buf[256];
-	char *ptr = buf;
-	struct pbr_interface *pbr_if;
-
-	if (pbr_interface_any) {
-		ptr+=sprintf(ptr, "iptables -t mangle -%s PREROUTING -m set",
-		     cmd ? "I":"D");
-		return netlink_iptable_update_unit_2(buf, ptr,
-						     iptable, combi);
-	}
-
-	RB_FOREACH (pbr_if, pbr_interface_head, &pbr_interface_list) {
-		ptr+=sprintf(ptr, "iptables -i %s -t mangle -%s PREROUTING -m set",
-			     pbr_if->name, cmd ? "I":"D");
-		netlink_iptable_update_unit_2(buf, ptr,
-					      iptable, combi);
-	}
-	return 0;
-}
-
-/*
- * Form netlink message and ship it. Currently, notify status after
- * waiting for netlink status.
- */
-static int netlink_iptable_update(int cmd,
-		      struct zebra_pbr_iptable *iptable,
-		      struct zebra_ns *zns)
-{
-	char buf2[32];
-
-	if (iptable->type == IPSET_NET_NET) {
-		sprintf(buf2, "src,dst");
-		return netlink_iptable_update_unit(cmd, iptable, buf2);
-	} else if (iptable->type == IPSET_NET) {
-		if (iptable->filter_bm & PBR_FILTER_DST_IP)
-			sprintf(buf2, "dst");
-		else
-			sprintf(buf2, "src");
-		return netlink_iptable_update_unit(cmd, iptable, buf2);
-	} else if (iptable->type == IPSET_NET_PORT) {
-		char *ptr = buf2;
-
-		if (iptable->filter_bm & PBR_FILTER_DST_IP)
-			ptr += sprintf(ptr, "dst");
-		else
-			ptr += sprintf(ptr, "src");
-
-		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
-		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
-			/* iptable rule will be called twice.
-			 * one for each side
-			 */
-			sprintf(ptr, ",dst");
-			netlink_iptable_update_unit(cmd, iptable, buf2);
-			sprintf(ptr, ",src");
-		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
-			sprintf(ptr, ",dst");
-		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
-			sprintf(ptr, ",src");
-		return netlink_iptable_update_unit(cmd, iptable, buf2);
-	} else if (iptable->type == IPSET_NET_PORT_NET) {
-		char *ptr = buf2;
-
-		ptr += sprintf(ptr, "src");
-
-		if ((iptable->filter_bm & PBR_FILTER_DST_PORT) &&
-		    (iptable->filter_bm & PBR_FILTER_SRC_PORT)) {
-			sprintf(ptr, ",dst,dst");
-			netlink_iptable_update_unit(cmd, iptable, buf2);
-			ptr += sprintf(ptr, ",src");
-		} else if (iptable->filter_bm & PBR_FILTER_DST_PORT)
-			ptr += sprintf(ptr, ",dst");
-		else if (iptable->filter_bm & PBR_FILTER_SRC_PORT)
-			ptr += sprintf(ptr, ",src");
-		ptr += sprintf(ptr, ",dst");
-
-		netlink_iptable_update_unit(cmd, iptable, buf2);
-	}
-	return 0;
-}
-
-/* Public functions */
 /*
  * Install specified rule for a specific interface. The preference is what
  * goes in the rule to denote relative ordering; it may or may not be the
@@ -439,7 +164,11 @@ void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
 {
 	int ret = 0;
 
-	ret = netlink_rule_update(RTM_NEWRULE, rule);
+	if (rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule))
+		ret = hook_call(rule_ip_wrap_script_update,
+				1, rule);
+	else
+		ret = netlink_rule_update(RTM_NEWRULE, rule);
 	kernel_pbr_rule_add_del_status(rule,
 				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
 					      : SOUTHBOUND_INSTALL_FAILURE);
@@ -452,7 +181,11 @@ void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
 {
 	int ret = 0;
 
-	ret = netlink_rule_update(RTM_DELRULE, rule);
+	if (rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule))
+		ret = hook_call(rule_ip_wrap_script_update,
+				0, rule);
+	else
+		ret = netlink_rule_update(RTM_DELRULE, rule);
 	kernel_pbr_rule_add_del_status(rule,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
@@ -463,7 +196,8 @@ void kernel_create_pbr_ipset(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_ipset_update(IPSET_CMD_CREATE, ipset, zns);
+	ret = hook_call(rule_ipset_wrap_script_update,
+			1, ipset);
 	kernel_pbr_ipset_add_del_status(ipset,
 				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
 					      : SOUTHBOUND_INSTALL_FAILURE);
@@ -477,7 +211,8 @@ void kernel_destroy_pbr_ipset(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_ipset_update(IPSET_CMD_DESTROY, ipset, zns);
+	ret = hook_call(rule_ipset_wrap_script_update,
+			0, ipset);
 	kernel_pbr_ipset_add_del_status(ipset,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
@@ -488,7 +223,8 @@ void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_ipset_entry_update(IPSET_CMD_ADD, ipset, zns);
+	ret = hook_call(rule_ipset_entry_wrap_script_update,
+			1, ipset);
 	kernel_pbr_ipset_entry_add_del_status(ipset,
 				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
 					      : SOUTHBOUND_INSTALL_FAILURE);
@@ -502,7 +238,8 @@ void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_ipset_entry_update(IPSET_CMD_DESTROY, ipset, zns);
+	ret = hook_call(rule_ipset_entry_wrap_script_update,
+			0, ipset);
 	kernel_pbr_ipset_entry_add_del_status(ipset,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
@@ -514,7 +251,7 @@ void kernel_add_pbr_iptable(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_iptable_update(1, iptable, zns);
+	ret = hook_call(rule_iptable_wrap_script_update, 1, iptable);
 	kernel_pbr_iptable_add_del_status(iptable,
 				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
 					      : SOUTHBOUND_INSTALL_FAILURE);
@@ -525,7 +262,7 @@ void kernel_del_pbr_iptable(struct zebra_ns *zns,
 {
 	int ret = 0;
 
-	ret = netlink_iptable_update(0, iptable, zns);
+	ret = hook_call(rule_iptable_wrap_script_update, 0, iptable);
 	kernel_pbr_iptable_add_del_status(iptable,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
 					      : SOUTHBOUND_DELETE_FAILURE);
