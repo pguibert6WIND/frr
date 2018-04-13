@@ -62,6 +62,10 @@ static const char *zebra_wrap_script_iptable_pathname = "iptable";
 static const char *zebra_wrap_script_ipset_pathname = "ipset";
 static const char *zebra_wrap_script_iprule_pathname = "ip rule";
 
+static struct cmd_node zebra_wrap_script_node = {WRAP_SCRIPT_NODE,
+				     "", /* This node has no interface. */
+				     1};
+
 static int zebra_wrap_debug;
 
 static int zebra_wrap_script_column(const char *script,
@@ -77,6 +81,7 @@ static int zebra_wrap_script_get_stat(struct json_object *json_input,
 				      uint64_t *pkts, uint64_t *bytes);
 
 static int zebra_wrap_script_call_only(const char *script);
+static int zebra_wrap_script_init(struct thread_master *t);
 
 static int zebra_wrap_script_iptable_update(int cmd,
 					    struct zebra_pbr_iptable *iptable);
@@ -86,12 +91,6 @@ static int zebra_wrap_script_ipset_entry_update(int cmd,
 					  struct zebra_pbr_ipset_entry *ipset);
 static int zebra_wrap_script_iprule_update(int cmd,
 					   struct zebra_pbr_rule *iprule);
-
-static int zebra_wrap_script_init(struct thread_master *t)
-{
-	zebra_wrap_debug = 0;
-	return 0;
-}
 
 static int zebra_wrap_script_module_init(void)
 {
@@ -972,5 +971,22 @@ static int zebra_wrap_script_iprule_update(int cmd,
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug("PBR: %s", buf);
 	zebra_wrap_script_call_only(buf);
+	return 0;
+}
+
+/*************************************************
+ * ipset, iptable, iprule general
+ *************************************************/
+
+static int zebra_wrap_script_config_write(struct vty *vty)
+{
+	return 0;
+}
+
+static int zebra_wrap_script_init(struct thread_master *t)
+{
+	zebra_wrap_debug = 0;
+	install_node(&zebra_wrap_script_node,
+		     zebra_wrap_script_config_write);
 	return 0;
 }

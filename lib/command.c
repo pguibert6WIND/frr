@@ -122,6 +122,9 @@ const char *node_names[] = {
 				     */
 	"pbr",	    /* PBR_NODE
 		     */
+
+	"Wrap Script", /* WRAP_SCRIPT_NODE
+			*/
 };
 
 /* Command vector which includes some level of command lists. Normally

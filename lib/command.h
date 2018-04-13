@@ -143,6 +143,7 @@ enum node_type {
 	BGP_FLOWSPECV4_NODE,	/* BGP IPv4 FLOWSPEC Address-Family */
 	BGP_FLOWSPECV6_NODE,	/* BGP IPv6 FLOWSPEC Address-Family */
 	PBR_NODE,	/* Policy Routing Node */
+	WRAP_SCRIPT_NODE,	/* Wrap Script Config commands */
 	NODE_TYPE_MAX, /* maximum */
 };
 
