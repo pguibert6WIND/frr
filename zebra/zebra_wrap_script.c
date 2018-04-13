@@ -23,8 +23,10 @@
 #include "version.h"
 #include "hook.h"
 #include "libfrr.h"
+#include "memory.h"
 
 #include "zebra/debug.h"
+#include "zebra_memory.h"
 #include "zebra/zebra_pbr.h"
 
 /* this struct temporarily stores the list of headers
@@ -57,9 +59,14 @@ struct item_list {
 #define IPSET_DEFAULT_HASHSIZE 64
 #define IPSET_PRE_HASH "hash:"
 
+DEFINE_MTYPE_STATIC(ZEBRA, SCRIPTPATH, "Path Location for scripts")
 static char *zebra_wrap_script_iptable_pathname;
 static char *zebra_wrap_script_ipset_pathname;
 static char *zebra_wrap_script_iprule_pathname;
+
+static struct cmd_node zebra_wrap_script_node = {WRAP_SCRIPT_NODE,
+				     "", /* This node has no interface. */
+				     1};
 
 static int zebra_wrap_debug;
 
@@ -738,6 +745,38 @@ static int zebra_wrap_script_iptable_update(struct zebra_ns *zns, int cmd,
 	return !ret ? 1 : -1;
 }
 
+DEFUN (zebra_wrap_script_iptable,
+       zebra_wrap_script_iptable_cmd,
+       "wrap script iptable LINE...",
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPtable utility\n"
+       "path of iptable script utility \n")
+{
+	int idx = 3;
+
+	if (zebra_wrap_script_iptable_pathname) {
+		XFREE(MTYPE_TMP, zebra_wrap_script_iptable_pathname);
+		zebra_wrap_script_iptable_pathname = NULL;
+	}
+	zebra_wrap_script_iptable_pathname = argv_concat(argv, argc, idx);
+	return CMD_SUCCESS;
+}
+
+DEFUN (zebra_wrap_script_no_iptable,
+       zebra_wrap_script_no_iptable_cmd,
+       "no wrap script iptable",
+       NO_STR
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPtable utility\n"
+       "path of iptable script utility \n")
+{
+	XFREE(MTYPE_TMP, zebra_wrap_script_iptable_pathname);
+	zebra_wrap_script_iptable_pathname = NULL;
+	return CMD_SUCCESS;
+}
+
 /*************************************************
  * ipset
  *************************************************/
@@ -854,6 +893,38 @@ static int zebra_wrap_script_ipset_entry_update(struct zebra_ns *zns, int cmd,
 	return !ret ? 1 : -1;
 }
 
+DEFUN (zebra_wrap_script_ipset,
+       zebra_wrap_script_ipset_cmd,
+       "wrap script ipset LINE...",
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPset utility\n"
+       "path of ipset script utility \n")
+{
+	int idx = 3;
+
+	if (zebra_wrap_script_ipset_pathname) {
+		XFREE(MTYPE_TMP, zebra_wrap_script_ipset_pathname);
+		zebra_wrap_script_ipset_pathname = NULL;
+	}
+	zebra_wrap_script_ipset_pathname = argv_concat(argv, argc, idx);
+	return CMD_SUCCESS;
+}
+
+DEFUN (zebra_wrap_script_no_ipset,
+       zebra_wrap_script_no_ipset_cmd,
+       "no wrap script ipset",
+       NO_STR
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPset utility\n"
+       "path of ipset script utility \n")
+{
+	XFREE(MTYPE_TMP, zebra_wrap_script_ipset_pathname);
+	zebra_wrap_script_ipset_pathname = NULL;
+	return CMD_SUCCESS;
+}
+
 /*************************************************
  * iprule
  *************************************************/
@@ -888,11 +959,70 @@ static int zebra_wrap_script_iprule_update(struct zebra_ns *zns, int cmd,
 	return !ret ? 1 : -1;
 }
 
+DEFUN (zebra_wrap_script_iprule,
+       zebra_wrap_script_iprule_cmd,
+       "wrap script iprule LINE...",
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPrule utility\n"
+       "path of iprule script utility \n")
+{
+	int idx = 3;
+
+	if (zebra_wrap_script_iprule_pathname) {
+		XFREE(MTYPE_TMP, zebra_wrap_script_iprule_pathname);
+		zebra_wrap_script_iprule_pathname = NULL;
+	}
+	zebra_wrap_script_iprule_pathname = argv_concat(argv, argc, idx);
+	return CMD_SUCCESS;
+}
+
+DEFUN (zebra_wrap_script_no_iprule,
+       zebra_wrap_script_no_iprule_cmd,
+       "no wrap script iprule",
+       NO_STR
+       "Wrapping utilities\n"
+       "Use an external script\n"
+       "IPrule utility\n"
+       "path of iprule script utility \n")
+{
+	XFREE(MTYPE_TMP, zebra_wrap_script_iprule_pathname);
+	zebra_wrap_script_iprule_pathname = NULL;
+	return CMD_SUCCESS;
+}
+
+/*************************************************
+ * ipset, iptable, iprule general
+ *************************************************/
+
+static int zebra_wrap_script_config_write(struct vty *vty)
+{
+	int ret = 0;
+	if (zebra_wrap_script_iptable_pathname) {
+		vty_out(vty, "wrap script iptable %s\n", zebra_wrap_script_iptable_pathname);
+		ret++;
+	}
+	if (zebra_wrap_script_ipset_pathname) {
+		vty_out(vty, "wrap script ipset %s\n", zebra_wrap_script_ipset_pathname);
+		ret++;
+	}
+	if (zebra_wrap_script_iprule_pathname) {
+		vty_out(vty, "wrap script iprule %s\n", zebra_wrap_script_iprule_pathname);
+		ret++;
+	}
+	return ret;
+}
+
 static int zebra_wrap_script_init(struct thread_master *t)
 {
 	zebra_wrap_debug = 0;
-	zebra_wrap_script_iptable_pathname = XSTRDUP(MTYPE_TMP, "iptables");
-	zebra_wrap_script_ipset_pathname = XSTRDUP(MTYPE_TMP, "ipset");
-	zebra_wrap_script_iprule_pathname = XSTRDUP(MTYPE_TMP, "ip rule");
+	install_element(CONFIG_NODE, &zebra_wrap_script_iptable_cmd);
+	install_element(CONFIG_NODE, &zebra_wrap_script_ipset_cmd);
+	install_element(CONFIG_NODE, &zebra_wrap_script_iprule_cmd);
+	install_element(CONFIG_NODE, &zebra_wrap_script_no_iptable_cmd);
+	install_element(CONFIG_NODE, &zebra_wrap_script_no_ipset_cmd);
+	install_element(CONFIG_NODE, &zebra_wrap_script_no_iprule_cmd);
+	install_node(&zebra_wrap_script_node,
+		     zebra_wrap_script_config_write);
 	return 0;
 }
