@@ -2992,7 +2992,6 @@ void (*zserv_handlers[])(ZAPI_HANDLER_ARGS) = {
 	[ZEBRA_IPSET_ENTRY_DELETE] = zread_ipset_entry,
 	[ZEBRA_IPTABLE_ADD] = zread_iptable,
 	[ZEBRA_IPTABLE_DELETE] = zread_iptable,
-	[ZEBRA_IPSET_GET_STATS] = zread_get_ipset,
 };
 
 static inline void zserv_handle_commands(struct zserv *client,
