@@ -653,8 +653,14 @@ static int netlink_interface(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	if (tb[IFLA_LINK])
 		link_ifindex = *(ifindex_t *)RTA_DATA(tb[IFLA_LINK]);
 
-	/* Add interface. */
-	ifp = if_get_by_name(name, vrf_id, 0);
+	/* on Netns context, the interface is requested to be searched
+	 * on the local VRF. If not found, create it.
+	 */
+	ifp = if_lookup_by_name(name, vrf_id);
+	if (!ifp && vrf_is_backend_netns())
+		ifp = if_create(name, vrf_id);
+	else
+		ifp = if_get_by_name(name, vrf_id, 0);
 	set_ifindex(ifp, ifi->ifi_index, zns);
 	ifp->flags = ifi->ifi_flags & 0x0000fffff;
 	ifp->mtu6 = ifp->mtu = *(uint32_t *)RTA_DATA(tb[IFLA_MTU]);
