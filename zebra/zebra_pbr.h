@@ -179,26 +179,7 @@ extern void kernel_add_pbr_rule(struct zebra_pbr_rule *rule);
  */
 extern void kernel_del_pbr_rule(struct zebra_pbr_rule *rule);
 
-/*
- * Install specified ipset and ipset entries into the kernel
- */
-extern void kernel_create_pbr_ipset(struct zebra_ns *zns,
-				    struct zebra_pbr_ipset *rule);
-extern void kernel_destroy_pbr_ipset(struct zebra_ns *zns,
-				     struct zebra_pbr_ipset *rule);
-extern void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
-				struct zebra_pbr_ipset_entry *rule);
-extern void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
-				struct zebra_pbr_ipset_entry *rule);
 extern const char *zebra_pbr_ipset_type2str(uint32_t type);
-
-/*
- * Install specified iptable entries into kernel
- */
-extern void kernel_add_pbr_iptable(struct zebra_ns *zns,
-				   struct zebra_pbr_iptable *iptable);
-extern void kernel_del_pbr_iptable(struct zebra_ns *zns,
-				   struct zebra_pbr_iptable *iptable);
 
 /*
  * Get to know existing PBR rules in the kernel - typically called at startup.
@@ -276,17 +257,23 @@ DECLARE_HOOK(zebra_pbr_wrap_script_get_stat, (struct json_object *json_input,
 				    const char *pattern, const char *match,
 				    uint64_t *pkts, uint64_t *bytes),
 	     (json_input, pattern, match, pkts, bytes))
-DECLARE_HOOK(rule_iptable_wrap_script_update, (int cmd,
-					      struct zebra_pbr_iptable *iptable),
-					     (cmd, iptable))
-DECLARE_HOOK(rule_ipset_entry_wrap_script_update, (int cmd,
+
+DECLARE_HOOK(zebra_pbr_iptable_wrap_script_update, (struct zebra_ns *zns,
+					     int cmd,
+					     struct zebra_pbr_iptable *iptable),
+					     (zns, cmd, iptable))
+
+DECLARE_HOOK(zebra_pbr_ipset_entry_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
 				  struct zebra_pbr_ipset_entry *ipset),
-			    (cmd, ipset))
-DECLARE_HOOK(rule_ipset_wrap_script_update, (int cmd,
+				     (zns, cmd, ipset))
+DECLARE_HOOK(zebra_pbr_ipset_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
 				  struct zebra_pbr_ipset *ipset),
-			    (cmd, ipset))
-DECLARE_HOOK(rule_ip_wrap_script_update, (int cmd,
-				struct zebra_pbr_rule *iprule),
-			    (cmd, iprule))
+				     (zns, cmd, ipset))
+DECLARE_HOOK(zebra_pbr_iprule_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
+				  struct zebra_pbr_rule *iprule),
+				     (zns, cmd, iprule))
 
 #endif /* _ZEBRA_PBR_H */

@@ -58,19 +58,6 @@ static const struct message netlink_ipset_type_msg[] = {
 /* static function declarations */
 
 /* Private functions */
-DEFINE_HOOK(rule_iptable_wrap_script_update, (int cmd,
-					     struct zebra_pbr_iptable *iptable),
-					    (cmd, iptable))
-
-DEFINE_HOOK(rule_ipset_entry_wrap_script_update, (int cmd,
-				  struct zebra_pbr_ipset_entry *ipset),
-			    (cmd, ipset))
-DEFINE_HOOK(rule_ipset_wrap_script_update, (int cmd,
-				  struct zebra_pbr_ipset *ipset),
-			    (cmd, ipset))
-DEFINE_HOOK(rule_ip_wrap_script_update, (int cmd,
-				  struct zebra_pbr_rule *iprule),
-			    (cmd, iprule))
 
 
 /* Install or uninstall specified rule for a specific interface.
@@ -164,14 +151,10 @@ void kernel_add_pbr_rule(struct zebra_pbr_rule *rule)
 {
 	int ret = 0;
 
-	if (rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule))
-		ret = hook_call(rule_ip_wrap_script_update,
-				1, rule);
-	else
-		ret = netlink_rule_update(RTM_NEWRULE, rule);
+	ret = netlink_rule_update(RTM_NEWRULE, rule);
 	kernel_pbr_rule_add_del_status(rule,
 				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
-					      : SOUTHBOUND_INSTALL_FAILURE);
+				       : SOUTHBOUND_INSTALL_FAILURE);
 }
 
 /*
@@ -181,91 +164,10 @@ void kernel_del_pbr_rule(struct zebra_pbr_rule *rule)
 {
 	int ret = 0;
 
-	if (rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule))
-		ret = hook_call(rule_ip_wrap_script_update,
-				0, rule);
-	else
-		ret = netlink_rule_update(RTM_DELRULE, rule);
+	ret = netlink_rule_update(RTM_DELRULE, rule);
 	kernel_pbr_rule_add_del_status(rule,
 				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
-					      : SOUTHBOUND_DELETE_FAILURE);
-}
-
-void kernel_create_pbr_ipset(struct zebra_ns *zns,
-			     struct zebra_pbr_ipset *ipset)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_ipset_wrap_script_update,
-			1, ipset);
-	kernel_pbr_ipset_add_del_status(ipset,
-				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
-					      : SOUTHBOUND_INSTALL_FAILURE);
-}
-
-/*
- * Uninstall specified ipset for a specific interface.
- */
-void kernel_destroy_pbr_ipset(struct zebra_ns *zns,
-			      struct zebra_pbr_ipset *ipset)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_ipset_wrap_script_update,
-			0, ipset);
-	kernel_pbr_ipset_add_del_status(ipset,
-				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
-					      : SOUTHBOUND_DELETE_FAILURE);
-}
-
-void kernel_add_pbr_ipset_entry(struct zebra_ns *zns,
-				struct zebra_pbr_ipset_entry *ipset)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_ipset_entry_wrap_script_update,
-			1, ipset);
-	kernel_pbr_ipset_entry_add_del_status(ipset,
-				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
-					      : SOUTHBOUND_INSTALL_FAILURE);
-}
-
-/*
- * Uninstall specified ipset for a specific interface.
- */
-void kernel_del_pbr_ipset_entry(struct zebra_ns *zns,
-				struct zebra_pbr_ipset_entry *ipset)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_ipset_entry_wrap_script_update,
-			0, ipset);
-	kernel_pbr_ipset_entry_add_del_status(ipset,
-				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
-					      : SOUTHBOUND_DELETE_FAILURE);
-}
-
-
-void kernel_add_pbr_iptable(struct zebra_ns *zns,
-			    struct zebra_pbr_iptable *iptable)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_iptable_wrap_script_update, 1, iptable);
-	kernel_pbr_iptable_add_del_status(iptable,
-				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
-					      : SOUTHBOUND_INSTALL_FAILURE);
-}
-
-void kernel_del_pbr_iptable(struct zebra_ns *zns,
-			    struct zebra_pbr_iptable *iptable)
-{
-	int ret = 0;
-
-	ret = hook_call(rule_iptable_wrap_script_update, 0, iptable);
-	kernel_pbr_iptable_add_del_status(iptable,
-				       (!ret) ? SOUTHBOUND_DELETE_SUCCESS
-					      : SOUTHBOUND_DELETE_FAILURE);
+				       : SOUTHBOUND_DELETE_FAILURE);
 }
 
 /*
