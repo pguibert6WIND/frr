@@ -1048,6 +1048,8 @@ static void bgp_pbr_policyroute_add_to_zebra(struct bgp *bgp,
 		bpme->backpointer = bpm;
 		bpme->installed = false;
 		bpme->install_in_progress = false;
+		/* link bgp info to bpme */
+		bpme->bgp_info = (void *)binfo;
 	}
 
 	/* BGP FS: append entry to zebra
