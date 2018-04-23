@@ -49,6 +49,8 @@ struct zebra_pbr_rule {
 	(r->rule.filter.filter_bm & PBR_FILTER_SRC_PORT)
 #define IS_RULE_FILTERING_ON_DST_PORT(r) \
 	(r->rule.filter.filter_bm & PBR_FILTER_DST_PORT)
+#define IS_RULE_FILTERING_ON_FWMARK(r) \
+	(r->rule.filter.filter_bm & PBR_FILTER_FWMARK)
 
 /*
  * An IPSet Entry Filter
@@ -157,6 +159,8 @@ extern void kernel_add_pbr_rule(struct zebra_pbr_rule *rule);
  */
 extern void kernel_del_pbr_rule(struct zebra_pbr_rule *rule);
 
+extern const char *zebra_pbr_ipset_type2str(uint32_t type);
+
 /*
  * Get to know existing PBR rules in the kernel - typically called at startup.
  */
@@ -181,6 +185,12 @@ extern void kernel_pbr_ipset_entry_add_del_status(
 
 extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
 			      enum southbound_results res);
+
+/*
+ * Handle success or failure of iptables (un)install in the kernel.
+ */
+extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
+					      enum southbound_results res);
 
 /*
  * Handle rule delete notification from kernel.
@@ -221,5 +231,23 @@ DECLARE_HOOK(zebra_pbr_wrap_script_get_stat, (struct json_object *json_input,
 				    const char *pattern, const char *match,
 				    uint64_t *pkts, uint64_t *bytes),
 	     (json_input, pattern, match, pkts, bytes))
+
+DECLARE_HOOK(zebra_pbr_iptable_wrap_script_update, (struct zebra_ns *zns,
+					     int cmd,
+					     struct zebra_pbr_iptable *iptable),
+					     (zns, cmd, iptable))
+
+DECLARE_HOOK(zebra_pbr_ipset_entry_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
+				  struct zebra_pbr_ipset_entry *ipset),
+				     (zns, cmd, ipset))
+DECLARE_HOOK(zebra_pbr_ipset_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
+				  struct zebra_pbr_ipset *ipset),
+				     (zns, cmd, ipset))
+DECLARE_HOOK(zebra_pbr_iprule_wrap_script_update, (struct zebra_ns *zns,
+				  int cmd,
+				  struct zebra_pbr_rule *iprule),
+				     (zns, cmd, iprule))
 
 #endif /* _ZEBRA_PBR_H */

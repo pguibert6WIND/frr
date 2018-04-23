@@ -53,6 +53,14 @@ struct item_list {
 #define SCRIPT_ITEM_LIST	(1<<2)
 #define SCRIPT_ELEMENT_LIST	(1<<3)
 
+/* definitions */
+#define IPSET_DEFAULT_HASHSIZE 64
+#define IPSET_PRE_HASH "hash:"
+
+static char *zebra_wrap_script_iptable_pathname;
+static char *zebra_wrap_script_ipset_pathname;
+static char *zebra_wrap_script_iprule_pathname;
+
 static int zebra_wrap_debug;
 
 static int zebra_wrap_script_column(const char *script,
@@ -68,12 +76,28 @@ static int zebra_wrap_script_get_stat(struct json_object *json_input,
 				      uint64_t *pkts, uint64_t *bytes);
 static int zebra_wrap_script_init(struct thread_master *t);
 
+static int zebra_wrap_script_iptable_update(struct zebra_ns *zns, int cmd,
+					    struct zebra_pbr_iptable *iptable);
+static int zebra_wrap_script_ipset_update(struct zebra_ns *zns, int cmd,
+					  struct zebra_pbr_ipset *ipset);
+static int zebra_wrap_script_ipset_entry_update(struct zebra_ns *zns, int cmd,
+					  struct zebra_pbr_ipset_entry *ipset);
+static int zebra_wrap_script_iprule_update(struct zebra_ns *zns, int cmd,
+					   struct zebra_pbr_rule *iprule);
+
 static int zebra_wrap_script_module_init(void)
 {
 	hook_register(zebra_pbr_wrap_script_rows, zebra_wrap_script_rows);
 	hook_register(zebra_pbr_wrap_script_column, zebra_wrap_script_column);
 	hook_register(zebra_pbr_wrap_script_get_stat, zebra_wrap_script_get_stat);
 	hook_register(frr_late_init, zebra_wrap_script_init);
+	hook_register(zebra_pbr_iptable_wrap_script_update, zebra_wrap_script_iptable_update);
+	hook_register(zebra_pbr_ipset_entry_wrap_script_update,
+		      zebra_wrap_script_ipset_entry_update);
+	hook_register(zebra_pbr_ipset_wrap_script_update,
+		      zebra_wrap_script_ipset_update);
+	hook_register(zebra_pbr_iprule_wrap_script_update,
+		      zebra_wrap_script_iprule_update);
 	return 0;
 }
 
@@ -542,6 +566,25 @@ static int zebra_wrap_script_rows(const char *script,
 	return 0;
 }
 
+static int zebra_wrap_script_call_only(const char *script)
+{
+	FILE *fp;
+
+	if (IS_ZEBRA_DEBUG_KERNEL_MSGDUMP_SEND)
+		zlog_debug("SCRIPT : %s", script);
+	fp = popen(script, "r");
+	if (!fp) {
+		zlog_err("SCRIPT: error calling %s", script);
+		return -1;
+	}
+	if (pclose(fp)) {
+		zlog_err("SCRIPT: error with %s: closing stream (errno %u)",
+			 script, errno);
+		return -1;
+	}
+	return 0;
+}
+
 /* convert string <NUM>[K,M,G] into int64 value
  * last letter of the word is a multiplier
  * remove it and apply atoll
@@ -627,8 +670,229 @@ static int zebra_wrap_script_get_stat(struct json_object *json_input,
 	return ret;
 }
 
+
+/*************************************************
+ * iptable
+ *************************************************/
+static int netlink_iptable_update_unit_2(char *buf, char *ptr,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	ptr+=sprintf(ptr, " --match-set %s %s",
+		     iptable->ipset_name, combi);
+	if (iptable->action == ZEBRA_IPTABLES_DROP)
+		ptr+=sprintf(ptr, " -j DROP");
+	else
+		ptr+=sprintf(ptr, " -j MARK --set-mark %d",
+			     iptable->fwmark);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	return zebra_wrap_script_call_only(buf);
+}
+
+static int netlink_iptable_update_unit(int cmd,
+				  struct zebra_pbr_iptable *iptable,
+				  char *combi)
+{
+	char buf[256];
+	char *ptr = buf;
+
+	ptr+=sprintf(ptr, "%s -t mangle -%s PREROUTING -m set",
+		     zebra_wrap_script_iptable_pathname,
+		     cmd ? "I":"D");
+	return netlink_iptable_update_unit_2(buf, ptr,
+					     iptable, combi);
+	return 0;
+}
+
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_iptable_update(struct zebra_ns *zns, int cmd,
+					    struct zebra_pbr_iptable *iptable)
+{
+	char buf2[32];
+	int ret = 0;
+
+	if (!zebra_wrap_script_iptable_pathname) {
+		zlog_err("SCRIPT: script not configured for iptable\n");
+		kernel_pbr_iptable_add_del_status(iptable,
+				SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	if (iptable->type == IPSET_NET_NET) {
+		sprintf(buf2, "src,dst");
+		return netlink_iptable_update_unit(cmd, iptable, buf2);
+	} else if (iptable->type == IPSET_NET) {
+		if (iptable->filter_bm & PBR_FILTER_DST_IP)
+			sprintf(buf2, "dst");
+		else
+			sprintf(buf2, "src");
+		ret = netlink_iptable_update_unit(cmd, iptable, buf2);
+	}
+	kernel_pbr_iptable_add_del_status(iptable,
+		  (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+		  : SOUTHBOUND_INSTALL_FAILURE);
+	return !ret ? 1 : -1;
+}
+
+/*************************************************
+ * ipset
+ *************************************************/
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_ipset_update(struct zebra_ns *zns, int cmd,
+					  struct zebra_pbr_ipset *ipset)
+{
+	char buf[256];
+	int ret = 0;
+
+	if (!zebra_wrap_script_ipset_pathname) {
+		zlog_err("SCRIPT: script not configured for ipset\n");
+		kernel_pbr_ipset_add_del_status(ipset,
+				SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	if (cmd) {
+		sprintf(buf, "ipset create %s %s%s hashsize %u counters",
+			ipset->ipset_name, IPSET_PRE_HASH,
+			zebra_pbr_ipset_type2str(ipset->type),
+			IPSET_DEFAULT_HASHSIZE);
+	} else
+		sprintf(buf, "ipset destroy %s",
+			ipset->ipset_name);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	ret = zebra_wrap_script_call_only(buf);
+	kernel_pbr_ipset_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+	return !ret ? 1 : -1;
+}
+
+static int netlink_ipset_entry_update_unit(int cmd,
+					   struct zebra_pbr_ipset_entry *ipset,
+					   char *buf)
+{
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	return zebra_wrap_script_call_only(buf);
+}
+
+/*
+ * Form netlink message and ship it. Currently, notify status after
+ * waiting for netlink status.
+ */
+static int zebra_wrap_script_ipset_entry_update(struct zebra_ns *zns, int cmd,
+						struct zebra_pbr_ipset_entry *ipset)
+{
+	char buf[256];
+	char buf_src[PREFIX2STR_BUFFER];
+	char buf_dst[PREFIX2STR_BUFFER];
+	char *psrc = NULL, *pdst = NULL;
+	struct zebra_pbr_ipset *bp;
+	int ret = 0;
+
+	if (!zebra_wrap_script_ipset_pathname) {
+		zlog_err("SCRIPT: script not configured for ipset\n");
+		kernel_pbr_ipset_entry_add_del_status(ipset,
+				      SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	if (ipset->filter_bm & PBR_FILTER_SRC_IP) {
+		psrc = (char *)prefix2str(&ipset->src, buf_src, PREFIX2STR_BUFFER);
+		if (psrc == NULL) {
+			kernel_pbr_ipset_entry_add_del_status(ipset,
+					      SOUTHBOUND_INSTALL_FAILURE);
+			return -1;
+		}
+	}
+	if (ipset->filter_bm & PBR_FILTER_DST_IP) {
+		pdst = (char *)prefix2str(&ipset->dst, buf_dst, PREFIX2STR_BUFFER);
+		if (pdst == NULL) {
+			kernel_pbr_ipset_entry_add_del_status(ipset,
+					      SOUTHBOUND_INSTALL_FAILURE);
+			return -1;
+		}
+	}
+	bp = ipset->backpointer;
+	if (!bp) {
+		kernel_pbr_ipset_entry_add_del_status(ipset,
+				SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	if (bp->type == IPSET_NET_NET) {
+		sprintf(buf, "%s %s %s %s,%s",
+			zebra_wrap_script_ipset_pathname,
+			cmd ? "add" : "del",
+			bp->ipset_name,
+			psrc, pdst);
+		ret = netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else if (bp->type == IPSET_NET) {
+		sprintf(buf, "%s %s %s %s",
+			zebra_wrap_script_ipset_pathname,
+			cmd ? "add" : "del",
+			bp->ipset_name,
+			pdst == NULL ? psrc : pdst);
+		ret = netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	} else {
+		sprintf(buf, "%s %s %s %s,%s",
+			zebra_wrap_script_ipset_pathname,
+			cmd ? "add" : "del",
+			bp->ipset_name,
+			psrc, pdst);
+		ret = netlink_ipset_entry_update_unit(cmd, ipset, buf);
+	}
+	kernel_pbr_ipset_entry_add_del_status(ipset,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+	return !ret ? 1 : -1;
+}
+
+/*************************************************
+ * iprule
+ *************************************************/
+
+static int zebra_wrap_script_iprule_update(struct zebra_ns *zns, int cmd,
+					   struct zebra_pbr_rule *rule)
+{
+	char buf[255];
+	int ret = 0;
+
+	if (!zebra_wrap_script_iprule_pathname) {
+		zlog_err("SCRIPT: script not configured for iprule\n");
+		kernel_pbr_rule_add_del_status(rule,
+			SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	if (!(rule->rule.action.table && IS_RULE_FILTERING_ON_FWMARK(rule))) {
+		kernel_pbr_rule_add_del_status(rule,
+			SOUTHBOUND_INSTALL_FAILURE);
+		return -1;
+	}
+	snprintf(buf, 255, "%s %s fwmark %d table %d",
+		 zebra_wrap_script_iprule_pathname,
+		 cmd ? "add" : "del",
+		 rule->rule.filter.fwmark, rule->rule.action.table);
+	if (IS_ZEBRA_DEBUG_KERNEL)
+		zlog_debug("PBR: %s", buf);
+	ret = zebra_wrap_script_call_only(buf);
+	kernel_pbr_rule_add_del_status(rule,
+				       (!ret) ? SOUTHBOUND_INSTALL_SUCCESS
+					      : SOUTHBOUND_INSTALL_FAILURE);
+	return !ret ? 1 : -1;
+}
+
 static int zebra_wrap_script_init(struct thread_master *t)
 {
 	zebra_wrap_debug = 0;
+	zebra_wrap_script_iptable_pathname = XSTRDUP(MTYPE_TMP, "iptables");
+	zebra_wrap_script_ipset_pathname = XSTRDUP(MTYPE_TMP, "ipset");
+	zebra_wrap_script_iprule_pathname = XSTRDUP(MTYPE_TMP, "ip rule");
 	return 0;
 }
