@@ -170,6 +170,8 @@ extern void kernel_add_pbr_rule(struct zebra_pbr_rule *rule);
  */
 extern void kernel_del_pbr_rule(struct zebra_pbr_rule *rule);
 
+extern const char *zebra_pbr_ipset_type2str(uint32_t type);
+
 /*
  * Get to know existing PBR rules in the kernel - typically called at startup.
  */
@@ -194,6 +196,12 @@ extern void kernel_pbr_ipset_entry_add_del_status(
 
 extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
 			      enum southbound_results res);
+
+/*
+ * Handle success or failure of iptables (un)install in the kernel.
+ */
+extern void kernel_pbr_iptable_add_del_status(struct zebra_pbr_iptable *iptable,
+					      enum southbound_results res);
 
 /*
  * Handle rule delete notification from kernel.
@@ -227,15 +235,17 @@ extern void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname);
 extern void zebra_pbr_show_iptable(struct vty *vty);
 extern void zebra_pbr_iptable_update_interfacelist(struct stream *s,
 				   struct zebra_pbr_iptable *zpi);
-struct json_object;
+
 DECLARE_HOOK(zebra_pbr_ipset_entry_wrap_script_get_stat, (struct zebra_ns *zns,
 				    struct zebra_pbr_ipset_entry *ipset,
 				    uint64_t *pkts, uint64_t *bytes),
 				     (zns, ipset, pkts, bytes))
+
 DECLARE_HOOK(zebra_pbr_iptable_wrap_script_get_stat, (struct zebra_ns *zns,
 				    struct zebra_pbr_iptable *iptable,
 				    uint64_t *pkts, uint64_t *bytes),
 				     (zns, iptable, pkts, bytes))
+
 DECLARE_HOOK(zebra_pbr_iptable_wrap_script_update, (struct zebra_ns *zns,
 					     int cmd,
 					     struct zebra_pbr_iptable *iptable),
