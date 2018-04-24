@@ -1316,6 +1316,13 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 			return 0;
 		}
 
+		if (vrf_is_backend_netns()) {
+			/* sometimes the interface has its vrf_id set to 0
+			 * whereas the vrf_id should be set with NS_ID
+			 */
+			if (ifp->vrf_id == 0 && ifp->vrf_id != zns->ns_id)
+				ifp->vrf_id = zns->ns_id;
+		}
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("RTM_DELLINK for %s(%u)", name,
 				   ifp->ifindex);
