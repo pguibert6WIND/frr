@@ -763,11 +763,17 @@ void if_delete_update(struct interface *ifp)
 	   interface deletion message. */
 	if_set_index(ifp, IFINDEX_INTERNAL);
 	ifp->node = NULL;
-
+	zlog_err("if_delete_update ifp %x %s %u VRF %u node is null\n",
+		 ifp, ifp->name, ifp->ifindex, ifp->vrf_id);
 	/* if the ifp is in a vrf, move it to default so vrf can be deleted if
 	 * desired */
-	if (ifp->vrf_id)
+	/* interface can not be moved since
+	 * other netlink events like ADDR_DELETE may come after
+	 */
+	if (ifp->vrf_id && !vrf_is_backend_netns()) {
+		zlog_err("call vrf change to default ifp %s %x\n",ifp->name, ifp);
 		if_handle_vrf_change(ifp, VRF_DEFAULT);
+	}
 
 	/* Reset some zebra interface params to default values. */
 	zif = ifp->info;
