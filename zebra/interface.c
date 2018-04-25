@@ -50,6 +50,9 @@
 #include "zebra/zebra_vxlan.h"
 #include "zebra/zebra_static.h"
 
+#define zlog_debug printf
+#define zlog_err printf
+#define zlog_info printf
 #define ZEBRA_PTM_SUPPORT
 
 DEFINE_HOOK(zebra_if_extra_info, (struct vty * vty, struct interface *ifp),
@@ -70,7 +73,7 @@ static int if_zebra_speed_update(struct thread *thread)
 
 	new_speed = kernel_get_speed(ifp);
 	if (new_speed != ifp->speed) {
-		zlog_info("%s: %s old speed: %u new speed: %u",
+		zlog_info("%s: %s old speed: %u new speed: %u\n",
 			  __PRETTY_FUNCTION__, ifp->name, ifp->speed,
 			  new_speed);
 		ifp->speed = new_speed;
@@ -496,7 +499,7 @@ static void if_addr_wakeup(struct interface *ifp)
 				ret = if_set_prefix(ifp, ifc);
 				if (ret < 0) {
 					zlog_warn(
-						"Can't set interface's address: %s",
+						"Can't set interface's address: %s\n",
 						safe_strerror(errno));
 					continue;
 				}
@@ -518,7 +521,7 @@ static void if_addr_wakeup(struct interface *ifp)
 				ret = if_prefix_add_ipv6(ifp, ifc);
 				if (ret < 0) {
 					zlog_warn(
-						"Can't set interface's address: %s",
+						"Can't set interface's address: %s\n",
 						safe_strerror(errno));
 					continue;
 				}
@@ -564,7 +567,7 @@ void if_add_update(struct interface *ifp)
 			if (IS_ZEBRA_DEBUG_KERNEL)
 				zlog_debug(
 					"interface %s vrf %u index %d is shutdown. "
-					"Won't wake it up.",
+					"Won't wake it up.\n",
 					ifp->name, ifp->vrf_id, ifp->ifindex);
 			return;
 		}
@@ -573,13 +576,13 @@ void if_add_update(struct interface *ifp)
 
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
-				"interface %s vrf %u index %d becomes active.",
+				"interface %s vrf %u index %d becomes active.\n",
 				ifp->name, ifp->vrf_id, ifp->ifindex);
 
 		static_ifindex_update(ifp, true);
 	} else {
 		if (IS_ZEBRA_DEBUG_KERNEL)
-			zlog_debug("interface %s vrf %u index %d is added.",
+			zlog_debug("interface %s vrf %u index %d is added.\n",
 				   ifp->name, ifp->vrf_id, ifp->ifindex);
 	}
 }
@@ -720,7 +723,7 @@ void if_delete_update(struct interface *ifp)
 
 	if (if_is_up(ifp)) {
 		zlog_err(
-			"interface %s vrf %u index %d is still up while being deleted.",
+			"interface %s vrf %u index %d is still up while being deleted.\n",
 			ifp->name, ifp->vrf_id, ifp->ifindex);
 		return;
 	}
@@ -729,7 +732,7 @@ void if_delete_update(struct interface *ifp)
 	UNSET_FLAG(ifp->status, ZEBRA_INTERFACE_ACTIVE);
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("interface %s vrf %u index %d is now inactive.",
+		zlog_debug("interface %s vrf %u index %d is now inactive.\n",
 			   ifp->name, ifp->vrf_id, ifp->ifindex);
 
 	static_ifindex_update(ifp, false);
@@ -805,7 +808,7 @@ void if_handle_vrf_change(struct interface *ifp, vrf_id_t vrf_id)
 	 * and new VRF.
 	 */
 	if (IS_ZEBRA_DEBUG_RIB_DETAILED)
-		zlog_debug("%u: IF %s VRF change, scheduling RIB processing",
+		zlog_debug("%u: IF %s VRF change, scheduling RIB processing\n",
 			   ifp->vrf_id, ifp->name);
 	rib_update(old_vrf_id, RIB_UPDATE_IF_CHANGE);
 	rib_update(ifp->vrf_id, RIB_UPDATE_IF_CHANGE);
@@ -931,7 +934,7 @@ void if_up(struct interface *ifp)
 	if_install_connected(ifp);
 
 	if (IS_ZEBRA_DEBUG_RIB_DETAILED)
-		zlog_debug("%u: IF %s up, scheduling RIB processing",
+		zlog_debug("%u: IF %s up, scheduling RIB processing\n",
 			   ifp->vrf_id, ifp->name);
 	rib_update(ifp->vrf_id, RIB_UPDATE_IF_CHANGE);
 
@@ -988,8 +991,8 @@ void if_down(struct interface *ifp)
 	/* Uninstall connected routes from the kernel. */
 	if_uninstall_connected(ifp);
 
-	if (IS_ZEBRA_DEBUG_RIB_DETAILED)
-		zlog_debug("%u: IF %s down, scheduling RIB processing",
+	if (IS_ZEBRA_DEBUG_RIB_DETAILED || 1)
+		zlog_debug("%u: IF %s down, scheduling RIB processing\n",
 			   ifp->vrf_id, ifp->name);
 	rib_update(ifp->vrf_id, RIB_UPDATE_IF_CHANGE);
 

@@ -35,6 +35,9 @@
 #include "ns.h"
 #include "privs.h"
 
+#define zlog_debug printf
+#define zlog_err printf
+#define zlog_info printf
 /* default VRF ID value used when VRF backend is not NETNS */
 #define VRF_DEFAULT_INTERNAL 0
 
@@ -125,8 +128,8 @@ int vrf_switch_to_netns(vrf_id_t vrf_id)
 	if (vrf->data.l.netns_name[0] == '\0')
 		return 0;
 	name = ns_netns_pathname(NULL, vrf->data.l.netns_name);
-	if (debug_vrf)
-		zlog_debug("VRF_SWITCH: %s(%u)", name, vrf->vrf_id);
+	if (debug_vrf && 0)
+		zlog_debug("VRF_SWITCH: %s(%u)\n", name, vrf->vrf_id);
 	return ns_switch_to_netns(name);
 }
 
@@ -134,8 +137,8 @@ int vrf_switchback_to_initial(void)
 {
 	int ret = ns_switchback_to_initial();
 
-	if (ret == 0 && debug_vrf)
-		zlog_debug("VRF_SWITCHBACK");
+	if (ret == 0 && debug_vrf && 0)
+		zlog_debug("VRF_SWITCHBACK\n");
 	return ret;
 }
 
@@ -151,8 +154,8 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 	struct vrf *vrf = NULL;
 	int new = 0;
 
-	if (debug_vrf)
-		zlog_debug("VRF_GET: %s(%u)", name == NULL ? "(NULL)" : name,
+	if (debug_vrf && 0)
+		zlog_debug("VRF_GET: %s(%u)\n", name == NULL ? "(NULL)" : name,
 			   vrf_id);
 
 	/* Nothing to see, move along here */

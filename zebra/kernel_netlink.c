@@ -47,6 +47,9 @@
 #include "zebra/if_netlink.h"
 #include "zebra/rule_netlink.h"
 
+#define zlog_debug printf
+#define zlog_err printf
+#define zlog_info printf
 #ifndef SO_RCVBUFFORCE
 #define SO_RCVBUFFORCE  (33)
 #endif
@@ -131,7 +134,7 @@ extern struct zebra_privs_t zserv_privs;
 int netlink_talk_filter(struct sockaddr_nl *snl, struct nlmsghdr *h,
 			ns_id_t ns_id, int startup)
 {
-	zlog_warn("netlink_talk: ignoring message type 0x%04x NS %u",
+	zlog_warn("netlink_talk: ignoring message type 0x%04x NS %u\n",
 		  h->nlmsg_type, ns_id);
 	return 0;
 }
@@ -145,7 +148,7 @@ static int netlink_recvbuf(struct nlsock *nl, uint32_t newsize)
 
 	ret = getsockopt(nl->sock, SOL_SOCKET, SO_RCVBUF, &oldsize, &oldlen);
 	if (ret < 0) {
-		zlog_err("Can't get %s receive buffer size: %s", nl->name,
+		zlog_err("Can't get %s receive buffer size: %s\n", nl->name,
 			 safe_strerror(errno));
 		return -1;
 	}
@@ -481,7 +484,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 				continue;
 			if (errno == EWOULDBLOCK || errno == EAGAIN)
 				break;
-			zlog_err("%s recvmsg overrun: %s", nl->name,
+			zlog_err("%s recvmsg overrun: %s\n", nl->name,
 				 safe_strerror(errno));
 			/*
 			 *  In this case we are screwed.
@@ -498,13 +501,13 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 		}
 
 		if (msg.msg_namelen != sizeof snl) {
-			zlog_err("%s sender address length error: length %d",
+			zlog_err("%s sender address length error: length %d\n",
 				 nl->name, msg.msg_namelen);
 			return -1;
 		}
 
 		if (IS_ZEBRA_DEBUG_KERNEL_MSGDUMP_RECV) {
-			zlog_debug("%s: << netlink message dump [recv]",
+			zlog_debug("%s: << netlink message dump [recv]\n",
 				   __func__);
 			zlog_hexdump(buf, status);
 		}
@@ -529,7 +532,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 				if (err->error == 0) {
 					if (IS_ZEBRA_DEBUG_KERNEL) {
 						zlog_debug(
-							"%s: %s ACK: type=%s(%u), seq=%u, pid=%u",
+							"%s: %s ACK: type=%s(%u), seq=%u, pid=%u\n",
 							__FUNCTION__, nl->name,
 							nl_msg_type_to_str(
 								err->msg.nlmsg_type),
@@ -547,7 +550,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 
 				if (h->nlmsg_len
 				    < NLMSG_LENGTH(sizeof(struct nlmsgerr))) {
-					zlog_err("%s error: message truncated",
+					zlog_err("%s error: message truncated\n",
 						 nl->name);
 					return -1;
 				}
@@ -563,7 +566,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 						|| -errnum == EEXIST)))) {
 					if (IS_ZEBRA_DEBUG_KERNEL)
 						zlog_debug(
-							"%s: error: %s type=%s(%u), seq=%u, pid=%u",
+							"%s: error: %s type=%s(%u), seq=%u, pid=%u\n",
 							nl->name,
 							safe_strerror(-errnum),
 							nl_msg_type_to_str(
@@ -591,7 +594,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 					 */
 					if (IS_ZEBRA_DEBUG_KERNEL)
 						zlog_debug(
-							"%s error: %s, type=%s(%u), seq=%u, pid=%u",
+							"%s error: %s, type=%s(%u), seq=%u, pid=%u\n",
 							nl->name,
 							safe_strerror(-errnum),
 							nl_msg_type_to_str(
@@ -612,9 +615,9 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 			}
 
 			/* OK we got netlink message. */
-			if (IS_ZEBRA_DEBUG_KERNEL)
+			if (IS_ZEBRA_DEBUG_KERNEL && 0)
 				zlog_debug(
-					"netlink_parse_info: %s type %s(%u), len=%d, seq=%u, pid=%u",
+					"netlink_parse_info: %s type %s(%u), len=%d, seq=%u, pid=%u\n",
 					nl->name,
 					nl_msg_type_to_str(h->nlmsg_type),
 					h->nlmsg_type, h->nlmsg_len,
@@ -631,7 +634,7 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 				&& h->nlmsg_type != RTM_DELADDR)) {
 				if (IS_ZEBRA_DEBUG_KERNEL)
 					zlog_debug(
-						"netlink_parse_info: %s packet comes from %s",
+						"netlink_parse_info: %s packet comes from %s\n",
 						zns->netlink_cmd.name,
 						nl->name);
 				continue;
@@ -639,18 +642,18 @@ int netlink_parse_info(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *,
 
 			error = (*filter)(&snl, h, zns->ns_id, startup);
 			if (error < 0) {
-				zlog_err("%s filter function error", nl->name);
+				zlog_err("%s filter function error\n", nl->name);
 				ret = error;
 			}
 		}
 
 		/* After error care. */
 		if (msg.msg_flags & MSG_TRUNC) {
-			zlog_err("%s error: message truncated", nl->name);
+			zlog_err("%s error: message truncated\n", nl->name);
 			continue;
 		}
 		if (status) {
-			zlog_err("%s error: data remnant size %d", nl->name,
+			zlog_err("%s error: data remnant size %d\n", nl->name,
 				 status);
 			return -1;
 		}
@@ -703,26 +706,26 @@ int netlink_talk(int (*filter)(struct sockaddr_nl *, struct nlmsghdr *, ns_id_t,
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
 		zlog_debug(
-			"netlink_talk: %s type %s(%u), len=%d seq=%u flags 0x%x",
+			"netlink_talk: %s type %s(%u), len=%d seq=%u flags 0x%x\n",
 			nl->name, nl_msg_type_to_str(n->nlmsg_type),
 			n->nlmsg_type, n->nlmsg_len, n->nlmsg_seq,
 			n->nlmsg_flags);
 
 	/* Send message to netlink interface. */
 	if (zserv_privs.change(ZPRIVS_RAISE))
-		zlog_err("Can't raise privileges");
+		zlog_err("Can't raise privileges\n");
 	status = sendmsg(nl->sock, &msg, 0);
 	save_errno = errno;
 	if (zserv_privs.change(ZPRIVS_LOWER))
 		zlog_err("Can't lower privileges");
 
 	if (IS_ZEBRA_DEBUG_KERNEL_MSGDUMP_SEND) {
-		zlog_debug("%s: >> netlink message dump [sent]", __func__);
+		zlog_debug("%s: >> netlink message dump [sent]\n", __func__);
 		zlog_hexdump(n, n->nlmsg_len);
 	}
 
 	if (status < 0) {
-		zlog_err("netlink_talk sendmsg() error: %s",
+		zlog_err("netlink_talk sendmsg() error: %s\n",
 			 safe_strerror(save_errno));
 		return -1;
 	}

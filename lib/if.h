@@ -26,6 +26,7 @@
 #include "memory.h"
 #include "qobj.h"
 #include "hook.h"
+#include "log.h"
 
 DECLARE_MTYPE(IF)
 DECLARE_MTYPE(CONNECTED_LABEL)
@@ -297,30 +298,30 @@ DECLARE_QOBJ_TYPE(interface)
 
 #define IFNAME_RB_INSERT(vrf, ifp)                                             \
 	if (RB_INSERT(if_name_head, &vrf->ifaces_by_name, (ifp)))              \
-		zlog_err(                                                      \
+		printf(                                                      \
 			"%s(%s): corruption detected -- interface with this "  \
-			"name exists already in VRF %u!",                      \
+			"name exists already in VRF %u!\n",                      \
 			__func__, (ifp)->name, (ifp)->vrf_id);
 
 #define IFNAME_RB_REMOVE(vrf, ifp)                                             \
 	if (RB_REMOVE(if_name_head, &vrf->ifaces_by_name, (ifp)) == NULL)      \
-		zlog_err(                                                      \
+		printf(                                                      \
 			"%s(%s): corruption detected -- interface with this "  \
-			"name doesn't exist in VRF %u!",                       \
+			"name doesn't exist in VRF %u!\n",                       \
 			__func__, (ifp)->name, (ifp)->vrf_id);
 
 #define IFINDEX_RB_INSERT(vrf, ifp)                                            \
 	if (RB_INSERT(if_index_head, &vrf->ifaces_by_index, (ifp)))            \
-		zlog_err(                                                      \
+		printf(                                                      \
 			"%s(%u): corruption detected -- interface with this "  \
-			"ifindex exists already in VRF %u!",                   \
+			"ifindex exists already in VRF %u!\n",                   \
 			__func__, (ifp)->ifindex, (ifp)->vrf_id);
 
 #define IFINDEX_RB_REMOVE(vrf, ifp)                                            \
 	if (RB_REMOVE(if_index_head, &vrf->ifaces_by_index, (ifp)) == NULL)    \
-		zlog_err(                                                      \
+		printf(                                                      \
 			"%s(%u): corruption detected -- interface with this "  \
-			"ifindex doesn't exist in VRF %u!",                    \
+			"ifindex doesn't exist in VRF %u!\n",                    \
 			__func__, (ifp)->ifindex, (ifp)->vrf_id);
 
 #define FOR_ALL_INTERFACES(vrf, ifp)                                           \

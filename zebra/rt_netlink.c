@@ -65,6 +65,9 @@
 #include "zebra/zebra_mroute.h"
 #include "zebra/zebra_vxlan.h"
 
+#define zlog_debug printf
+#define zlog_err printf
+#define zlog_info printf
 #ifndef AF_MPLS
 #define AF_MPLS 28
 #endif
@@ -367,7 +370,7 @@ static int netlink_route_change_read_unicast(struct sockaddr_nl *snl,
 	if (rtm->rtm_src_len != 0) {
 		char buf[PREFIX_STRLEN];
 		zlog_warn(
-			"unsupported IPv[4|6] sourcedest route (dest %s vrf %u)",
+			"unsupported IPv[4|6] sourcedest route (dest %s vrf %u)\n",
 			prefix2str(&p, buf, sizeof(buf)), vrf_id);
 		return 0;
 	}
@@ -394,10 +397,10 @@ static int netlink_route_change_read_unicast(struct sockaddr_nl *snl,
 		metric = (metric & 0x00FFFFFF);
 	}
 
-	if (IS_ZEBRA_DEBUG_KERNEL) {
+	if (IS_ZEBRA_DEBUG_KERNEL && 0) {
 		char buf[PREFIX_STRLEN];
 		char buf2[PREFIX_STRLEN];
-		zlog_debug("%s %s%s%s vrf %u(%u) metric: %d Admin Distance: %d",
+		zlog_debug("%s %s%s%s vrf %u(%u) metric: %d Admin Distance: %d\n",
 			   nl_msg_type_to_str(h->nlmsg_type),
 			   prefix2str(&p, buf, sizeof(buf)),
 			   src_p.prefixlen ? " from " : "",
@@ -497,7 +500,7 @@ static int netlink_route_change_read_unicast(struct sockaddr_nl *snl,
 						nh_vrf_id = ifp->vrf_id;
 					else {
 						zlog_warn(
-							"%s: Unknown interface %u specified, defaulting to VRF_DEFAULT",
+							"%s: Unknown interface %u specified, defaulting to VRF_DEFAULT\n",
 							__PRETTY_FUNCTION__,
 							index);
 						nh_vrf_id = VRF_DEFAULT;
@@ -683,7 +686,7 @@ static int netlink_route_change_read_multicast(struct sockaddr_nl *snl,
 		struct zebra_vrf *zvrf = zebra_vrf_lookup_by_id(vrf);
 		ifp = if_lookup_by_index(iif, vrf);
 		zlog_debug(
-			"MCAST VRF: %s(%d) %s (%s,%s) IIF: %s OIF: %s jiffies: %lld",
+			"MCAST VRF: %s(%d) %s (%s,%s) IIF: %s OIF: %s jiffies: %lld\n",
 			zvrf->vrf->name, vrf, nl_msg_type_to_str(h->nlmsg_type),
 			sbuf, gbuf, ifp->name, oif_list, m->lastused);
 	}
@@ -705,8 +708,8 @@ int netlink_route_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	}
 
 	/* Connected route. */
-	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("%s %s %s proto %s NS %u",
+	if (IS_ZEBRA_DEBUG_KERNEL && 0)
+		zlog_debug("%s %s %s proto %s NS %u\n",
 			   nl_msg_type_to_str(h->nlmsg_type),
 			   nl_family_to_str(rtm->rtm_family),
 			   nl_rttype_to_str(rtm->rtm_type),
@@ -927,7 +930,7 @@ static void _netlink_route_build_singlepath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				" 5549: _netlink_route_build_singlepath() (%s): "
-				"nexthop via %s %s if %u(%u)",
+				"nexthop via %s %s if %u(%u)\n",
 				routedesc, ipv4_ll_buf, label_buf,
 				nexthop->ifindex, nexthop->vrf_id);
 		return;
@@ -953,7 +956,7 @@ static void _netlink_route_build_singlepath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via %s %s if %u(%u)",
+				"nexthop via %s %s if %u(%u)\n",
 				routedesc, inet_ntoa(nexthop->gate.ipv4),
 				label_buf, nexthop->ifindex, nexthop->vrf_id);
 	}
@@ -976,7 +979,7 @@ static void _netlink_route_build_singlepath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via %s %s if %u(%u)",
+				"nexthop via %s %s if %u(%u)\n",
 				routedesc, inet6_ntoa(nexthop->gate.ipv6),
 				label_buf, nexthop->ifindex, nexthop->vrf_id);
 	}
@@ -1003,7 +1006,7 @@ static void _netlink_route_build_singlepath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via if %u(%u)",
+				"nexthop via if %u(%u)\n",
 				routedesc, nexthop->ifindex, nexthop->vrf_id);
 	}
 
@@ -1020,7 +1023,7 @@ static void _netlink_route_build_singlepath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via if %u(%u)",
+				"nexthop via if %u(%u)\n",
 				routedesc, nexthop->ifindex, nexthop->vrf_id);
 	}
 }
@@ -1143,7 +1146,7 @@ static void _netlink_route_build_multipath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				" 5549: netlink_route_build_multipath() (%s): "
-				"nexthop via %s %s if %u",
+				"nexthop via %s %s if %u\n",
 				routedesc, ipv4_ll_buf, label_buf,
 				nexthop->ifindex);
 		return;
@@ -1162,7 +1165,7 @@ static void _netlink_route_build_multipath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via %s %s if %u",
+				"nexthop via %s %s if %u\n",
 				routedesc, inet_ntoa(nexthop->gate.ipv4),
 				label_buf, nexthop->ifindex);
 	}
@@ -1180,7 +1183,7 @@ static void _netlink_route_build_multipath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via %s %s if %u",
+				"nexthop via %s %s if %u\n",
 				routedesc, inet6_ntoa(nexthop->gate.ipv6),
 				label_buf, nexthop->ifindex);
 	}
@@ -1204,13 +1207,13 @@ static void _netlink_route_build_multipath(const char *routedesc, int bytelen,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via if %u",
+				"nexthop via if %u\n",
 				routedesc, nexthop->ifindex);
 	} else if (nexthop->type == NEXTHOP_TYPE_IPV6_IFINDEX) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"netlink_route_multipath() (%s): "
-				"nexthop via if %u",
+				"nexthop via if %u\n",
 				routedesc, nexthop->ifindex);
 	} else {
 		rtnh->rtnh_ifindex = 0;
@@ -1264,7 +1267,7 @@ static void _netlink_route_debug(int cmd, struct prefix *p,
 	if (IS_ZEBRA_DEBUG_KERNEL) {
 		char buf[PREFIX_STRLEN];
 		zlog_debug(
-			"netlink_route_multipath(): %s %s vrf %u(%u)",
+			"netlink_route_multipath(): %s %s vrf %u(%u)\n",
 			nl_msg_type_to_str(cmd),
 			prefix2str(p, buf, sizeof(buf)),
 			zvrf_id(zvrf), tableid);
@@ -1274,7 +1277,7 @@ static void _netlink_route_debug(int cmd, struct prefix *p,
 static void _netlink_mpls_debug(int cmd, uint32_t label, const char *routedesc)
 {
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("netlink_mpls_multipath() (%s): %s %u/20", routedesc,
+		zlog_debug("netlink_mpls_multipath() (%s): %s %u/20\n", routedesc,
 			   nl_msg_type_to_str(cmd), label);
 }
 
@@ -1608,7 +1611,7 @@ static int netlink_route_multipath(int cmd, struct prefix *p,
 	if (nexthop_num == 0) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
-				"netlink_route_multipath(): No useful nexthop.");
+				"netlink_route_multipath(): No useful nexthop.\n");
 		return 0;
 	}
 
@@ -1759,7 +1762,7 @@ static int netlink_vxlan_flood_list_update(struct interface *ifp,
 int kernel_add_vtep(vni_t vni, struct interface *ifp, struct in_addr *vtep_ip)
 {
 	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Install %s into flood list for VNI %u intf %s(%u)",
+		zlog_debug("Install %s into flood list for VNI %u intf %s(%u)\n",
 			   inet_ntoa(*vtep_ip), vni, ifp->name, ifp->ifindex);
 
 	return netlink_vxlan_flood_list_update(ifp, vtep_ip, RTM_NEWNEIGH);
@@ -1773,7 +1776,7 @@ int kernel_del_vtep(vni_t vni, struct interface *ifp, struct in_addr *vtep_ip)
 {
 	if (IS_ZEBRA_DEBUG_VXLAN)
 		zlog_debug(
-			"Uninstall %s from flood list for VNI %u intf %s(%u)",
+			"Uninstall %s from flood list for VNI %u intf %s(%u)\n",
 			inet_ntoa(*vtep_ip), vni, ifp->name, ifp->ifindex);
 
 	return netlink_vxlan_flood_list_update(ifp, vtep_ip, RTM_DELNEIGH);
@@ -1823,7 +1826,7 @@ static int netlink_macfdb_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 
 	zif = (struct zebra_if *)ifp->info;
 	if ((br_if = zif->brslave_info.br_if) == NULL) {
-		zlog_warn("%s family %s IF %s(%u) brIF %u - no bridge master",
+		zlog_warn("%s family %s IF %s(%u) brIF %u - no bridge master\n",
 			  nl_msg_type_to_str(h->nlmsg_type),
 			  nl_family_to_str(ndm->ndm_family), ifp->name,
 			  ndm->ndm_ifindex, zif->brslave_info.bridge_ifindex);
@@ -1835,7 +1838,7 @@ static int netlink_macfdb_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	netlink_parse_rtattr(tb, NDA_MAX, NDA_RTA(ndm), len);
 
 	if (!tb[NDA_LLADDR]) {
-		zlog_warn("%s family %s IF %s(%u) brIF %u - no LLADDR",
+		zlog_warn("%s family %s IF %s(%u) brIF %u - no LLADDR\n",
 			  nl_msg_type_to_str(h->nlmsg_type),
 			  nl_family_to_str(ndm->ndm_family), ifp->name,
 			  ndm->ndm_ifindex, zif->brslave_info.bridge_ifindex);
@@ -1844,7 +1847,7 @@ static int netlink_macfdb_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 
 	if (RTA_PAYLOAD(tb[NDA_LLADDR]) != ETH_ALEN) {
 		zlog_warn(
-			"%s family %s IF %s(%u) brIF %u - LLADDR is not MAC, len %lu",
+			"%s family %s IF %s(%u) brIF %u - LLADDR is not MAC, len %lu\n",
 			nl_msg_type_to_str(h->nlmsg_type),
 			nl_family_to_str(ndm->ndm_family), ifp->name,
 			ndm->ndm_ifindex, zif->brslave_info.bridge_ifindex,
@@ -1873,7 +1876,7 @@ static int netlink_macfdb_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	sticky = (ndm->ndm_state & NUD_NOARP) ? 1 : 0;
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("Rx %s family %s IF %s(%u)%s %sMAC %s%s",
+		zlog_debug("Rx %s family %s IF %s(%u)%s %sMAC %s%s\n",
 			   nl_msg_type_to_str(h->nlmsg_type),
 			   nl_family_to_str(ndm->ndm_family), ifp->name,
 			   ndm->ndm_ifindex, vid_present ? vid_buf : "",
@@ -2040,7 +2043,7 @@ static int netlink_macfdb_update(struct interface *ifp, vlanid_t vid,
 	zns = zvrf->zns;
 	zif = ifp->info;
 	if ((br_if = zif->brslave_info.br_if) == NULL) {
-		zlog_warn("MAC %s on IF %s(%u) - no mapping to bridge",
+		zlog_warn("MAC %s on IF %s(%u) - no mapping to bridge\n",
 			  (cmd == RTM_NEWNEIGH) ? "add" : "del", ifp->name,
 			  ifp->ifindex);
 		return -1;
@@ -2080,7 +2083,7 @@ static int netlink_macfdb_update(struct interface *ifp, vlanid_t vid,
 	addattr32(&req.n, sizeof(req), NDA_MASTER, br_if->ifindex);
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("Tx %s family %s IF %s(%u)%s %sMAC %s%s",
+		zlog_debug("Tx %s family %s IF %s(%u)%s %sMAC %s%s\n",
 			   nl_msg_type_to_str(cmd),
 			   nl_family_to_str(req.ndm.ndm_family), ifp->name,
 			   ifp->ifindex, vid_present ? vid_buf : "",
@@ -2126,7 +2129,7 @@ static int netlink_ipneigh_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	netlink_parse_rtattr(tb, NDA_MAX, NDA_RTA(ndm), len);
 
 	if (!tb[NDA_DST]) {
-		zlog_warn("%s family %s IF %s(%u) - no DST",
+		zlog_warn("%s family %s IF %s(%u) - no DST\n",
 			  nl_msg_type_to_str(h->nlmsg_type),
 			  nl_family_to_str(ndm->ndm_family), ifp->name,
 			  ndm->ndm_ifindex);
@@ -2186,7 +2189,7 @@ static int netlink_ipneigh_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 		if (tb[NDA_LLADDR]) {
 			if (RTA_PAYLOAD(tb[NDA_LLADDR]) != ETH_ALEN) {
 				zlog_warn(
-					"%s family %s IF %s(%u) - LLADDR is not MAC, len %lu",
+					"%s family %s IF %s(%u) - LLADDR is not MAC, len %lu\n",
 					nl_msg_type_to_str(h->nlmsg_type),
 					nl_family_to_str(ndm->ndm_family),
 					ifp->name, ndm->ndm_ifindex,
@@ -2203,7 +2206,7 @@ static int netlink_ipneigh_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
-				"Rx %s family %s IF %s(%u) IP %s MAC %s state 0x%x flags 0x%x",
+				"Rx %s family %s IF %s(%u) IP %s MAC %s state 0x%x flags 0x%x\n",
 				nl_msg_type_to_str(h->nlmsg_type),
 				nl_family_to_str(ndm->ndm_family), ifp->name,
 				ndm->ndm_ifindex,
@@ -2228,7 +2231,7 @@ static int netlink_ipneigh_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	}
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("Rx %s family %s IF %s(%u) IP %s",
+		zlog_debug("Rx %s family %s IF %s(%u) IP %s\n",
 			   nl_msg_type_to_str(h->nlmsg_type),
 			   nl_family_to_str(ndm->ndm_family), ifp->name,
 			   ndm->ndm_ifindex,
@@ -2384,7 +2387,7 @@ static int netlink_neigh_update2(struct interface *ifp, struct ipaddr *ip,
 		addattr_l(&req.n, sizeof(req), NDA_LLADDR, mac, 6);
 
 	if (IS_ZEBRA_DEBUG_KERNEL)
-		zlog_debug("Tx %s family %s IF %s(%u) Neigh %s MAC %s",
+		zlog_debug("Tx %s family %s IF %s(%u) Neigh %s MAC %s\n",
 			   nl_msg_type_to_str(cmd),
 			   nl_family_to_str(req.ndm.ndm_family), ifp->name,
 			   ifp->ifindex, ipaddr2str(ip, buf, sizeof(buf)),

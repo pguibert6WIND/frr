@@ -44,6 +44,9 @@
 #include "zebra/zebra_vxlan.h"
 
 #define ZEBRA_PTM_SUPPORT
+#define zlog_debug printf
+#define zlog_err printf
+#define zlog_info printf
 
 /* array holding redistribute info about table redistribution */
 /* bit AFI is set if that AFI is redistributing routes from this table */
@@ -352,8 +355,8 @@ void zebra_interface_up_update(struct interface *ifp)
 	struct listnode *node, *nnode;
 	struct zserv *client;
 
-	if (IS_ZEBRA_DEBUG_EVENT)
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_UP %s", ifp->name);
+	if (IS_ZEBRA_DEBUG_EVENT && 0)
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_UP %s\n", ifp->name);
 
 	if (ifp->ptm_status || !ifp->ptm_enable) {
 		for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
@@ -371,8 +374,8 @@ void zebra_interface_down_update(struct interface *ifp)
 	struct listnode *node, *nnode;
 	struct zserv *client;
 
-	if (IS_ZEBRA_DEBUG_EVENT)
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_DOWN %s", ifp->name);
+	if (IS_ZEBRA_DEBUG_EVENT && 0)
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_DOWN %s\n", ifp->name);
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client)) {
 		zsend_interface_update(ZEBRA_INTERFACE_DOWN, client, ifp);
@@ -385,8 +388,8 @@ void zebra_interface_add_update(struct interface *ifp)
 	struct listnode *node, *nnode;
 	struct zserv *client;
 
-	if (IS_ZEBRA_DEBUG_EVENT)
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADD %s[%d]", ifp->name,
+	if (IS_ZEBRA_DEBUG_EVENT && 0)
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADD %s[%d]\n", ifp->name,
 			   ifp->vrf_id);
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
@@ -402,8 +405,9 @@ void zebra_interface_delete_update(struct interface *ifp)
 	struct listnode *node, *nnode;
 	struct zserv *client;
 
-	if (IS_ZEBRA_DEBUG_EVENT)
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_DELETE %s", ifp->name);
+	if (IS_ZEBRA_DEBUG_EVENT && 0)
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_DELETE %s, Idx %u, VRF %u\n",
+			   ifp->name, ifp->ifindex, ifp->vrf_id);
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client)) {
 		client->ifdel_cnt++;
@@ -419,17 +423,17 @@ void zebra_interface_address_add_update(struct interface *ifp,
 	struct zserv *client;
 	struct prefix *p;
 
-	if (IS_ZEBRA_DEBUG_EVENT) {
+	if (IS_ZEBRA_DEBUG_EVENT && 0) {
 		char buf[PREFIX_STRLEN];
 
 		p = ifc->address;
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADDRESS_ADD %s on %s",
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADDRESS_ADD %s on %s\n",
 			   prefix2str(p, buf, sizeof(buf)), ifc->ifp->name);
 	}
 
 	if (!CHECK_FLAG(ifc->conf, ZEBRA_IFC_REAL))
 		zlog_warn(
-			"WARNING: advertising address to clients that is not yet usable.");
+			"WARNING: advertising address to clients that is not yet usable.\n");
 
 	zebra_vxlan_add_del_gw_macip(ifp, ifc->address, 1);
 
@@ -451,11 +455,11 @@ void zebra_interface_address_delete_update(struct interface *ifp,
 	struct zserv *client;
 	struct prefix *p;
 
-	if (IS_ZEBRA_DEBUG_EVENT) {
+	if (IS_ZEBRA_DEBUG_EVENT && 0) {
 		char buf[PREFIX_STRLEN];
 
 		p = ifc->address;
-		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADDRESS_DELETE %s on %s",
+		zlog_debug("MESSAGE: ZEBRA_INTERFACE_ADDRESS_DELETE %s on %s\n",
 			   prefix2str(p, buf, sizeof(buf)), ifc->ifp->name);
 	}
 
@@ -481,7 +485,7 @@ void zebra_interface_vrf_update_del(struct interface *ifp, vrf_id_t new_vrf_id)
 
 	if (IS_ZEBRA_DEBUG_EVENT)
 		zlog_debug(
-			"MESSAGE: ZEBRA_INTERFACE_VRF_UPDATE/DEL %s VRF Id %u -> %u",
+			"MESSAGE: ZEBRA_INTERFACE_VRF_UPDATE/DEL %s VRF Id %u -> %u\n",
 			ifp->name, ifp->vrf_id, new_vrf_id);
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client)) {
@@ -504,7 +508,7 @@ void zebra_interface_vrf_update_add(struct interface *ifp, vrf_id_t old_vrf_id)
 
 	if (IS_ZEBRA_DEBUG_EVENT)
 		zlog_debug(
-			"MESSAGE: ZEBRA_INTERFACE_VRF_UPDATE/ADD %s VRF Id %u -> %u",
+			"MESSAGE: ZEBRA_INTERFACE_VRF_UPDATE/ADD %s VRF Id %u -> %u\n",
 			ifp->name, old_vrf_id, ifp->vrf_id);
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client)) {
