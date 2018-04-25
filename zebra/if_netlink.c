@@ -1181,7 +1181,11 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 		if (desc)
 			ifp->desc = XSTRDUP(MTYPE_TMP, desc);
 	}
-
+	if (ifp && ifp->vrf_id == 0 && ns_id != 0) {
+		zlog_err("strange %x XXXXXXXXXXXXXXXXXXXXXXxx ifp %s idx %u vrf %u ns %u\n",
+			 ifp, ifp->name,
+			 ifp->ifindex, ifp->vrf_id, ns_id);
+	}
 	if (h->nlmsg_type == RTM_NEWLINK) {
 		if (tb[IFLA_MASTER]) {
 			if (slave_kind && (strcmp(slave_kind, "vrf") == 0)
@@ -1325,7 +1329,14 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 				  name, ifi->ifi_index);
 			return 0;
 		}
-
+		if (vrf_is_backend_netns()) {
+			if (ifp->vrf_id == 0 && ifp->vrf_id != ns_id) {
+				zlog_err("%s ifp %s idx %u VRF %u NS %u force\n",
+					 __func__, ifp->name, ifp->ifindex,
+					 ifp->vrf_id, ns_id);
+				ifp->vrf_id = zns->ns_id;
+			}
+		}
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("RTM_DELLINK for %s(%u) VRF %u NS %u\n", name,
 				   ifp->ifindex, ifp->vrf_id , zns->ns_id);
