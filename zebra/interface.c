@@ -196,6 +196,7 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 {
 	struct prefix p;
 	struct route_node *rn;
+	zlog_err("if_link_per_ns nsid %u\n", ns->ns_id);
 
 	if (ifp->ifindex == IFINDEX_INTERNAL)
 		return NULL;
@@ -205,20 +206,30 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 	if (rn->info) {
 		ifp = (struct interface *)rn->info;
 		route_unlock_node(rn); /* get */
+		zlog_err("if_link_per_ns ifp %x %s %u VRF %u already here NS %d\n", ifp,
+			 ifp->name, ifp->ifindex, ifp->vrf_id, ns->ns_id);
 		return ifp;
 	}
 
 	rn->info = ifp;
 	ifp->node = rn;
-
+	zlog_err("if_link_per_ns ifp %x %s %u VRF %u OK\n", ifp,
+		 ifp->name, ifp->ifindex, ifp->vrf_id);
 	return ifp;
 }
 
 /* Delete a VRF. This is called in vrf_terminate(). */
 void if_unlink_per_ns(struct interface *ifp)
 {
-	ifp->node->info = NULL;
-	route_unlock_node(ifp->node);
+	zlog_err("if_unlink_per_ns ifp %x %s %u VRF %u OK\n", ifp,
+		 ifp->name, ifp->ifindex, ifp->vrf_id);
+	if (ifp->node) {
+		ifp->node->info = NULL;
+		route_unlock_node(ifp->node);
+	} else {
+		zlog_err("if_unlink_per_ns %s %u VRF %u missing node",
+			 ifp->name, ifp->ifindex, ifp->vrf_id);
+	}
 	ifp->node = NULL;
 }
 
