@@ -2698,11 +2698,50 @@ void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 		 * with nexthop-vrf <VRF>
 		 */
 		ifp = if_lookup_by_name_all_vrf(vrf->name);
-		if (!ifp)
-			return;
-		api_nh->vrf_id = nh->vrf_id;
-		api_nh->type = NEXTHOP_TYPE_IFINDEX;
-		api_nh->ifindex = ifp->ifindex;
+		/* vrf backend is netns.
+		 */
+		if (!ifp) {
+			char *cp;
+			char buff[PREFIX_STRLEN];
+			int len, stop_on_error = 0, stop_on_success = 0;
+			struct prefix_ipv4 p4;
+
+			/* an xvrf interface will be found
+			 * then inside that xvrf interface,
+			 * a nexthop will be found:
+			 * semantic :
+			 * interface xvrf<x>, where x belongs to VRF vrf<x>
+			 *   xvrf0 stands for interface in default VRF
+			 * NH = 169.254.128.<y>, where y belongs to dst VRF vrf<y>
+			 */
+			/* default route */
+			len = strlen(vrf->data.l.netns_name);
+			cp = vrf->data.l.netns_name + len;
+			len--;
+			do {
+				if (len <= 0) {
+					stop_on_error = 1;
+				} else if (isalpha(*cp)) {
+					stop_on_success = 1;
+					cp++;
+				} else {
+					cp--;
+					len--;
+				}
+			} while(stop_on_error || stop_on_success);
+			if (stop_on_error)
+				return;
+			sprintf(buff, "169.254.128.%s/32", cp);
+			memset(&p4, 0, sizeof(struct prefix_ipv4));
+			str2prefix_ipv4(buff, &p4);
+			api_nh->vrf_id = bgp->vrf_id;
+			api_nh->gate.ipv4 = p4.prefix;
+			api_nh->type = NEXTHOP_TYPE_IPV4;
+		} else {
+			api_nh->vrf_id = nh->vrf_id;
+			api_nh->type = NEXTHOP_TYPE_IFINDEX;
+			api_nh->ifindex = ifp->ifindex;
+		}
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_info("BGP: sending default route to %s table %d (redirect VRF)",
 				  vrf->name, table_id);
