@@ -754,7 +754,7 @@ void if_delete_update(struct interface *ifp)
 
 	/* if the ifp is in a vrf, move it to default so vrf can be deleted if
 	 * desired */
-	if (ifp->vrf_id)
+	if (ifp->vrf_id && !vrf_is_backend_netns())
 		if_handle_vrf_change(ifp, VRF_DEFAULT);
 
 	/* Reset some zebra interface params to default values. */
