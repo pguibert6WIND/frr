@@ -140,6 +140,16 @@ static inline const char *zvrf_ns_name(struct zebra_vrf *zvrf)
 	return ns_get_name((struct ns *)zvrf->vrf->ns_ctxt);
 }
 
+static inline ns_id_t zvrf_ns_id(struct zebra_vrf *zvrf)
+{
+	struct ns *ns;
+
+	if (!zvrf->vrf || !zvrf->vrf->ns_ctxt)
+		return NS_UNKNOWN;
+	ns = zvrf->vrf->ns_ctxt;
+	return ns->ns_id;
+}
+
 static inline const char *zvrf_name(struct zebra_vrf *zvrf)
 {
 	return zvrf->vrf->name;

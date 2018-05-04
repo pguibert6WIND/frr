@@ -84,7 +84,7 @@ static void set_ifindex(struct interface *ifp, ifindex_t ifi_index,
 				"internal value %u",
 				ifp->name, ifi_index);
 		else {
-			if (IS_ZEBRA_DEBUG_KERNEL)
+			if (1 || IS_ZEBRA_DEBUG_KERNEL)
 				zlog_debug(
 					"interface index %d was renamed from %s to %s",
 					ifi_index, oifp->name, ifp->name);
@@ -983,16 +983,24 @@ int netlink_interface_addr(struct sockaddr_nl *snl, struct nlmsghdr *h,
 	if (ifp && label && strcmp(ifp->name, label) == 0)
 		label = NULL;
 
+	if (!CHECK_FLAG(ifp->status, ZEBRA_INTERFACE_ACTIVE)) {
+		zlog_err(" trying to %s address on interface %x that is not active",
+			 h->nlmsg_type == RTM_NEWADDR ? "add" : "delete", ifp);
+		return 0;
+	}
 	/* Register interface address to the interface. */
 	if (ifa->ifa_family == AF_INET) {
-		if (h->nlmsg_type == RTM_NEWADDR)
+		if (h->nlmsg_type == RTM_NEWADDR) {
+			zlog_err("connect add ipv4 ifp %x index %u vrf %u", ifp, ifp->ifindex, ifp->vrf_id);
 			connected_add_ipv4(ifp, flags, (struct in_addr *)addr,
 					   ifa->ifa_prefixlen,
 					   (struct in_addr *)broad, label);
-		else
+		} else {
+			zlog_err("connect del ipv4 ifp %x index %u vrf %u", ifp, ifp->ifindex, ifp->vrf_id);
 			connected_delete_ipv4(
 				ifp, flags, (struct in_addr *)addr,
 				ifa->ifa_prefixlen, (struct in_addr *)broad);
+		}
 	}
 	if (ifa->ifa_family == AF_INET6) {
 		if (h->nlmsg_type == RTM_NEWADDR) {
@@ -1049,7 +1057,7 @@ static void if_netlink_check_ifp_instance_consistency(uint16_t cmd,
 	if ((cmd == RTM_NEWLINK)
 	    && (CHECK_FLAG(other_ifp->status, ZEBRA_INTERFACE_ACTIVE)))
 		return;
-	if (IS_ZEBRA_DEBUG_KERNEL && cmd == RTM_NEWLINK) {
+	if ((1 || IS_ZEBRA_DEBUG_KERNEL) && cmd == RTM_NEWLINK) {
 		zlog_debug("RTM_NEWLINK %s(%u, VRF %u) replaces %s(%u, VRF %u)\n",
 			   ifp->name,
 			   ifp->ifindex,
@@ -1057,7 +1065,7 @@ static void if_netlink_check_ifp_instance_consistency(uint16_t cmd,
 			   other_ifp->name,
 			   other_ifp->ifindex,
 			   other_ifp->vrf_id);
-	} else	if (IS_ZEBRA_DEBUG_KERNEL && cmd == RTM_DELLINK) {
+	} else	if ((1 || IS_ZEBRA_DEBUG_KERNEL) && cmd == RTM_DELLINK) {
 		zlog_debug("RTM_DELLINK %s(%u, VRF %u) is replaced by %s(%u, VRF %u)\n",
 			   ifp->name,
 			   ifp->ifindex,
@@ -1173,7 +1181,15 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 		if (desc)
 			ifp->desc = XSTRDUP(MTYPE_TMP, desc);
 	}
-
+	if (ifp) {
+		zlog_err("%s ifp %x vrf %u ifindex %u NS %u",
+			 h->nlmsg_type == RTM_NEWLINK ? "NewLink" : "DelLink",
+			 ifp, ifp->vrf_id, ifp->ifindex, ns_id);
+	} else {
+		zlog_err("%s ifp null NS %u",
+			 h->nlmsg_type == RTM_NEWLINK ? "NewLink" : "DelLink",
+			 ns_id);
+	}
 	if (h->nlmsg_type == RTM_NEWLINK) {
 		if (tb[IFLA_MASTER]) {
 			if (slave_kind && (strcmp(slave_kind, "vrf") == 0)
@@ -1204,10 +1220,13 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 			if (ifp == NULL) {
 				/* unknown interface */
 				ifp = if_get_by_name(name, vrf_id, 0);
+				zlog_err("if_get by name vrf %u name %s got %x", vrf_id,  name,ifp);
 			} else {
 				/* pre-configured interface, learnt now */
-				if (ifp->vrf_id != vrf_id)
+				zlog_err("if_update_to_new_vrf vrf %u->%u name %s got %x", ifp->vrf_id, vrf_id,  name,ifp);
+				if (ifp->vrf_id != vrf_id) {
 					if_update_to_new_vrf(ifp, vrf_id);
+				}
 			}
 
 			/* Update interface information. */

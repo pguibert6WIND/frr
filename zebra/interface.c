@@ -194,6 +194,8 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 	struct prefix p;
 	struct route_node *rn;
 
+	zlog_err("if_link_per_ns %x index %u, vrf %u NS %u node %x",
+		 ifp, ifp->ifindex, ifp->vrf_id, ns->ns_id, ifp->node);
 	if (ifp->ifindex == IFINDEX_INTERNAL)
 		return NULL;
 
@@ -208,6 +210,7 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 
 	rn->info = ifp;
 	ifp->node = rn;
+	zlog_err("if_link_per_ns ifp %x node %x", ifp, ifp->node);
 
 	return ifp;
 }
@@ -215,6 +218,7 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 /* Delete a VRF. This is called in vrf_terminate(). */
 void if_unlink_per_ns(struct interface *ifp)
 {
+	zlog_err("if_unlink_per_ns %x index %u vrf_id %u node %x",ifp, ifp->ifindex, ifp->vrf_id, ifp->node);
 	ifp->node->info = NULL;
 	route_unlock_node(ifp->node);
 	ifp->node = NULL;
@@ -541,10 +545,13 @@ void if_add_update(struct interface *ifp)
 	struct zebra_vrf *zvrf = vrf_info_lookup(ifp->vrf_id);
 
 	/* case interface populate before vrf enabled */
-	if (zvrf->zns)
+	if (zvrf->zns) {
 		zns = zvrf->zns;
-	else
+		zlog_err("zvrf takes specific %u", zns->ns_id);
+	} else {
+		zlog_err("zvrf takes default");
 		zns = zebra_ns_lookup(NS_DEFAULT);
+	}
 	if_link_per_ns(zns, ifp);
 	if_data = ifp->info;
 	assert(if_data);
@@ -751,6 +758,8 @@ void if_delete_update(struct interface *ifp)
 	   while processing the deletion.  Each client daemon is responsible
 	   for setting ifindex to IFINDEX_INTERNAL after processing the
 	   interface deletion message. */
+	zlog_err("ifp %x set node to null ifindex %u vrf id %u node %x", ifp,
+		 ifp->ifindex, ifp->vrf_id, ifp->node);
 	if_set_index(ifp, IFINDEX_INTERNAL);
 	ifp->node = NULL;
 
@@ -775,6 +784,7 @@ void if_handle_vrf_change(struct interface *ifp, vrf_id_t vrf_id)
 {
 	vrf_id_t old_vrf_id;
 
+	zlog_err("if handle vrf change ifp %x from %u to %u", ifp, ifp->vrf_id, vrf_id);
 	old_vrf_id = ifp->vrf_id;
 
 	static_ifindex_update(ifp, false);
