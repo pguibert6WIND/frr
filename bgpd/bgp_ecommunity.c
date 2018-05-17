@@ -745,21 +745,24 @@ char *ecommunity_ecom2str(struct ecommunity *ecom, int format, int filter)
 					"FS:redirect IP 0x%x", *(pnt+5));
 			} else
 				unk_ecom = 1;
-		} else if ((sub_type == ECOMMUNITY_REDIRECT_VRF) &&
-			   (type == ECOMMUNITY_ENCODE_TRANS_EXP ||
-			    type == ECOMMUNITY_EXTENDED_COMMUNITY_PART_2 ||
-			    type == ECOMMUNITY_EXTENDED_COMMUNITY_PART_3)) {
-			char buf[16];
+		} else if (type == ECOMMUNITY_ENCODE_TRANS_EXP ||
+			   type == ECOMMUNITY_EXTENDED_COMMUNITY_PART_2 ||
+			   type == ECOMMUNITY_EXTENDED_COMMUNITY_PART_3) {
+			sub_type = *pnt++;
+			if (sub_type == ECOMMUNITY_REDIRECT_VRF) {
+				char buf[16];
 
-			memset(buf, 0, sizeof(buf));
-			ecommunity_rt_soo_str(buf, (uint8_t *)pnt,
-					      type &
-					      ~ECOMMUNITY_ENCODE_TRANS_EXP,
-					      ECOMMUNITY_ROUTE_TARGET,
-					      ECOMMUNITY_FORMAT_DISPLAY);
-			len = snprintf(str_buf + str_pnt,
-				       str_size - len,
-				       "FS:redirect VRF %s", buf);
+				memset(buf, 0, sizeof(buf));
+				ecommunity_rt_soo_str(buf, pnt,
+						      type &
+						      ~ECOMMUNITY_ENCODE_TRANS_EXP,
+						      ECOMMUNITY_ROUTE_TARGET,
+						      ECOMMUNITY_FORMAT_DISPLAY);
+				len = snprintf(str_buf + str_pnt,
+					       str_size - len,
+					       "FS:redirect VRF %s", buf);
+			} else
+				unk_ecom = 1;
 		} else if (type == ECOMMUNITY_ENCODE_TRANS_EXP) {
 			sub_type = *pnt++;
 
