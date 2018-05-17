@@ -753,7 +753,7 @@ char *ecommunity_ecom2str(struct ecommunity *ecom, int format, int filter)
 				char buf[16];
 
 				memset(buf, 0, sizeof(buf));
-				ecommunity_rt_soo_str(buf, pnt,
+				ecommunity_rt_soo_str(buf, (uint8_t *)pnt,
 						      type &
 						      ~ECOMMUNITY_ENCODE_TRANS_EXP,
 						      ECOMMUNITY_ROUTE_TARGET,
