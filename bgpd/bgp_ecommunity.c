@@ -761,12 +761,9 @@ char *ecommunity_ecom2str(struct ecommunity *ecom, int format, int filter)
 				len = snprintf(str_buf + str_pnt,
 					       str_size - len,
 					       "FS:redirect VRF %s", buf);
-			} else
+			} else if (type != ECOMMUNITY_ENCODE_TRANS_EXP)
 				unk_ecom = 1;
-		} else if (type == ECOMMUNITY_ENCODE_TRANS_EXP) {
-			sub_type = *pnt++;
-
-			if (sub_type == ECOMMUNITY_TRAFFIC_ACTION) {
+			else if (sub_type == ECOMMUNITY_TRAFFIC_ACTION) {
 				char action[64];
 				char *ptr = action;
 
