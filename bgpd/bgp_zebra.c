@@ -2798,21 +2798,25 @@ void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 			} while(stop_on_error || stop_on_success);
 			if (stop_on_error)
 				return;
-			sprintf(buff, "169.254.128.%s/32", cp);
+			sprintf(buff, "169.254.0.%s/32", cp);
 			memset(&p4, 0, sizeof(struct prefix_ipv4));
 			str2prefix_ipv4(buff, &p4);
 			api_nh->vrf_id = bgp->vrf_id;
 			api_nh->gate.ipv4 = p4.prefix;
 			api_nh->type = NEXTHOP_TYPE_IPV4;
+			if (BGP_DEBUG(zebra, ZEBRA))
+				zlog_info("BGP: %s default route to %s table %d NH %s (redirect VRF)",
+					  announce ? "adding" : "withdrawing",
+					  vrf->name, table_id, buff);
 		} else {
+			if (BGP_DEBUG(zebra, ZEBRA))
+				zlog_info("BGP: %s default route to %s table %d (redirect VRF)",
+					  announce ? "adding" : "withdrawing",
+					  vrf->name, table_id);
 			api_nh->vrf_id = nh->vrf_id;
 			api_nh->type = NEXTHOP_TYPE_IFINDEX;
 			api_nh->ifindex = ifp->ifindex;
 		}
-		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_info("BGP: %s default route to %s table %d (redirect VRF)",
-				  announce ? "adding" : "withdrawing",
-				  vrf->name, table_id);
 		zclient_route_send(announce ? ZEBRA_ROUTE_ADD
 				   : ZEBRA_ROUTE_DELETE,
 				   zclient, &api);
