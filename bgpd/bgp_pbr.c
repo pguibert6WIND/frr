@@ -1367,14 +1367,14 @@ void bgp_pbr_update_entry(struct bgp *bgp, struct prefix *p,
 	/* already installed */
 	if (nlri_update && extra->bgp_fs_pbr) {
 		if (BGP_DEBUG(pbr, PBR_ERROR))
-			zlog_err("%s: entry %x already installed in bgp pbr",
+			zlog_err("%s: entry %p already installed in bgp pbr",
 				 __func__, info);
 		return;
 	}
 
 	if (bgp_pbr_build_and_validate_entry(p, info, &api) < 0) {
 		if (BGP_DEBUG(pbr, PBR_ERROR))
-			zlog_err("%s: cancel updating entry %x in bgp pbr",
+			zlog_err("%s: cancel updating entry %p in bgp pbr",
 				 __func__, info);
 		return;
 	}
