@@ -1365,7 +1365,7 @@ void bgp_pbr_update_entry(struct bgp *bgp, struct prefix *p,
 		return;
 	}
 	/* already installed */
-	if (extra->bgp_fs_pbr) {
+	if (nlri_update && extra->bgp_fs_pbr) {
 		if (BGP_DEBUG(pbr, PBR_ERROR))
 			zlog_err("%s: entry %x already installed in bgp pbr",
 				 __func__, info);
