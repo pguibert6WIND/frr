@@ -1061,7 +1061,7 @@ static void if_netlink_check_ifp_instance_consistency(uint16_t cmd,
 		zlog_debug("RTM_DELLINK %s(%u, VRF %u) is replaced by %s(%u, VRF %u)\n",
 			   ifp->name,
 			   ifp->ifindex,
-			   ns_id,
+			   ifp->vrf_id,
 			   other_ifp->name,
 			   other_ifp->ifindex,
 			   other_ifp->vrf_id);
@@ -1069,10 +1069,9 @@ static void if_netlink_check_ifp_instance_consistency(uint16_t cmd,
 	/* the found interface replaces the current one
 	 * remove it
 	 */
-	if (cmd == RTM_DELLINK) {
-		ifp->vrf_id = (vrf_id_t)ns_id;
+	if (cmd == RTM_DELLINK)
 		if_delete(ifp);
-	} else
+	else
 		if_delete(other_ifp);
 	/* the found interface is replaced by the current one
 	 * suppress it
