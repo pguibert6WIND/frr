@@ -41,6 +41,7 @@
 
 DEFINE_MTYPE_STATIC(LIB, VRF, "VRF")
 DEFINE_MTYPE_STATIC(LIB, VRF_BITMAP, "VRF bit-map")
+DEFINE_MTYPE_STATIC(LIB, VRF_NAME, "VRF Name")
 
 DEFINE_QOBJ_TYPE(vrf)
 
@@ -78,6 +79,8 @@ static int vrf_is_enabled(struct vrf *vrf);
 struct vrf *vrf_lookup_by_name(const char *name)
 {
 	struct vrf vrf;
+
+	memset(&vrf, 0, sizeof(struct vrf));
 	strlcpy(vrf.name, name, sizeof(vrf.name));
 	return (RB_FIND(vrf_name_head, &vrfs_by_name, &vrf));
 }
@@ -87,9 +90,23 @@ static __inline int vrf_id_compare(const struct vrf *a, const struct vrf *b)
 	return (a->vrf_id - b->vrf_id);
 }
 
+/* a pointer is the structure forged by user
+ */
 static int vrf_name_compare(const struct vrf *a, const struct vrf *b)
 {
-	return strcmp(a->name, b->name);
+	char *a_name = NULL, *b_name = NULL;
+	struct listnode *a_node, *b_node;
+
+	if (a->alias_names == NULL) {
+		for (ALL_LIST_ELEMENTS_RO(b->alias_names, b_node, b_name)) {
+			if (b_name == NULL)
+				break;
+			if (memcmp(b_name, a->name, VRF_NAMSIZ) == 0)
+				return 0;
+			continue;
+		}
+	}
+	return 1;
 }
 
 /* if ns_id is different and not VRF_UNKNOWN,
@@ -151,6 +168,7 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 {
 	struct vrf *vrf = NULL;
 	int new = 0;
+	char *name_local;
 
 	if (debug_vrf)
 		zlog_debug("VRF_GET: %s(%u)", name == NULL ? "(NULL)" : name,
@@ -171,6 +189,7 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 	if (vrf == NULL) {
 		vrf = XCALLOC(MTYPE_VRF, sizeof(struct vrf));
 		vrf->vrf_id = VRF_UNKNOWN;
+		vrf->alias_names = list_new();
 		QOBJ_REG(vrf, vrf);
 		new = 1;
 
@@ -187,11 +206,18 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 
 	/* Set name */
 	if (name && vrf->name[0] != '\0' && strcmp(name, vrf->name)) {
-		RB_REMOVE(vrf_name_head, &vrfs_by_name, vrf);
-		strlcpy(vrf->name, name, sizeof(vrf->name));
-		RB_INSERT(vrf_name_head, &vrfs_by_name, vrf);
+		if (debug_vrf)
+			zlog_debug("VRF(%u) %s alias appended to %s", vrf_id,
+				   name, vrf->name);
+		/* an alias is added */
+		name_local = XCALLOC(MTYPE_VRF_NAME, VRF_NAMSIZ + 1);
+		strlcpy(name_local, name, sizeof(name_local));
+		listnode_add(vrf->alias_names, name_local);
 	} else if (name && vrf->name[0] == '\0') {
 		strlcpy(vrf->name, name, sizeof(vrf->name));
+		name_local = XCALLOC(MTYPE_VRF_NAME, VRF_NAMSIZ + 1);
+		strlcpy(name_local, name, sizeof(vrf->name));
+		listnode_add(vrf->alias_names, name_local);
 		RB_INSERT(vrf_name_head, &vrfs_by_name, vrf);
 	}
 	if (new &&vrf_master.vrf_new_hook)
@@ -200,11 +226,35 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 	return vrf;
 }
 
+/* Try to Delete a VRF.
+ * While first name is not suppressed, VRF is not deleted
+ */
+void vrf_try_delete(struct vrf *vrf, const char *name)
+{
+	struct listnode *node, *nnode;
+	char *local_name;
+
+	for (ALL_LIST_ELEMENTS(vrf->alias_names, node, nnode, local_name)) {
+		if (local_name == NULL)
+			break;
+		if (strncmp(name, local_name, VRF_NAMSIZ))
+			continue;
+		XFREE(MTYPE_VRF_NAME, local_name);
+		listnode_delete(vrf->alias_names, node);
+		break;
+	}
+	if (vrf->alias_names && listcount(vrf->alias_names) == 0)
+		vrf_delete(vrf);
+}
+
 /* Delete a VRF. This is called when the underlying VRF goes away, a
  * pre-configured VRF is deleted or when shutting down (vrf_terminate()).
  */
 void vrf_delete(struct vrf *vrf)
 {
+	struct listnode *node, *nnode;
+	char *name;
+
 	if (debug_vrf)
 		zlog_debug("VRF %u is to be deleted.", vrf->vrf_id);
 
@@ -238,7 +288,12 @@ void vrf_delete(struct vrf *vrf)
 		RB_REMOVE(vrf_id_head, &vrfs_by_id, vrf);
 	if (vrf->name[0] != '\0')
 		RB_REMOVE(vrf_name_head, &vrfs_by_name, vrf);
-
+	for (ALL_LIST_ELEMENTS(vrf->alias_names, node, nnode, name)) {
+		if (name)
+			XFREE(MTYPE_VRF_NAME, name);
+		listnode_delete(vrf->alias_names, node);
+	}
+	list_delete_and_null(&vrf->alias_names);
 	XFREE(MTYPE_VRF, vrf);
 }
 

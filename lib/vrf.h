@@ -72,6 +72,7 @@ struct vrf {
 	/* Name */
 	char name[VRF_NAMSIZ + 1];
 
+	struct list *alias_names;
 	/* Zebra internal VRF status */
 	uint8_t status;
 #define VRF_ACTIVE     (1 << 0) /* VRF is up in kernel */
@@ -281,5 +282,6 @@ extern int vrf_netns_handler_create(struct vty *vty, struct vrf *vrf,
 extern void vrf_disable(struct vrf *vrf);
 extern int vrf_enable(struct vrf *vrf);
 extern void vrf_delete(struct vrf *vrf);
+extern void vrf_try_delete(struct vrf *vrf, const char *name);
 
 #endif /*_ZEBRA_VRF_H*/
