@@ -513,10 +513,18 @@ int vrf_bitmap_check(vrf_bitmap_t bmap, vrf_id_t vrf_id)
 static void vrf_autocomplete(vector comps, struct cmd_token *token)
 {
 	struct vrf *vrf = NULL;
+	char *name;
+	struct listnode *node;
 
 	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
-		if (vrf->vrf_id != VRF_DEFAULT)
-			vector_set(comps, XSTRDUP(MTYPE_COMPLETION, vrf->name));
+		for (ALL_LIST_ELEMENTS_RO(vrf->alias_names, node, name)) {
+			if (vrf->vrf_id == VRF_DEFAULT &&
+			    !strcmp(name, VRF_DEFAULT_NAME))
+				continue;
+			if (name)
+				vector_set(comps, XSTRDUP(MTYPE_COMPLETION,
+							  name));
+		}
 	}
 }
 
