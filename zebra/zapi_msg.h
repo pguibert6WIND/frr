@@ -47,8 +47,10 @@
 extern void zserv_handle_commands(struct zserv *client, struct zmsghdr *hdr,
 				  struct stream *msg, struct zebra_vrf *zvrf);
 
-extern int zsend_vrf_add(struct zserv *zclient, struct zebra_vrf *zvrf);
-extern int zsend_vrf_delete(struct zserv *zclient, struct zebra_vrf *zvrf);
+extern int zsend_vrf_add(struct zserv *zclient, struct zebra_vrf *zvrf,
+			 const char *name);
+extern int zsend_vrf_delete(struct zserv *zclient, struct zebra_vrf *zvrf,
+			    const char *name);
 extern int zsend_interface_add(struct zserv *zclient, struct interface *ifp);
 extern int zsend_interface_delete(struct zserv *zclient, struct interface *ifp);
 extern int zsend_interface_addresses(struct zserv *zclient,

@@ -95,7 +95,8 @@ static void zserv_encode_interface(struct stream *s, struct interface *ifp)
 	stream_putw_at(s, 0, stream_get_endp(s));
 }
 
-static void zserv_encode_vrf(struct stream *s, struct zebra_vrf *zvrf)
+static void zserv_encode_vrf(struct stream *s, struct zebra_vrf *zvrf,
+			     const char *alias_name)
 {
 	struct vrf_data data;
 	const char *netns_name = zvrf_ns_name(zvrf);
@@ -110,7 +111,10 @@ static void zserv_encode_vrf(struct stream *s, struct zebra_vrf *zvrf)
 	/* Pass the tableid and the netns NAME */
 	stream_put(s, &data, sizeof(struct vrf_data));
 	/* Interface information. */
-	stream_put(s, zvrf_name(zvrf), VRF_NAMSIZ);
+	if (alias_name)
+		stream_put(s, alias_name, VRF_NAMSIZ);
+	else
+		stream_put(s, zvrf_name(zvrf), VRF_NAMSIZ);
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 }
@@ -177,28 +181,59 @@ int zsend_interface_delete(struct zserv *client, struct interface *ifp)
 	return zebra_server_send_message(client, s);
 }
 
-int zsend_vrf_add(struct zserv *client, struct zebra_vrf *zvrf)
+int zsend_vrf_add(struct zserv *client, struct zebra_vrf *zvrf,
+		  const char *name)
 {
-	struct stream *s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+	struct stream *s;
+	struct listnode *node;
+	char *local_name;
 
-	zclient_create_header(s, ZEBRA_VRF_ADD, zvrf_id(zvrf));
-	zserv_encode_vrf(s, zvrf);
+	if (name) {
+		s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+		zclient_create_header(s, ZEBRA_VRF_ADD, zvrf_id(zvrf));
+		zserv_encode_vrf(s, zvrf, name);
 
-	client->vrfadd_cnt++;
-	return zebra_server_send_message(client, s);
+		client->vrfadd_cnt++;
+		return zebra_server_send_message(client, s);
+	}
+	for (ALL_LIST_ELEMENTS_RO(zvrf->vrf->alias_names, node, local_name)) {
+		s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+		zclient_create_header(s, ZEBRA_VRF_ADD, zvrf_id(zvrf));
+		zserv_encode_vrf(s, zvrf, local_name);
+
+		client->vrfadd_cnt++;
+		zebra_server_send_message(client, s);
+	}
+	return 0;
 }
 
 /* VRF deletion from zebra daemon. */
-int zsend_vrf_delete(struct zserv *client, struct zebra_vrf *zvrf)
+int zsend_vrf_delete(struct zserv *client, struct zebra_vrf *zvrf,
+		     const char *name)
 
 {
-	struct stream *s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+	struct stream *s;
+	struct listnode *node;
+	char *local_name;
 
-	zclient_create_header(s, ZEBRA_VRF_DELETE, zvrf_id(zvrf));
-	zserv_encode_vrf(s, zvrf);
+	if (name) {
+		s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+		zclient_create_header(s, ZEBRA_VRF_DELETE, zvrf_id(zvrf));
 
-	client->vrfdel_cnt++;
-	return zebra_server_send_message(client, s);
+		zserv_encode_vrf(s, zvrf, name);
+
+		client->vrfdel_cnt++;
+		return zebra_server_send_message(client, s);
+	}
+	for (ALL_LIST_ELEMENTS_RO(zvrf->vrf->alias_names, node, local_name)) {
+		s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+		zclient_create_header(s, ZEBRA_VRF_DELETE, zvrf_id(zvrf));
+		zserv_encode_vrf(s, zvrf, local_name);
+
+		client->vrfdel_cnt++;
+		zebra_server_send_message(client, s);
+	}
+	return 0;
 }
 
 int zsend_interface_link_params(struct zserv *client, struct interface *ifp)

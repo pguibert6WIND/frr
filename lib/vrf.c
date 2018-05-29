@@ -48,6 +48,8 @@ DEFINE_QOBJ_TYPE(vrf)
 static __inline int vrf_id_compare(const struct vrf *, const struct vrf *);
 static __inline int vrf_name_compare(const struct vrf *, const struct vrf *);
 
+static int vrf_name_compare_extended(const struct vrf *a, const struct vrf *b);
+
 RB_GENERATE(vrf_id_head, vrf, id_entry, vrf_id_compare);
 RB_GENERATE(vrf_name_head, vrf, name_entry, vrf_name_compare);
 
@@ -79,10 +81,18 @@ static int vrf_is_enabled(struct vrf *vrf);
 struct vrf *vrf_lookup_by_name(const char *name)
 {
 	struct vrf vrf;
+	struct vrf *vrf_res;
 
 	memset(&vrf, 0, sizeof(struct vrf));
 	strlcpy(vrf.name, name, sizeof(vrf.name));
-	return (RB_FIND(vrf_name_head, &vrfs_by_name, &vrf));
+	vrf_res = RB_FIND(vrf_name_head, &vrfs_by_name, &vrf);
+	if (!vrf_res) {
+		RB_FOREACH (vrf_res, vrf_name_head, &vrfs_by_name) {
+			if (!vrf_name_compare_extended(&vrf, vrf_res))
+				return vrf_res;
+		}
+	}
+	return vrf_res;
 }
 
 static __inline int vrf_id_compare(const struct vrf *a, const struct vrf *b)
@@ -90,18 +100,26 @@ static __inline int vrf_id_compare(const struct vrf *a, const struct vrf *b)
 	return (a->vrf_id - b->vrf_id);
 }
 
-/* a pointer is the structure forged by user
+/* this comparison function is used by RB_XXX macros
+ * this should be used only for creation and internal researchs
  */
 static int vrf_name_compare(const struct vrf *a, const struct vrf *b)
 {
-	char *a_name = NULL, *b_name = NULL;
-	struct listnode *a_node, *b_node;
+	return strcmp(a->name, b->name);
+}
 
-	if (a->alias_names == NULL) {
-		for (ALL_LIST_ELEMENTS_RO(b->alias_names, b_node, b_name)) {
-			if (b_name == NULL)
+/* this comparison is an additional search function that looks for aliases
+ */
+static int vrf_name_compare_extended(const struct vrf *a, const struct vrf *b)
+{
+	char *name = NULL;
+	struct listnode *node;
+
+	if (a->alias_names == NULL || a->name == NULL) {
+		for (ALL_LIST_ELEMENTS_RO(b->alias_names, node, name)) {
+			if (name == NULL)
 				break;
-			if (memcmp(b_name, a->name, VRF_NAMSIZ) == 0)
+			if (strcmp(a->name, name) == 0)
 				return 0;
 			continue;
 		}

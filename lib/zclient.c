@@ -1596,6 +1596,8 @@ static void zclient_vrf_add(struct zclient *zclient, vrf_id_t vrf_id)
 static void zclient_vrf_delete(struct zclient *zclient, vrf_id_t vrf_id)
 {
 	struct vrf *vrf;
+	char vrfname_tmp[VRF_NAMSIZ];
+	struct vrf_data data;
 
 	/* Lookup vrf by vrf_id. */
 	vrf = vrf_lookup_by_id(vrf_id);
@@ -1608,7 +1610,11 @@ static void zclient_vrf_delete(struct zclient *zclient, vrf_id_t vrf_id)
 	if (!vrf)
 		return;
 
-	vrf_delete(vrf);
+	stream_get(&data, zclient->ibuf, sizeof(struct vrf_data));
+	/* Read interface name. */
+	stream_get(vrfname_tmp, zclient->ibuf, VRF_NAMSIZ);
+
+	vrf_try_delete(vrf, (const char *)vrfname_tmp);
 }
 
 struct interface *zebra_interface_add_read(struct stream *s, vrf_id_t vrf_id)

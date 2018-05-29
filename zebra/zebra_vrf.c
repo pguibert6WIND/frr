@@ -58,7 +58,7 @@ static void zebra_vrf_add_update(struct zebra_vrf *zvrf)
 		zlog_debug("MESSAGE: ZEBRA_VRF_ADD %s", zvrf_name(zvrf));
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
-		zsend_vrf_add(client, zvrf);
+		zsend_vrf_add(client, zvrf, NULL);
 }
 
 static void zebra_vrf_delete_update(struct zebra_vrf *zvrf)
@@ -70,7 +70,7 @@ static void zebra_vrf_delete_update(struct zebra_vrf *zvrf)
 		zlog_debug("MESSAGE: ZEBRA_VRF_DELETE %s", zvrf_name(zvrf));
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
-		zsend_vrf_delete(client, zvrf);
+		zsend_vrf_delete(client, zvrf, NULL);
 }
 
 void zebra_vrf_update_all(struct zserv *client)
@@ -79,7 +79,8 @@ void zebra_vrf_update_all(struct zserv *client)
 
 	RB_FOREACH (vrf, vrf_id_head, &vrfs_by_id) {
 		if (vrf->vrf_id != VRF_UNKNOWN)
-			zsend_vrf_add(client, vrf_info_lookup(vrf->vrf_id));
+			zsend_vrf_add(client, vrf_info_lookup(vrf->vrf_id),
+				      NULL);
 	}
 }
 
