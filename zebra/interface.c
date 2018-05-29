@@ -206,6 +206,17 @@ struct interface *if_link_per_ns(struct zebra_ns *ns, struct interface *ifp)
 		return ifp;
 	}
 
+	/* An ifp belongs to only one VR and can not be rattached to two
+	 * different route node
+	 * Remove old link if any. This case can occur when a interface is moved
+	 * from a VR to the default one */
+	if (ifp->node) {
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug(
+				"remove old link for interface %s vrf %u",
+				ifp->name, ifp->vrf_id);
+		if_unlink_per_ns(ifp);
+	}
 	rn->info = ifp;
 	ifp->node = rn;
 
