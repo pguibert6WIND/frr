@@ -2874,20 +2874,46 @@ DEFUN (show_vrf,
 	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
 		if (!(zvrf = vrf->info))
 			continue;
-		if (zvrf_id(zvrf) == VRF_DEFAULT)
+		if (zvrf_id(zvrf) != VRF_DEFAULT) {
+			vty_out(vty, "vrf %s ", zvrf_name(zvrf));
+			if (zvrf_id(zvrf) == VRF_UNKNOWN ||
+			    !zvrf_is_active(zvrf))
+				vty_out(vty, "inactive");
+			else if (zvrf_ns_name(zvrf))
+				vty_out(vty, "id %u netns %s", zvrf_id(zvrf),
+					zvrf_ns_name(zvrf));
+			else
+				vty_out(vty, "id %u table %u", zvrf_id(zvrf),
+					zvrf->table_id);
+		} else if (listcount(vrf->alias_names) <= 1) {
 			continue;
+		} else
+			vty_out(vty, "vrf %s ", zvrf_name(zvrf));
+		if (vrf_is_user_cfged(vrf) ||
+		    listcount(vrf->alias_names) > 1) {
+			int cfgd = 0;
 
-		vty_out(vty, "vrf %s ", zvrf_name(zvrf));
-		if (zvrf_id(zvrf) == VRF_UNKNOWN || !zvrf_is_active(zvrf))
-			vty_out(vty, "inactive");
-		else if (zvrf_ns_name(zvrf))
-			vty_out(vty, "id %u netns %s", zvrf_id(zvrf),
-				zvrf_ns_name(zvrf));
-		else
-			vty_out(vty, "id %u table %u", zvrf_id(zvrf),
-				zvrf->table_id);
-		if (vrf_is_user_cfged(vrf))
-			vty_out(vty, " (configured)");
+			vty_out(vty, " (");
+			if (vrf->vrf_id != VRF_DEFAULT &&
+			    vrf_is_user_cfged(vrf)) {
+				vty_out(vty, "configured");
+				cfgd = 1;
+			}
+			if (listcount(vrf->alias_names) > 1) {
+				char *name = NULL;
+				struct listnode *node;
+
+				if (cfgd)
+					vty_out(vty, ", ");
+				vty_out(vty, "alias ");
+				for (ALL_LIST_ELEMENTS_RO(vrf->alias_names,
+							  node, name)) {
+					if (strcmp(vrf->name, name))
+						vty_out(vty, "%s ", name);
+				}
+			}
+			vty_out(vty, ")");
+		}
 		vty_out(vty, "\n");
 	}
 
