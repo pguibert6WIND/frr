@@ -87,6 +87,7 @@ static void zebra_ns_notify_create_context_from_entry_name(const char *name)
 		zlog_warn(
 			"NS notify : same NSID used by VRF %s. Ignore NS %s creation",
 			vrf->name, netnspath);
+		vrf_get((vrf_id_t)ns_id_external, name);
 		return;
 	}
 	if (vrf_handler_create(NULL, name, &vrf) != CMD_SUCCESS) {
@@ -128,6 +129,7 @@ static int zebra_ns_delete(char *name)
 {
 	struct vrf *vrf = vrf_lookup_by_name(name);
 	struct ns *ns;
+	vrf_id_t vrf_id;
 
 	if (!vrf) {
 		zlog_warn(
@@ -138,11 +140,14 @@ static int zebra_ns_delete(char *name)
 	/* Clear configured flag and invoke delete. */
 	UNSET_FLAG(vrf->status, VRF_CONFIGURED);
 	ns = (struct ns *)vrf->ns_ctxt;
+	vrf_id = vrf->vrf_id;
+
 	/* the deletion order is the same
 	 * as the one used when siging signal is received
 	 */
-	vrf_delete(vrf);
-	if (ns)
+	vrf_try_delete(vrf, (const char *)name);
+	vrf = vrf_lookup_by_id(vrf_id);
+	if (!vrf && ns)
 		ns_delete(ns);
 
 	zlog_info("NS notify : deleted VRF %s", name);
