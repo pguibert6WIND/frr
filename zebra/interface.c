@@ -268,10 +268,11 @@ struct interface *if_lookup_by_name_per_ns(struct zebra_ns *ns,
  * is a netns backend
  */
 struct interface *if_lookup_by_name_not_ns(ns_id_t ns_id,
-					   const char *ifname)
+					   struct interface *old_ifp)
 {
 	struct interface *ifp;
 	struct ns *ns;
+	char *ifname = old_ifp->name;
 
 	RB_FOREACH (ns, ns_head, &ns_tree) {
 		if (ns->ns_id == ns_id)
@@ -281,7 +282,7 @@ struct interface *if_lookup_by_name_not_ns(ns_id_t ns_id,
 		 * so to look for interface, use the vrf list
 		 */
 		ifp = if_lookup_by_name(ifname, (vrf_id_t)ns->ns_id);
-		if (!ifp)
+		if (!ifp || ifp == old_ifp)
 			continue;
 		return ifp;
 	}
