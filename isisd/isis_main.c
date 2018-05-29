@@ -190,7 +190,7 @@ int main(int argc, char **argv, char **envp)
 	 *  initializations
 	 */
 	access_list_init();
-	vrf_init(NULL, NULL, NULL, NULL);
+	vrf_init(NULL, NULL, NULL, NULL, NULL);
 	prefix_list_init();
 	isis_init();
 	isis_circuit_init();

@@ -192,9 +192,8 @@ extern int vrf_bitmap_check(vrf_bitmap_t, vrf_id_t);
  *           the system ( 2 and 3 ) above.
  */
 extern void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
-		     int (*disable)(struct vrf *), int (*delete)(struct vrf *));
-
-extern void vrf_init_update_name(int (*update)(struct vrf *));
+		     int (*disable)(struct vrf *), int (*delete)(struct vrf *),
+		     int ((*update)(struct vrf *vrf)));
 
 /*
  * Call vrf_terminate when the protocol is being shutdown

@@ -168,7 +168,7 @@ int main(int argc, char **argv, char **envp)
 	eigrp_om->master = frr_init();
 	master = eigrp_om->master;
 
-	vrf_init(NULL, NULL, NULL, NULL);
+	vrf_init(NULL, NULL, NULL, NULL, NULL);
 
 	/*EIGRPd init*/
 	eigrp_if_init();

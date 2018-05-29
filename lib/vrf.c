@@ -455,7 +455,8 @@ void vrf_init_update_name(int (*update)(struct vrf *))
 
 /* Initialize VRF module. */
 void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
-	      int (*disable)(struct vrf *), int (*delete)(struct vrf *))
+	      int (*disable)(struct vrf *), int (*delete)(struct vrf *),
+	      int ((*update)(struct vrf *)))
 {
 	struct vrf *default_vrf;
 	char *local_ptr =  (char *)VRF_DEFAULT_NAME;
@@ -472,6 +473,7 @@ void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
 	vrf_master.vrf_enable_hook = enable;
 	vrf_master.vrf_disable_hook = disable;
 	vrf_master.vrf_delete_hook = delete;
+	vrf_master.vrf_update_name_hook = update;
 
 	/* The default VRF always exists. */
 	default_vrf = vrf_get(VRF_DEFAULT, vrf_default_name);

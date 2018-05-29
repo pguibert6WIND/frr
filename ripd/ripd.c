@@ -3030,7 +3030,7 @@ static int rip_vrf_disable(struct vrf *vrf)
 void rip_vrf_init(void)
 {
 	vrf_init(rip_vrf_new, rip_vrf_enable, rip_vrf_disable,
-		 rip_vrf_delete);
+		 rip_vrf_delete, NULL);
 }
 
 void rip_vrf_terminate(void)
