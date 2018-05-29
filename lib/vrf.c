@@ -71,6 +71,7 @@ struct vrf_master {
 	int (*vrf_delete_hook)(struct vrf *);
 	int (*vrf_enable_hook)(struct vrf *);
 	int (*vrf_disable_hook)(struct vrf *);
+	int (*vrf_update_name_hook)(struct vrf *, const char *, bool);
 } vrf_master = {
 	0,
 };
@@ -231,6 +232,9 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 		name_local = XCALLOC(MTYPE_VRF_NAME, VRF_NAMSIZ + 1);
 		strlcpy(name_local, name, sizeof(name_local));
 		listnode_add(vrf->alias_names, name_local);
+		if (vrf->vrf_id != VRF_UNKNOWN &&
+		    vrf_master.vrf_update_name_hook)
+			(*vrf_master.vrf_update_name_hook)(vrf, name, true);
 	} else if (name && vrf->name[0] == '\0') {
 		strlcpy(vrf->name, name, sizeof(vrf->name));
 		name_local = XCALLOC(MTYPE_VRF_NAME, VRF_NAMSIZ + 1);
@@ -259,6 +263,11 @@ void vrf_try_delete(struct vrf *vrf, const char *name)
 			continue;
 		XFREE(MTYPE_VRF_NAME, local_name);
 		listnode_delete(vrf->alias_names, node);
+		if (vrf->vrf_id != VRF_UNKNOWN &&
+		    vrf_master.vrf_update_name_hook)
+			(*vrf_master.vrf_update_name_hook)(vrf,
+							   local_name,
+							   false);
 		break;
 	}
 	if (vrf->alias_names && listcount(vrf->alias_names) == 0)
@@ -518,6 +527,11 @@ static const struct cmd_variable_handler vrf_var_handlers[] = {
 	},
 	{.completions = NULL},
 };
+
+void vrf_init_update_name(int (*update)(struct vrf *, const char *, bool))
+{
+	vrf_master.vrf_update_name_hook = update;
+}
 
 /* Initialize VRF module. */
 void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),

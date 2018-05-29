@@ -49,7 +49,7 @@ static void zebra_rnhtable_node_cleanup(struct route_table *table,
 					struct route_node *node);
 
 /* VRF information update. */
-static void zebra_vrf_add_update(struct zebra_vrf *zvrf)
+static void zebra_vrf_add_update(struct zebra_vrf *zvrf, const char *name)
 {
 	struct listnode *node, *nnode;
 	struct zserv *client;
@@ -58,10 +58,10 @@ static void zebra_vrf_add_update(struct zebra_vrf *zvrf)
 		zlog_debug("MESSAGE: ZEBRA_VRF_ADD %s", zvrf_name(zvrf));
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
-		zsend_vrf_add(client, zvrf, NULL);
+		zsend_vrf_add(client, zvrf, name);
 }
 
-static void zebra_vrf_delete_update(struct zebra_vrf *zvrf)
+static void zebra_vrf_delete_update(struct zebra_vrf *zvrf, const char *name)
 {
 	struct listnode *node, *nnode;
 	struct zserv *client;
@@ -70,7 +70,7 @@ static void zebra_vrf_delete_update(struct zebra_vrf *zvrf)
 		zlog_debug("MESSAGE: ZEBRA_VRF_DELETE %s", zvrf_name(zvrf));
 
 	for (ALL_LIST_ELEMENTS(zebrad.client_list, node, nnode, client))
-		zsend_vrf_delete(client, zvrf, NULL);
+		zsend_vrf_delete(client, zvrf, name);
 }
 
 void zebra_vrf_update_all(struct zserv *client)
@@ -120,7 +120,7 @@ static int zebra_vrf_enable(struct vrf *vrf)
 	 * add for the clients.
 	 */
 
-	zebra_vrf_add_update(zvrf);
+	zebra_vrf_add_update(zvrf, NULL);
 	/* Allocate tables */
 	for (afi = AFI_IP; afi <= AFI_IP6; afi++) {
 		for (safi = SAFI_UNICAST; safi <= SAFI_MULTICAST; safi++)
@@ -172,7 +172,7 @@ static int zebra_vrf_disable(struct vrf *vrf)
 	/* Inform clients that the VRF is now inactive. This is a
 	 * delete for the clients.
 	 */
-	zebra_vrf_delete_update(zvrf);
+	zebra_vrf_delete_update(zvrf, NULL);
 
 	/* If asked to retain routes, there's nothing more to do. */
 	if (CHECK_FLAG(zvrf->flags, ZEBRA_VRF_RETAIN))
@@ -296,6 +296,23 @@ static int zebra_vrf_delete(struct vrf *vrf)
 
 	return 0;
 }
+
+static int zebra_vrf_update(struct vrf *vrf, const char *name, bool add)
+{
+	struct zebra_vrf *zvrf = vrf->info;
+
+	assert(zvrf);
+	assert(name);
+	if (IS_ZEBRA_DEBUG_EVENT)
+		zlog_debug("VRF %s id %u %s", name,
+			   zvrf_id(zvrf), add ? "added" : "removed");
+	if (add)
+		zebra_vrf_add_update(zvrf, name);
+	else
+		zebra_vrf_delete_update(zvrf, name);
+	return 0;
+}
+
 
 /* Return if this VRF has any FRR configuration or not.
  * IMPORTANT: This function needs to be updated when additional configuration
@@ -569,6 +586,7 @@ void zebra_vrf_init(void)
 {
 	vrf_init(zebra_vrf_new, zebra_vrf_enable, zebra_vrf_disable,
 		 zebra_vrf_delete);
+	vrf_init_update_name(zebra_vrf_update);
 
 	vrf_cmd_init(vrf_config_write, &zserv_privs);
 }
