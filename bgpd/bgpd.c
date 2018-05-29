@@ -7828,10 +7828,18 @@ static void bgp_viewvrf_autocomplete(vector comps, struct cmd_token *token)
 	struct vrf *vrf = NULL;
 	struct listnode *next;
 	struct bgp *bgp;
+	char *name;
+	struct listnode *node;
 
 	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
-		if (vrf->vrf_id != VRF_DEFAULT)
-			vector_set(comps, XSTRDUP(MTYPE_COMPLETION, vrf->name));
+		for (ALL_LIST_ELEMENTS_RO(vrf->alias_names, node, name)) {
+			if (vrf->vrf_id == VRF_DEFAULT &&
+			    !memcmp(name, VRF_DEFAULT_NAME, VRF_NAMSIZ))
+				continue;
+			if (name)
+				vector_set(comps, XSTRDUP(MTYPE_COMPLETION,
+							  name));
+		}
 	}
 
 	for (ALL_LIST_ELEMENTS_RO(bm->bgp, next, bgp)) {
