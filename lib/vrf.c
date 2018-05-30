@@ -225,6 +225,14 @@ struct vrf *vrf_get(vrf_id_t vrf_id, const char *name)
 
 	/* Set name */
 	if (name && vrf->name[0] != '\0' && strcmp(name, vrf->name)) {
+		char *local_name;
+		struct listnode *node;
+
+		/* lookup if not already in the list */
+		for (ALL_LIST_ELEMENTS_RO(vrf->alias_names, node, local_name)) {
+			if (strcmp(name, local_name) == 0)
+				return vrf;
+		}
 		if (debug_vrf)
 			zlog_debug("VRF(%u) %s alias appended to %s", vrf_id,
 				   name, vrf->name);
@@ -797,7 +805,7 @@ DEFUN_NOSH (no_vrf,
 
 	/* Clear configured flag and invoke delete. */
 	UNSET_FLAG(vrfp->status, VRF_CONFIGURED);
-	vrf_delete(vrfp);
+	vrf_try_delete(vrfp, vrfname);
 
 	return CMD_SUCCESS;
 }
