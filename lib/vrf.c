@@ -476,6 +476,16 @@ void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
 		exit(1);
 	}
 
+	if (vrf_is_backend_netns()) {
+		struct ns *ns;
+
+		strlcpy(default_vrf->data.l.netns_name,
+			VRF_DEFAULT_NAME, NS_NAMSIZ);
+		ns = ns_lookup(ns_get_default_id());
+		ns->vrf_ctxt = (void *)default_vrf;
+		default_vrf->ns_ctxt = (void *)ns;
+	}
+
 	cmd_variable_handler_register(vrf_var_handlers);
 }
 
@@ -647,8 +657,6 @@ int vrf_is_mapped_on_netns(vrf_id_t vrf_id)
 	struct vrf *vrf = vrf_lookup_by_id(vrf_id);
 
 	if (!vrf || vrf->data.l.netns_name[0] == '\0')
-		return 0;
-	if (vrf->vrf_id == VRF_DEFAULT)
 		return 0;
 	return 1;
 }

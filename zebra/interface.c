@@ -263,31 +263,6 @@ struct interface *if_lookup_by_name_per_ns(struct zebra_ns *ns,
 	return NULL;
 }
 
-/* this function must be used only if the vrf backend
- * is a netns backend
- */
-struct interface *if_lookup_by_name_not_ns(ns_id_t ns_id,
-					   struct interface *old_ifp)
-{
-	struct interface *ifp;
-	struct ns *ns;
-	char *ifname = old_ifp->name;
-
-	RB_FOREACH (ns, ns_head, &ns_tree) {
-		if (ns->ns_id == ns_id)
-			continue;
-		/* if_delete_update has removed interface
-		 * from zns->if_table
-		 * so to look for interface, use the vrf list
-		 */
-		ifp = if_lookup_by_name(ifname, (vrf_id_t)ns->ns_id);
-		if (!ifp || ifp == old_ifp)
-			continue;
-		return ifp;
-	}
-	return NULL;
-}
-
 const char *ifindex2ifname_per_ns(struct zebra_ns *zns, unsigned int ifindex)
 {
 	struct interface *ifp;
@@ -766,8 +741,12 @@ void if_delete_update(struct interface *ifp)
 	ifp->node = NULL;
 
 	/* if the ifp is in a vrf, move it to default so vrf can be deleted if
-	 * desired */
-	if (ifp->vrf_id)
+	 * desired. This operation is not done for netns implementation to avoid
+	 * collision with interface with the same name in the default vrf (can
+	 * occur with this implementation whereas it is not possible with
+	 * vrf-lite).
+	 */
+	if ((ifp->vrf_id) && !vrf_is_backend_netns())
 		if_handle_vrf_change(ifp, VRF_DEFAULT);
 
 	/* Reset some zebra interface params to default values. */
