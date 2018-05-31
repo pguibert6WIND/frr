@@ -1481,6 +1481,7 @@ extern int bgp_nexthop_set(union sockunion *, union sockunion *,
 extern struct bgp *bgp_get_default(void);
 extern struct bgp *bgp_lookup(as_t, const char *);
 extern struct bgp *bgp_lookup_by_name(const char *);
+extern char *bgp_name_lookup_by_vrf_name(const char *name);
 extern struct bgp *bgp_lookup_by_vrf_id(vrf_id_t);
 extern struct peer *peer_lookup(struct bgp *, union sockunion *);
 extern struct peer *peer_lookup_by_conf_if(struct bgp *, const char *);
