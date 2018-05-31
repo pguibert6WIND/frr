@@ -305,13 +305,15 @@ int bgp_vty_find_and_parse_afi_safi_bgp(struct vty *vty,
 	if (argv_find(argv, argc, "ip", idx))
 		*afi = AFI_IP;
 
-	if (argv_find(argv, argc, "view", idx)
-	    || argv_find(argv, argc, "vrf", idx)) {
-		vrf_name  = bgp_name_lookup_by_vrf_name(
-					argv[*idx + 1]->arg);
-		if (vrf_name == NULL)
-			*bgp = bgp_get_default();
-		else if (strmatch(vrf_name, "all"))
+	if (argv_find(argv, argc, "view", idx))
+		vrf_name = argv[*idx + 1]->arg;
+	else if (argv_find(argv, argc, "vrf", idx)) {
+		vrf_name = argv[*idx + 1]->arg;
+		if (strmatch(vrf_name, VRF_DEFAULT_NAME))
+			vrf_name = NULL;
+	}
+	if (vrf_name) {
+		if (strmatch(vrf_name, "all"))
 			*bgp = NULL;
 		else {
 			*bgp = bgp_lookup_by_name(vrf_name);
@@ -893,8 +895,9 @@ DEFUN_NOSH (router_bgp,
 			name = argv[idx_vrf]->arg;
 
 			if (!strcmp(argv[idx_view_vrf]->text, "vrf")) {
-				name = bgp_name_lookup_by_vrf_name(name);
-				if (name)
+				if (strmatch(name, VRF_DEFAULT_NAME))
+					name = NULL;
+				else
 					inst_type = BGP_INSTANCE_TYPE_VRF;
 			} else if (!strcmp(argv[idx_view_vrf]->text, "view"))
 				inst_type = BGP_INSTANCE_TYPE_VIEW;
@@ -7124,13 +7127,13 @@ DEFUN (clear_ip_bgp_all,
 	if (argv_find(argv, argc, "vrf", &idx)) {
 		vrf = argv[idx + 1]->arg;
 		idx += 2;
-		vrf = bgp_name_lookup_by_vrf_name(vrf);
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
 	} else if (argv_find(argv, argc, "view", &idx)) {
 		/* [<view> VIEWVRFNAME] */
 		vrf = argv[idx + 1]->arg;
 		idx += 2;
 	}
-
 	/* ["BGP_AFI_CMD_STR" ["BGP_SAFI_CMD_STR"]] */
 	if (argv_find_and_parse_afi(argv, argc, &idx, &afi))
 		argv_find_and_parse_safi(argv, argc, &idx, &safi);
@@ -7198,7 +7201,8 @@ DEFUN (clear_ip_bgp_prefix,
 	if (argv_find(argv, argc, "vrf", &idx)) {
 		vrf = argv[idx + 1]->arg;
 		idx += 2;
-		vrf = bgp_name_lookup_by_vrf_name(vrf);
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
 	} else if (argv_find(argv, argc, "view", &idx)) {
 		/* [<view> VIEWVRFNAME] */
 		vrf = argv[idx + 1]->arg;
@@ -7256,7 +7260,8 @@ DEFUN (clear_bgp_instance_ipv6_safi_prefix,
 	/* [<view|vrf> VIEWVRFNAME] */
 	if (argv_find(argv, argc, "vrf", &idx_vrfview)) {
 		vrfview = argv[idx_vrfview + 1]->arg;
-		vrfview = bgp_name_lookup_by_vrf_name(vrfview);
+		if (vrfview && strmatch(vrfview, VRF_DEFAULT_NAME))
+			vrfview = NULL;
 	} else if (argv_find(argv, argc, "view", &idx_vrfview)) {
 		/* [<view> VIEWVRFNAME] */
 		vrfview = argv[idx_vrfview + 1]->arg;
@@ -7454,9 +7459,11 @@ DEFUN(show_bgp_martian_nexthop_db, show_bgp_martian_nexthop_db_cmd,
 	char *name = NULL;
 
 	/* [<vrf> VIEWVRFNAME] */
-	if (argv_find(argv, argc, "vrf", &idx))
-		name = bgp_name_lookup_by_vrf_name(argv[idx + 1]->arg);
-	else if (argv_find(argv, argc, "view", &idx))
+	if (argv_find(argv, argc, "vrf", &idx)) {
+		name = argv[idx + 1]->arg;
+		if (name && strmatch(name, VRF_DEFAULT_NAME))
+			name = NULL;
+	} else if (argv_find(argv, argc, "view", &idx))
 		/* [<view> VIEWVRFNAME] */
 		name = argv[idx + 1]->arg;
 	if (name)
@@ -8209,9 +8216,11 @@ DEFUN (show_ip_bgp_summary,
 	if (argv_find(argv, argc, "ip", &idx))
 		afi = AFI_IP;
 	/* [<vrf> VIEWVRFNAME] */
-	if (argv_find(argv, argc, "vrf", &idx))
-		vrf = bgp_name_lookup_by_vrf_name(argv[idx + 1]->arg);
-	else if (argv_find(argv, argc, "view", &idx))
+	if (argv_find(argv, argc, "vrf", &idx)) {
+		vrf = argv[idx + 1]->arg;
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
+	} else if (argv_find(argv, argc, "view", &idx))
 		/* [<view> VIEWVRFNAME] */
 		vrf = argv[idx + 1]->arg;
 	/* ["BGP_AFI_CMD_STR" ["BGP_SAFI_CMD_STR"]] */
@@ -10880,9 +10889,11 @@ DEFUN (show_ip_bgp_neighbors,
 	int idx = 0;
 
 	/* [<vrf> VIEWVRFNAME] */
-	if (argv_find(argv, argc, "vrf", &idx))
-		vrf = bgp_name_lookup_by_vrf_name(argv[idx + 1]->arg);
-	else if (argv_find(argv, argc, "view", &idx))
+	if (argv_find(argv, argc, "vrf", &idx)) {
+		vrf = argv[idx + 1]->arg;
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
+	} else if (argv_find(argv, argc, "view", &idx))
 		/* [<view> VIEWVRFNAME] */
 		vrf = argv[idx + 1]->arg;
 
@@ -11091,8 +11102,11 @@ DEFUN (show_ip_bgp_route_leak,
 		return CMD_WARNING;
 	}
 
-	if (argv_find(argv, argc, "vrf", &idx))
-		vrf = bgp_name_lookup_by_vrf_name(argv[idx + 1]->arg);
+	if (argv_find(argv, argc, "vrf", &idx)) {
+		vrf = argv[idx + 1]->arg;
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
+	}
 	/* ["BGP_AFI_CMD_STR" ["BGP_SAFI_CMD_STR"]] */
 	if (argv_find_and_parse_afi(argv, argc, &idx, &afi)) {
 		argv_find_and_parse_safi(argv, argc, &idx, &safi);
@@ -11166,9 +11180,11 @@ DEFUN (show_ip_bgp_updgrps,
 	if (argv_find(argv, argc, "ip", &idx))
 		afi = AFI_IP;
 	/* [<vrf> VIEWVRFNAME] */
-	if (argv_find(argv, argc, "vrf", &idx))
-		vrf = bgp_name_lookup_by_vrf_name(argv[idx + 1]->arg);
-	else if (argv_find(argv, argc, "view", &idx))
+	if (argv_find(argv, argc, "vrf", &idx)) {
+		vrf = argv[idx + 1]->arg;
+		if (vrf && strmatch(vrf, VRF_DEFAULT_NAME))
+			vrf = NULL;
+	} else if (argv_find(argv, argc, "view", &idx))
 		/* [<view> VIEWVRFNAME] */
 		vrf = argv[idx + 1]->arg;
 	/* ["BGP_AFI_CMD_STR" ["BGP_SAFI_CMD_STR"]] */
