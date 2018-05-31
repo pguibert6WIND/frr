@@ -3090,6 +3090,21 @@ struct bgp *bgp_lookup_by_name(const char *name)
 	return NULL;
 }
 
+/* Lookup VRF structure by vrf name and return the real name
+ * nothing for default
+ */
+char *bgp_name_lookup_by_vrf_name(const char *name)
+{
+	struct vrf *vrf;
+
+	vrf = vrf_lookup_by_name(name);
+	if (!vrf)
+		return (char *)name;
+	if (vrf->vrf_id == VRF_DEFAULT)
+		return NULL;
+	return vrf->name;
+}
+
 /* Lookup BGP instance based on VRF id. */
 /* Note: Only to be used for incoming messages from Zebra. */
 struct bgp *bgp_lookup_by_vrf_id(vrf_id_t vrf_id)
