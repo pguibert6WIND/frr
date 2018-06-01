@@ -710,7 +710,7 @@ DEFUN_NOSH (no_vrf,
 
 struct cmd_node vrf_node = {VRF_NODE, "%s(config-vrf)# ", 1};
 
-DEFUN_NOSH (vrf_netns,
+DEFUN (vrf_netns,
 	    vrf_netns_cmd,
 	    "netns NAME",
 	    "Attach VRF to a Namespace\n"
