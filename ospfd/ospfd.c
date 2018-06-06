@@ -233,15 +233,10 @@ static struct ospf *ospf_new(unsigned short instance, const char *name)
 	new->instance = instance;
 	new->router_id.s_addr = htonl(0);
 	new->router_id_static.s_addr = htonl(0);
-
-	if (name) {
+	if (name && !strmatch(name, VRF_DEFAULT_NAME)) {
 		new->vrf_id = VRF_UNKNOWN;
 		/* Freed in ospf_finish_final */
-		vrf = vrf_lookup_by_name(name);
-		if (vrf && vrf->vrf_id == VRF_DEFAULT)
-			new->vrf_id = VRF_DEFAULT;
-		else
-			new->name = XSTRDUP(MTYPE_OSPF_TOP, name);
+		new->name = XSTRDUP(MTYPE_OSPF_TOP, name);
 		if (IS_DEBUG_OSPF_EVENT)
 			zlog_debug(
 				"%s: Create new ospf instance with vrf_name %s vrf_id %u",
@@ -385,6 +380,9 @@ struct ospf *ospf_lookup_by_inst_name(unsigned short instance, const char *name)
 
 	vrf = vrf_lookup_by_name(name);
 	if (vrf && vrf->vrf_id == VRF_DEFAULT)
+		return ospf_lookup_by_vrf_id(VRF_DEFAULT);
+
+	if (name == NULL || strmatch(name, VRF_DEFAULT_NAME))
 		return ospf_lookup_by_vrf_id(VRF_DEFAULT);
 
 	for (ALL_LIST_ELEMENTS(om->ospf, node, nnode, ospf)) {
@@ -2090,6 +2088,10 @@ static int ospf_vrf_enable(struct vrf *vrf)
 
 	ospf = ospf_lookup_by_name(vrf->name);
 	if (ospf) {
+		if (ospf->name && strmatch(vrf->name, VRF_DEFAULT_NAME)) {
+			XFREE(MTYPE_OSPF_TOP, ospf->name);
+			ospf->name = NULL;
+		}
 		old_vrf_id = ospf->vrf_id;
 		/* We have instance configured, link to VRF and make it "up". */
 		ospf_vrf_link(ospf, vrf);
