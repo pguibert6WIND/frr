@@ -2468,3 +2468,267 @@ mistakes, if not serious flaws.
 .. [bgp-route-osci-cond] McPherson, D. and Gill, V. and Walton, D., "Border Gateway Protocol (BGP) Persistent Route Oscillation Condition", IETF RFC3345
 .. [stable-flexible-ibgp] Flavel, A. and M. Roughan, "Stable and flexible iBGP", ACM SIGCOMM 2009
 .. [ibgp-correctness] Griffin, T. and G. Wilfong, "On the correctness of IBGP configuration", ACM SIGCOMM 2002
+
+BGP Flowspec
+============
+
+Flowspec overview
+------------------
+
+BGP flowspec introduces a new Network Layer Reachability Information ( NLRI) encoding
+format that is used to distribute traffic rule flow specifications. Basically,
+instead of simply relying on destination IP address for IP prefixes, the IP prefix
+is replaced by a n-tuple consisting of a rule. That rule can be a more or less
+complex combination of the following:
+
+- Network source/destination ( can be one or the other, or both).
+- Layer 4 information for UDP/TCP : source port, or destination port, or any port.
+- Layer 4 information for ICMP type and ICMP code.
+- Misc layer 3 information : DSCP value, Protocol type, packet length,
+   fragmentation information.
+- Misc layer 4 TCP flags.
+
+That combination of information is being applied traffic filtering action. This is
+encoded as part of specific BGP extended communities and the action can range from
+the obvious rerouting ( to nexthop or to separate VRF) to shaping, or discard.
+
+Design Principles
+-----------------
+
+FRRouting implements the Flowspec client side, that is to say that BGP is able to
+receive Flowspec entries, but is not able to act as manager and send Flowspec entries.
+Also, the validation procedure depicted in RFC5575 has not been implemented, as
+this feature was not used in the existing setups you shared wih us.
+
+FRRouting uses policy based routing mechanisms to apply Flowspec configuration to the
+underlying system. In our case, the underlying system is Linux, and provides a rich
+enough API to implement this policy routing.
+
+- by filtering the traffic based on NetFilter
+NetFilter provides a set of tools like ipset and iptables that are powerful enough to
+be able to filter such flowspec filter rule.
+
+- by using non standard routing tables ( through ip rule tool from iproute2). That tool
+is already used by pbrd daemon that provides basic routing based on IPsrc, and IPdst
+criterium.
+
+Below example is an illustration of what BGP flowspec will inject in the underlying
+system:
+
+.. code-block:: linux
+
+   ipset create match0x102 hash:net,net counters
+   ipset add match0x102 32.0.0.0/16,40.0.0.0/16
+   iptables -N match0x102 -t mangle
+   iptables -A match0x102 -t mangle -j MARK --set-mark 102
+   iptables -A match0x102 -t mangle -j ACCEPT
+   iptables -i ntfp3 -t mangle -I PREROUTING -m set --match-set match0x102 src,dst
+                -g match0x102
+   ip rule add fwmark 102 lookup 102
+   ip route add 40.0.0.0/16 via 44.0.0.2 table 102
+
+
+For handling an incoming Flowspec entry, the following workflow is applied:
+
+- incoming Flowspec entries are handled by BGP daemon, and are stored in the BGP RIB.
+- according to the degree of complexity of the Flowspec entry, it will be installed
+  in Zebra RIB. Flowspec entry is split in several parts before being sent to ZEBRA.
+- ZEBRA daemon is receiving the policy routing entities necessary to policy route
+  the traffic in the underlying system. Two filtering contexts will be created or
+  appended ( NetFilter ipset and iptable entry). If the traffic has to be dropped,
+  then those filtering contexts will be enough. Otherwise, the traffic will be
+  redirected to an other routing table, with in that routing table, a route entry
+  to redirect the traffic to the wished destination.
+
+BGP Flowspec is implemented in FRR, with some restrictions
+basically is able to decode and store in its RIB
+
+Configuration guide
+-------------------
+
+In order to configure an IPv4 flowspec engine, use the following configuration. As of
+today, it is only possible to configure Flowspec on default VRF.
+
+.. code-block:: frr
+
+   router bgp <AS>
+     neighbor <A.B.C.D> remote-as <remoteAS>
+     address-family ipv4 flowspec
+      neighbor <A.B.C.D> activate
+    exit
+   exit
+
+
+.. code-block:: cli/xms
+
+   router bgp as <AS>
+     neighbor <A.B.C.D> remote-as <remoteAS>
+     address-family ipv4 flowspec
+      neighbor <A.B.C.D> activate
+    exit
+   exit
+
+You can see Flowspec entries, by using one of the following show commands:
+
+.. code-block:: frr
+
+   show bgp ipv4 flowspec [detail | A.B.C.D]
+
+
+.. code-block:: cli/xms
+
+   show routing bgp ipv4 flowspec [detail | A.B.C.D]
+
+One nice feature to use is the ability to apply flowspec to a specific interface,
+instead of applying it to the whole machine. Despite the following IETF draft
+*https://tools.ietf.org/html/draft-ietf-idr-flowspec-interfaceset-03* is not
+implemented, it is possible to manually limit Flowspec application to some
+incoming interfaces. Actually, not using it can result to some unexpected behaviour
+like accounting twice the traffic, or slow down the traffic (filtering costs). To
+limit flowspec to one specific interface, use the following command.
+
+.. code-block:: frr
+
+   router bgp <AS>
+     address-family ipv4 flowspec
+      [no] local-install <IFNAME | any>
+    exit
+   exit
+
+
+.. code-block:: cli/xms
+
+   router bgp as <AS>
+     address-family ipv4 flowspec
+      local-install enable <IFNAME | any >
+      local-install disable <IFNAME | any>
+    exit
+   exit
+
+
+By default, Flowspec is activated on all interfaces. Installing it to a named interface
+will result in allowing only this interface. Reversely, enabling any interface will flush
+all previously configured interfaces.
+
+An other nice feature to configure is the ability to redirect traffic to a separate VRF.
+As remind, BGP flowspec entries have a BGP extended community that contains a Route Target.
+Finding out a local VRF based on Route Target consists in the following:
+- a configuration of each VRF must be done, and each VRF is being configured its own
+route target list. Route Target list can be one of the following: A.B.C.D:U16,
+U16:U32, U32:U16.
+- the first VRF that will be able to receive the traffic will be the first to match the
+  route target.
+
+In order to illustrate, if the Route Target configured in the Flowspec entry is 1.2.3.4:44,
+then if a BGP VRF instance must be configured, and have a rt redirect import list containing
+the route target received.
+
+
+.. code-block:: frr
+
+   router bgp <AS> vrf vrf2
+     address-family ipv4 unicast
+      [no] rt redirect import [Route Target List]
+    exit
+   exit
+
+
+.. code-block:: cli/xms
+
+   router bgp as <AS> vrf vrf-id 2
+     address-family ipv4 unicast
+      rt redirect import [Route Target List]
+    exit
+   exit
+
+You can monitor policy-routing objects by using one of the following commands.
+Those command rely on the filtering contexts configured from BGP, and get the
+statistics information retrieved from the underlying system. In other words, those
+statistics are retrieved from NetFilter.
+
+.. code-block:: frr
+
+   show pbr ipset <IPSET> | iptable
+
+
+.. code-block:: cli/xms
+
+   show routing pbr iptable | ipset <IPSET>
+
+About rule contexts, it is not to know from CLI/XMS which rule has been configured
+to policy-route some specific traffic. This is why some Linux commands may be necessary,
+to use in conjunction with the other commands.
+
+.. code-block:: linux
+
+   ip rule list
+
+.. code-block:: frr
+
+   show ip route table <ID>
+
+.. code-block:: cli/xms
+
+   show routing ip route table <ID>
+
+You can troubleshoot BGP Flowspec, or BGP policy based routing. For instance, if you
+encounter some issues when decding a Flowspec entry, you should enable `debug bgp
+flowspec`. If you fail to apply the flowspec entry into Zebra, there should be some
+relationship with policy routing mechanism. Here, `debug bgp pbr [error]\` could help.
+
+.. code-block:: frr
+
+   debug bgp flowspec | pbr [error]
+
+
+.. code-block:: cli/xms
+
+   log
+   log-option bgp flowspec | pbr | pbr-error
+
+
+Limitations
+-----------
+
+As you can see, Flowspec is rich and can be very complex.
+As of today, not all flowspec rules will be able to be converted into Policy
+based routing actions.
+
+- If I take example of UDP ports, or TCP ports in flowspec, the information
+can be a range of ports, or a unique value. This case is handled.
+However, complexity can be increased, if the flow is a combination of a list of
+range of ports and an enumerate of unique values. Here this case is not handled.
+
+- Similarly, it is not possible to create a filter for both src port and dst port.
+For instance, filter on src port from [1-1000] and dst port = 80.
+
+- The first version of FRR Flowspec only operates policy based routing, on the
+following Flowspec criteria : IP Address, UDP port or TCP port.
+
+There are some other restrictions known:
+
+- The filtering action shaper value, if positive, is not used to apply shaping.
+If value is positive, the traffic is redirected to the wished destination,
+without any other action configured by Flowspec.
+It is recommended to configure Quality of Service if needed, more globally on
+a per interface basis.
+
+- upon crash or unknown event, ZEBRA may not have time to flush ipset/iptable
+and iprule contexts. This is also a consequence due to the fact that ip rule
+/ ipset / iptables are not discovered at startup ( not able to read appropriate
+contexts coming from BGP FS). A mitigation script could be provided so that before
+starting the FRR, the pbr contexts should be flushed.
+
+- from CLI/XMS, currently, it is not possible with current FRR version to configure
+default VRF using vrf0 keyword. The reason is that in FRR, it is not possible to
+name default VRF. So when CLI/XMS send vrf0 keyword, FRR ignores it, or eventually
+creates a new networking context based on a new VRF named vrf0, that is not the
+default VRF. The recommendation is to configure on default VRF by not using vrf0
+keyword.
+
+
+Annex
+------
+
+More information on *https://docs.google.com/presentation/d/1ekQygUAG5yvQ3w
+WUyrw4Wcag0LgmbW1kV02IWcU4iUg/edit#slide=id.g378f0e1b5e_1_44*
