@@ -237,8 +237,11 @@ static struct ospf *ospf_new(unsigned short instance, const char *name)
 	if (name) {
 		new->vrf_id = VRF_UNKNOWN;
 		/* Freed in ospf_finish_final */
-		new->name = XSTRDUP(MTYPE_OSPF_TOP, name);
-		vrf = vrf_lookup_by_name(new->name);
+		vrf = vrf_lookup_by_name(name);
+		if (vrf && vrf->vrf_id == VRF_DEFAULT)
+			new->vrf_id = VRF_DEFAULT;
+		else
+			new->name = XSTRDUP(MTYPE_OSPF_TOP, name);
 		if (IS_DEBUG_OSPF_EVENT)
 			zlog_debug(
 				"%s: Create new ospf instance with vrf_name %s vrf_id %u",
@@ -378,6 +381,11 @@ struct ospf *ospf_lookup_by_inst_name(unsigned short instance, const char *name)
 {
 	struct ospf *ospf = NULL;
 	struct listnode *node, *nnode;
+	struct vrf *vrf;
+
+	vrf = vrf_lookup_by_name(name);
+	if (vrf && vrf->vrf_id == VRF_DEFAULT)
+		return ospf_lookup_by_vrf_id(VRF_DEFAULT);
 
 	for (ALL_LIST_ELEMENTS(om->ospf, node, nnode, ospf)) {
 		if ((ospf->instance == instance)
