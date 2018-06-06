@@ -139,14 +139,19 @@ static struct ospf *ospf_cmd_lookup_ospf(struct vty *vty,
 {
 	struct ospf *ospf = NULL;
 	int idx_vrf = 0, idx_inst = 0;
-	const char *vrf_name = NULL;
+	char *vrf_name = NULL;
 
 	*instance = 0;
 	if (argv_find(argv, argc, "(1-65535)", &idx_inst))
 		*instance = strtoul(argv[idx_inst]->arg, NULL, 10);
 
 	if (argv_find(argv, argc, "vrf", &idx_vrf)) {
+		struct vrf *vrf;
+
 		vrf_name = argv[idx_vrf + 1]->arg;
+		vrf = vrf_lookup_by_name(vrf_name);
+		if (vrf && vrf->vrf_id == VRF_DEFAULT)
+			vrf_name = NULL;
 		if (enable) {
 			/* Allocate VRF aware instance */
 			ospf = ospf_get(*instance, vrf_name);
