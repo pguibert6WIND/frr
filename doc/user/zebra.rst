@@ -520,6 +520,64 @@ entered within the VRF context the static routes are created in the VRF.
    ip route 10.0.0.0 255.255.255.0 10.0.0.2 vrf r1-cust1 table 43
    show ip table vrf r1-cust1 table 43
 
+By using the :option:`-n` option, the *Linux network namespace* will be mapped
+over the *Zebra* VRF. One nice feature that is possible by handling *Linux
+network namespace* is the ability to name default VRF. You must have a kernel
+recent enough that supports the NSID feature. At startup, *Zebra* discovers the
+available *Linux network namespace* by parsing folder `/var/run/netns`. Each
+folder stands for a *Linux network namespace*, but not all *Linux network
+namespaces* are available under that folder. This is the case for default VRF.
+It is possible to name the default VRF, by creating a folder, by executing
+following commands. FRR will discover that new namespace name `vrf0` and will
+associate that namespace name to the default namespace, by looking at the
+*NetNamespace Identifier (NSID)* that is internally used.
+
+.. code-block:: linux
+
+   touch /var/run/netns/vrf0
+   mount --bind /proc/self/ns/net /var/run/netns/vrf0
+
+Consequently, an alias name is created, associated to default VRF. It becomes
+possible to name default VRF, by using the alias. An example configuration
+follows where the user attempts to create a default BGP core instance under VRF
+`vrf0`. In a similar way, it is possible to dump static routes for default VRF
+using the `vrf0` keyword.
+
+.. code-block:: frr
+
+   frr# show vrf
+   netns-based vrfs
+   vrf Default-IP-Routing-Table  (alias vrf0 )
+   frr# configure terminal
+   frr(config)# router bgp 534 vrf vrf0
+   frr(config)# ...
+   frr)# show running-config
+   ...
+   router bgp 534
+   ...
+   frr)# show ip route vrf vrf0
+   ...
+
+Similarly, an extended feature that FRR can benefit too is to use aliases for
+other VRFs, provided that VRF backend is *Linux network namespace* and that
+*NetNamespace Identifier (NSID)* is available. Here is an example where an user
+will create an alias with the following Linux commands. Consequently, the FRR
+will inherit from alias for `vrf_orig`. All FRR configuration will be able to
+configure `vrf_orig` by either using the originale netns name, or by using
+`vrf_alias` alias.
+
+.. code-block:: linux
+
+   ip netns add vrf_orig
+   touch /var/run/netns/vrf_alias
+   mount --bind /var/run/netns/vrf_orig /var/run/netns/vrf_alias
+
+.. code-block:: frr
+
+   frr# show vrf
+   netns-based vrfs
+   vrf Default-IP-Routing-Table  (alias vrf0 )
+   vrf vrf_orig (alias vrf_alias )
 
 .. _multicast-rib-commands:
 
