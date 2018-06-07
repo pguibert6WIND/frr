@@ -2797,7 +2797,9 @@ That is to say ipset/iptables and iprule contexts. This is also a consequence du
 to the fact that ip rule / ipset / iptables are not discovered at startup (not
 able to read appropriate contexts coming from BGP FS). A mitigation script could
 be provided so that before starting the FRR, the pbr contexts (iptable and ipset
-entries) should be flushed.
+entries) should be flushed. Caution must be done if the user wants to use both
+filtering and PBR with Flowspec. Since both rely on *NetFilter*, manually
+flushing tables may impact both services.
 
 - from CLI/XMS, currently, it is not possible to name default VRF as vrf0.
 It is not possible to configure default VRF using vrf0 keyword (from FRR vty), or
