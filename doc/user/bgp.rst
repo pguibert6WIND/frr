@@ -2837,6 +2837,8 @@ between an iptable entry and an ip rule entry. Both rely on the MARKER (0x100 in
 below example), which is the key to the question: "which traffic is redirected to
 which routign table ?".
 
+.. code-block:: linux
+
    # linux shell
    ip rule list
     0 : from all fwmark 0x100 lookup 256
