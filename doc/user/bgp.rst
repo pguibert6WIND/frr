@@ -2484,8 +2484,7 @@ complex combination of the following:
 - Network source/destination ( can be one or the other, or both).
 - Layer 4 information for UDP/TCP : source port, or destination port, or any port.
 - Layer 4 information for ICMP type and ICMP code.
-- Misc layer 3 information : DSCP value, Protocol type, packet length,
-   fragmentation information.
+- Layer 3 information : DSCP value, Protocol type, packet length, fragmentation.
 - Misc layer 4 TCP flags.
 
 That combination of information is being applied traffic filtering action. This is
@@ -2494,6 +2493,10 @@ the obvious rerouting ( to nexthop or to separate VRF) to shaping, or discard.
 
 Design Principles
 -----------------
+
+Following IETF drafts and RFCs have been used to implement FRR Flowspec
+- https://tools.ietf.org/rfc/rfc5575.txt
+- https://tools.ietf.org/id/draft-ietf-idr-flowspec-redirect-ip-02.txt
 
 FRRouting implements the Flowspec client side, that is to say that BGP is able to
 receive Flowspec entries, but is not able to act as manager and send Flowspec entries.
@@ -2508,8 +2511,9 @@ enough API to implement this policy routing.
 NetFilter provides a set of tools like ipset and iptables that are powerful enough to
 be able to filter such flowspec filter rule.
 
-- by using non standard routing tables ( through ip rule tool from iproute2). That tool
-is already used by pbrd daemon that provides basic routing based on IPsrc, and IPdst
+- by using non standard routing tables ( through ip rule tool from iproute2).
+That tool is already used by pbrd daemon that provides basic routing based on IPsrc,
+and IPdst
 criterium.
 
 Below example is an illustration of what BGP flowspec will inject in the underlying
@@ -2517,6 +2521,7 @@ system:
 
 .. code-block:: linux
 
+   # linux shell
    ipset create match0x102 hash:net,net counters
    ipset add match0x102 32.0.0.0/16,40.0.0.0/16
    iptables -N match0x102 -t mangle
@@ -2540,9 +2545,6 @@ For handling an incoming Flowspec entry, the following workflow is applied:
   redirected to an other routing table, with in that routing table, a route entry
   to redirect the traffic to the wished destination.
 
-BGP Flowspec is implemented in FRR, with some restrictions
-basically is able to decode and store in its RIB
-
 Configuration guide
 -------------------
 
@@ -2551,6 +2553,7 @@ today, it is only possible to configure Flowspec on default VRF.
 
 .. code-block:: frr
 
+   # FRR vty
    router bgp <AS>
      neighbor <A.B.C.D> remote-as <remoteAS>
      address-family ipv4 flowspec
@@ -2561,6 +2564,7 @@ today, it is only possible to configure Flowspec on default VRF.
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    router bgp as <AS>
      neighbor <A.B.C.D> remote-as <remoteAS>
      address-family ipv4 flowspec
@@ -2572,11 +2576,13 @@ You can see Flowspec entries, by using one of the following show commands:
 
 .. code-block:: frr
 
+   # FRR vty
    show bgp ipv4 flowspec [detail | A.B.C.D]
 
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    show routing bgp ipv4 flowspec [detail | A.B.C.D]
 
 One nice feature to use is the ability to apply flowspec to a specific interface,
@@ -2589,6 +2595,7 @@ limit flowspec to one specific interface, use the following command.
 
 .. code-block:: frr
 
+   # FRR vty
    router bgp <AS>
      address-family ipv4 flowspec
       [no] local-install <IFNAME | any>
@@ -2598,6 +2605,7 @@ limit flowspec to one specific interface, use the following command.
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    router bgp as <AS>
      address-family ipv4 flowspec
       local-install enable <IFNAME | any >
@@ -2613,19 +2621,15 @@ all previously configured interfaces.
 An other nice feature to configure is the ability to redirect traffic to a separate VRF.
 As remind, BGP flowspec entries have a BGP extended community that contains a Route Target.
 Finding out a local VRF based on Route Target consists in the following:
-- a configuration of each VRF must be done, and each VRF is being configured its own
-route target list. Route Target list can be one of the following: A.B.C.D:U16,
-U16:U32, U32:U16.
-- the first VRF that will be able to receive the traffic will be the first to match the
-  route target.
 
-In order to illustrate, if the Route Target configured in the Flowspec entry is 1.2.3.4:44,
-then if a BGP VRF instance must be configured, and have a rt redirect import list containing
-the route target received.
-
+- a configuration of each VRF must be done, with its Route Target set
+Each VRF is being configured within a BGP VRF instance with its own Route Target list.
+Route Target accepted format matches the following: A.B.C.D:U16, or U16:U32, U32:U16.
+- the first VRF with the matching Route Target will be selected to route traffic to.
 
 .. code-block:: frr
 
+   # FRR vty
    router bgp <AS> vrf vrf2
      address-family ipv4 unicast
       [no] rt redirect import [Route Target List]
@@ -2635,24 +2639,79 @@ the route target received.
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    router bgp as <AS> vrf vrf-id 2
      address-family ipv4 unicast
       rt redirect import [Route Target List]
     exit
    exit
 
-You can monitor policy-routing objects by using one of the following commands.
+
+In order to illustrate, if the Route Target configured in the Flowspec entry is E.F.G.H:II,
+then a BGP VRF instance with the same Route Target will be set set. That VRF will then be
+selected. The below full configuration example depicts how Route Targets are configured
+and how VRFs and cross VRF configuration is done. Note that the VRF are mapped on Linux
+Network Namespaces. For data traffic to cross VRF boundaries, virtual ethernet interfaces
+are created with private IP adressing scheme.
+
+.. code-block:: frr
+
+   # FRR vty
+   router bgp <ASx>
+    neighbor <A.B.C.D> remote-as <ASz>
+    address-family ipv4 flowspec
+     neighbor A.B.C.D activate
+    exit
+   exit
+   router bgp <ASy> vrf vrf2
+    address-family ipv4 unicast
+     rt redirect import <E.F.G.H:II>
+    exit
+   exit
+
+
+.. code-block:: cli/xms
+
+   # CLI/XMS
+
+   rtg
+    router bgp as <ASx>
+     neighbor <A.B.C.D> remote-as <ASz>
+     address-family ipv4 flowspec
+      neighbor A.B.C.D activate
+     exit
+    exit
+    router bgp as <ASy> vrf vrf-id 2
+     address-family ipv4 unicast
+      rt redirect import <E.F.G.H:II>
+     exit
+    exit
+   exit
+   vrf0
+    forwarding ipv4 enable
+    xvrf enable
+    ipv4-xvr-address 169.254.0.200/20
+   exit
+   vrf2
+    forwarding ipv4 enable
+    xvrf enable
+    ipv4-xvr-address 169.254.0.2/20
+   exit
+
+    You can monitor policy-routing objects by using one of the following commands.
 Those command rely on the filtering contexts configured from BGP, and get the
 statistics information retrieved from the underlying system. In other words, those
 statistics are retrieved from NetFilter.
 
 .. code-block:: frr
 
+   # FRR vty
    show pbr ipset <IPSET> | iptable
 
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    show routing pbr iptable | ipset <IPSET>
 
 About rule contexts, it is not to know from CLI/XMS which rule has been configured
@@ -2661,14 +2720,17 @@ to use in conjunction with the other commands.
 
 .. code-block:: linux
 
+   # linux shell
    ip rule list
 
 .. code-block:: frr
 
+   # FRR vty
    show ip route table <ID>
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    show routing ip route table <ID>
 
 You can troubleshoot BGP Flowspec, or BGP policy based routing. For instance, if you
@@ -2678,11 +2740,13 @@ relationship with policy routing mechanism. Here, `debug bgp pbr [error]\` could
 
 .. code-block:: frr
 
+   # FRR vty
    debug bgp flowspec | pbr [error]
 
 
 .. code-block:: cli/xms
 
+   # CLI/XMS
    log
    log-option bgp flowspec | pbr | pbr-error
 
@@ -2703,7 +2767,9 @@ range of ports and an enumerate of unique values. Here this case is not handled.
 For instance, filter on src port from [1-1000] and dst port = 80.
 
 - The first version of FRR Flowspec only operates policy based routing, on the
-following Flowspec criteria : IP Address, UDP port or TCP port.
+following Flowspec criteria : IP Address, UDP port or TCP port. The following is
+planned in a next release : support for ICMP type/code , TCP flags, fragmentation
+and packet length.
 
 There are some other restrictions known:
 
@@ -2720,15 +2786,36 @@ contexts coming from BGP FS). A mitigation script could be provided so that befo
 starting the FRR, the pbr contexts should be flushed.
 
 - from CLI/XMS, currently, it is not possible with current FRR version to configure
-default VRF using vrf0 keyword. The reason is that in FRR, it is not possible to
-name default VRF. So when CLI/XMS send vrf0 keyword, FRR ignores it, or eventually
-creates a new networking context based on a new VRF named vrf0, that is not the
-default VRF. The recommendation is to configure on default VRF by not using vrf0
-keyword.
+default VRF using vrf0 keyword ( from FRR vty), or vrf-id 0 keyword ( from CLI/XMS).
+The reason is that in FRR, it is not possible to name default VRF. The resulting is
+that a new BGP instance different from main BGP core instance will be created. To
+illustrate, the following illustrate which commands should not be used, and which ones
+should be used.
+
+.. code-block:: frr
+
+   # FRR vty that should not be used:
+   show ip route vrf vrf0
+   show bgp vrf vrf0
+   router bgp <AS> vrf vrf0
+   # FRR vty that should be used instead:
+   show ip route
+   show bgp
+   router bgp <AS>
+
+
+.. code-block:: cli/xms
+
+   # CLI/XMS that should not be used:
+   show routing bgp vrf vrf0
+   router bgp as <AS> vrf-id 0
+   # CLI/XMS that should be used instead:
+   show routing bgp
+   router bgp as <AS>
 
 
 Annex
 ------
 
-More information on *https://docs.google.com/presentation/d/1ekQygUAG5yvQ3w
-WUyrw4Wcag0LgmbW1kV02IWcU4iUg/edit#slide=id.g378f0e1b5e_1_44*
+More information:
+*https://docs.google.com/presentation/d/1ekQygUAG5yvQ3wWUyrw4Wcag0LgmbW1kV02IWcU4iUg/edit#slide=id.g378f0e1b5e_1_44*
