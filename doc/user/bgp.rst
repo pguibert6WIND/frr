@@ -2475,13 +2475,13 @@ BGP Flowspec
 Flowspec overview
 ------------------
 
-BGP flowspec introduces a new Network Layer Reachability Information ( NLRI) encoding
+BGP flowspec introduces a new Network Layer Reachability Information (NLRI) encoding
 format that is used to distribute traffic rule flow specifications. Basically,
 instead of simply relying on destination IP address for IP prefixes, the IP prefix
 is replaced by a n-tuple consisting of a rule. That rule can be a more or less
 complex combination of the following:
 
-- Network source/destination ( can be one or the other, or both).
+- Network source/destination (can be one or the other, or both).
 - Layer 4 information for UDP/TCP : source port, or destination port, or any port.
 - Layer 4 information for ICMP type and ICMP code.
 - Layer 3 information : DSCP value, Protocol type, packet length, fragmentation.
@@ -2489,29 +2489,28 @@ complex combination of the following:
 
 That combination of information is being applied traffic filtering action. This is
 encoded as part of specific BGP extended communities and the action can range from
-the obvious rerouting ( to nexthop or to separate VRF) to shaping, or discard.
-
-Design Principles
------------------
+the obvious rerouting (to nexthop or to separate VRF) to shaping, or discard.
 
 Following IETF drafts and RFCs have been used to implement FRR Flowspec
 - https://tools.ietf.org/rfc/rfc5575.txt
 - https://tools.ietf.org/id/draft-ietf-idr-flowspec-redirect-ip-02.txt
 
+
+Design Principles
+-----------------
+
 FRRouting implements the Flowspec client side, that is to say that BGP is able to
 receive Flowspec entries, but is not able to act as manager and send Flowspec entries.
-Also, the validation procedure depicted in RFC5575 has not been implemented, as
-this feature was not used in the existing setups you shared wih us.
 
 FRRouting uses policy based routing mechanisms to apply Flowspec configuration to the
-underlying system. In our case, the underlying system is Linux, and provides a rich
-enough API to implement this policy routing.
+underlying system. The underlying system is Linux, and provides a rich enough API to
+implement this policy routing.
 
 - by filtering the traffic based on NetFilter
 NetFilter provides a set of tools like ipset and iptables that are powerful enough to
 be able to filter such flowspec filter rule.
 
-- by using non standard routing tables ( through ip rule tool from iproute2).
+- by using non standard routing tables (through ip rule tool from iproute2).
 That tool is already used by pbrd daemon that provides basic routing based on IPsrc,
 and IPdst
 criterium.
@@ -2540,7 +2539,7 @@ For handling an incoming Flowspec entry, the following workflow is applied:
   in Zebra RIB. Flowspec entry is split in several parts before being sent to ZEBRA.
 - ZEBRA daemon is receiving the policy routing entities necessary to policy route
   the traffic in the underlying system. Two filtering contexts will be created or
-  appended ( NetFilter ipset and iptable entry). If the traffic has to be dropped,
+  appended (NetFilter ipset and iptable entry). If the traffic has to be dropped,
   then those filtering contexts will be enough. Otherwise, the traffic will be
   redirected to an other routing table, with in that routing table, a route entry
   to redirect the traffic to the wished destination.
@@ -2751,8 +2750,8 @@ relationship with policy routing mechanism. Here, `debug bgp pbr [error]\` could
    log-option bgp flowspec | pbr | pbr-error
 
 
-Limitations
------------
+Limitations / Known issues
+--------------------------
 
 As you can see, Flowspec is rich and can be very complex.
 As of today, not all flowspec rules will be able to be converted into Policy
@@ -2767,11 +2766,14 @@ range of ports and an enumerate of unique values. Here this case is not handled.
 For instance, filter on src port from [1-1000] and dst port = 80.
 
 - The first version of FRR Flowspec only operates policy based routing, on the
-following Flowspec criteria : IP Address, UDP port or TCP port. The following is
-planned in a next release : support for ICMP type/code , TCP flags, fragmentation
+following Flowspec criteria : IP Address, UDP port or TCP port. The next release
+plans to provide the following : support for ICMP type/code , TCP flags, fragmentation
 and packet length.
 
-There are some other restrictions known:
+There are some other known issues:
+
+- The validation procedure depicted in RFC5575 has not been implemented, as
+this feature was not used in the existing setups you shared wih us.
 
 - The filtering action shaper value, if positive, is not used to apply shaping.
 If value is positive, the traffic is redirected to the wished destination,
@@ -2781,16 +2783,16 @@ a per interface basis.
 
 - upon crash or unknown event, ZEBRA may not have time to flush ipset/iptable
 and iprule contexts. This is also a consequence due to the fact that ip rule
-/ ipset / iptables are not discovered at startup ( not able to read appropriate
+/ ipset / iptables are not discovered at startup (not able to read appropriate
 contexts coming from BGP FS). A mitigation script could be provided so that before
-starting the FRR, the pbr contexts should be flushed.
+starting the FRR, the pbr contexts (iptable and ipset entries) should be flushed.
 
 - from CLI/XMS, currently, it is not possible with current FRR version to configure
-default VRF using vrf0 keyword ( from FRR vty), or vrf-id 0 keyword ( from CLI/XMS).
+default VRF using vrf0 keyword (from FRR vty), or vrf-id 0 keyword (from CLI/XMS).
 The reason is that in FRR, it is not possible to name default VRF. The resulting is
 that a new BGP instance different from main BGP core instance will be created. To
 illustrate, the following illustrate which commands should not be used, and which ones
-should be used.
+should be used. The next release plans to fix the issue.
 
 .. code-block:: frr
 
@@ -2807,15 +2809,34 @@ should be used.
 .. code-block:: cli/xms
 
    # CLI/XMS that should not be used:
+   show routing ip route vrf vrf0
    show routing bgp vrf vrf0
    router bgp as <AS> vrf-id 0
    # CLI/XMS that should be used instead:
+   show routing ip route
    show routing bgp
    router bgp as <AS>
 
+- from CLI/XMS, it is not possible to visualise policy based routing dump.
+Currently, the routing table entry that has been used by a Flowspec entry can not
+be seen. Basically, the following linux commands example illustrate the relationship
+between an iptable entry and an ip rule entry. Both rely on the MARKER (0x100 in
+below example), which is the key to the question: "which traffic is redirected to
+which routign table ?".
+
+   # linux shell
+   ip rule list
+       0:from all fwmark 0x100 lookup 256
+   iptables -t mangle --list -v
+     ...
+     Chain match0x507e5f0 (1 references)
+     target     prot opt source               destination
+     MARK       all  --  anywhere             anywhere             MARK set 0x100
+     ...
+
 
 Annex
-------
+-----
 
 More information:
 *https://docs.google.com/presentation/d/1ekQygUAG5yvQ3wWUyrw4Wcag0LgmbW1kV02IWcU4iUg/edit#slide=id.g378f0e1b5e_1_44*
