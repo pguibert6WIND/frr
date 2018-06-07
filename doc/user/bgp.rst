@@ -2491,8 +2491,10 @@ That combination of information is being applied traffic filtering action. This 
 encoded as part of specific BGP extended communities and the action can range from
 the obvious rerouting (to nexthop or to separate VRF) to shaping, or discard.
 
-Following IETF drafts and RFCs have been used to implement FRR Flowspec
+Following IETF drafts and RFCs have been used to implement FRR Flowspec:
+
 - https://tools.ietf.org/rfc/rfc5575.txt
+
 - https://tools.ietf.org/id/draft-ietf-idr-flowspec-redirect-ip-02.txt
 
 
@@ -2584,6 +2586,9 @@ You can see Flowspec entries, by using one of the following show commands:
    # CLI/XMS
    show routing bgp ipv4 flowspec [detail | A.B.C.D]
 
+Flowspec Per Interface
+~~~~~~~~~~~~~~~~~~~~~~
+
 One nice feature to use is the ability to apply flowspec to a specific interface,
 instead of applying it to the whole machine. Despite the following IETF draft
 *https://tools.ietf.org/html/draft-ietf-idr-flowspec-interfaceset-03* is not
@@ -2617,14 +2622,18 @@ By default, Flowspec is activated on all interfaces. Installing it to a named in
 will result in allowing only this interface. Reversely, enabling any interface will flush
 all previously configured interfaces.
 
+Flowspec redirect VRF
+~~~~~~~~~~~~~~~~~~~~~
+
 An other nice feature to configure is the ability to redirect traffic to a separate VRF.
 As remind, BGP flowspec entries have a BGP extended community that contains a Route Target.
 Finding out a local VRF based on Route Target consists in the following:
 
-- a configuration of each VRF must be done, with its Route Target set
+- A configuration of each VRF must be done, with its Route Target set
 Each VRF is being configured within a BGP VRF instance with its own Route Target list.
 Route Target accepted format matches the following: A.B.C.D:U16, or U16:U32, U32:U16.
-- the first VRF with the matching Route Target will be selected to route traffic to.
+
+- The first VRF with the matching Route Target will be selected to route traffic to.
 
 .. code-block:: frr
 
@@ -2697,7 +2706,8 @@ are created with private IP adressing scheme.
     ipv4-xvr-address 169.254.0.2/20
    exit
 
-    You can monitor policy-routing objects by using one of the following commands.
+
+You can monitor policy-routing objects by using one of the following commands.
 Those command rely on the filtering contexts configured from BGP, and get the
 statistics information retrieved from the underlying system. In other words, those
 statistics are retrieved from NetFilter.
@@ -2733,7 +2743,7 @@ to use in conjunction with the other commands.
    show routing ip route table <ID>
 
 You can troubleshoot BGP Flowspec, or BGP policy based routing. For instance, if you
-encounter some issues when decding a Flowspec entry, you should enable `debug bgp
+encounter some issues when decoding a Flowspec entry, you should enable `debug bgp
 flowspec`. If you fail to apply the flowspec entry into Zebra, there should be some
 relationship with policy routing mechanism. Here, `debug bgp pbr [error]\` could help.
 
@@ -2757,23 +2767,24 @@ As you can see, Flowspec is rich and can be very complex.
 As of today, not all flowspec rules will be able to be converted into Policy
 based routing actions.
 
-- If I take example of UDP ports, or TCP ports in flowspec, the information
+- There are some limitations around UDP/TCP ports.
+If I take example of UDP ports, or TCP ports in flowspec, the information
 can be a range of ports, or a unique value. This case is handled.
 However, complexity can be increased, if the flow is a combination of a list of
 range of ports and an enumerate of unique values. Here this case is not handled.
-
-- Similarly, it is not possible to create a filter for both src port and dst port.
+Similarly, it is not possible to create a filter for both src port and dst port.
 For instance, filter on src port from [1-1000] and dst port = 80.
 
-- The first version of FRR Flowspec only operates policy based routing, on the
-following Flowspec criteria : IP Address, UDP port or TCP port. The next release
-plans to provide the following : support for ICMP type/code , TCP flags, fragmentation
-and packet length.
+- The first version of FRR Flowspec only handles a subset of Filter rules.
+It operates policy based routing, on the following Flowspec criteria : IP Address,
+UDP port or TCP port. The next release plans to provide the following : support for
+ICMP type/code , TCP flags, fragmentation and packet length.
 
 There are some other known issues:
 
-- The validation procedure depicted in RFC5575 has not been implemented, as
-this feature was not used in the existing setups you shared wih us.
+- The validation procedure depicted in RFC5575 is not available.
+This validation procedure has not been implemented, as this feature was not used
+in the existing setups you shared wih us.
 
 - The filtering action shaper value, if positive, is not used to apply shaping.
 If value is positive, the traffic is redirected to the wished destination,
@@ -2781,14 +2792,16 @@ without any other action configured by Flowspec.
 It is recommended to configure Quality of Service if needed, more globally on
 a per interface basis.
 
-- upon crash or unknown event, ZEBRA may not have time to flush ipset/iptable
-and iprule contexts. This is also a consequence due to the fact that ip rule
-/ ipset / iptables are not discovered at startup (not able to read appropriate
-contexts coming from BGP FS). A mitigation script could be provided so that before
-starting the FRR, the pbr contexts (iptable and ipset entries) should be flushed.
+- upon crash or unknown event, ZEBRA may not have time to flush pbr contexts.
+That is to say ipset/iptables and iprule contexts. This is also a consequence due
+to the fact that ip rule / ipset / iptables are not discovered at startup (not
+able to read appropriate contexts coming from BGP FS). A mitigation script could
+be provided so that before starting the FRR, the pbr contexts (iptable and ipset
+entries) should be flushed.
 
-- from CLI/XMS, currently, it is not possible with current FRR version to configure
-default VRF using vrf0 keyword (from FRR vty), or vrf-id 0 keyword (from CLI/XMS).
+- from CLI/XMS, currently, it is not possible to name default VRF as vrf0.
+It is not possible to configure default VRF using vrf0 keyword (from FRR vty), or
+vrf-id 0 keyword (from CLI/XMS).
 The reason is that in FRR, it is not possible to name default VRF. The resulting is
 that a new BGP instance different from main BGP core instance will be created. To
 illustrate, the following illustrate which commands should not be used, and which ones
@@ -2826,17 +2839,19 @@ which routign table ?".
 
    # linux shell
    ip rule list
-       0:from all fwmark 0x100 lookup 256
+    0 : from all fwmark 0x100 lookup 256
+
    iptables -t mangle --list -v
-     ...
-     Chain match0x507e5f0 (1 references)
-     target     prot opt source               destination
-     MARK       all  --  anywhere             anywhere             MARK set 0x100
-     ...
+    ...
+    Chain match0x507e5f0 (1 references)
+    target     prot opt source               destination
+    MARK       all  --  anywhere             anywhere             MARK set 0x100
+    ...
 
 
 Annex
 -----
 
 More information:
+
 *https://docs.google.com/presentation/d/1ekQygUAG5yvQ3wWUyrw4Wcag0LgmbW1kV02IWcU4iUg/edit#slide=id.g378f0e1b5e_1_44*
