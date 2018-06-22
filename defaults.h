@@ -51,4 +51,7 @@
 
 #endif /* !HAVE_DATACENTER */
 
+#define DFLT_VRF_NAME	"Default-IP-Routing-Table"
+
+
 #endif /* _FRR_DEFAULTS_H */
