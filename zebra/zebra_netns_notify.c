@@ -179,7 +179,7 @@ static bool zebra_ns_notify_is_default_netns(const char *name)
 		return false;
 
 	memset(&st, 0, sizeof(struct stat));
-	sprintf(netnspath, "%s/%s", NS_RUN_DIR, name);
+	snprintf(netnspath, 64, "%s/%s", NS_RUN_DIR, name);
 	/* compare with local stat */
 	if (stat(netnspath, &st) == 0 &&
 	    (st.st_dev == default_netns_stat.st_dev) &&
