@@ -439,7 +439,7 @@ char *ns_netns_pathname(struct vty *vty, const char *name)
 				pathname,
 				safe_strerror(errno));
 		else
-			zlog_warn("Invalid pathname: %s",
+			zlog_warn("Invalid pathname for %s: %s",
 				  pathname,
 				  safe_strerror(errno));
 		return NULL;
