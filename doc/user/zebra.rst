@@ -520,6 +520,36 @@ entered within the VRF context the static routes are created in the VRF.
    ip route 10.0.0.0 255.255.255.0 10.0.0.2 vrf r1-cust1 table 43
    show ip table vrf r1-cust1 table 43
 
+By using the :option:`-n` option, the *Linux network namespace* will be mapped
+over the *Zebra* VRF. One nice feature that is possible by handling *Linux
+network namespace* is the ability to name default VRF. At startup, *Zebra*
+discovers the available *Linux network namespace* by parsing folder
+`/var/run/netns`. Each file stands for a *Linux network namespace*, but not all
+*Linux network namespaces* are available under that folder. This is the case for
+default VRF. It is possible to name the default VRF, by creating a file, by
+executing following commands.
+
+.. code-block:: shell
+
+   touch /var/run/netns/vrf0
+   mount --bind /proc/self/ns/net /var/run/netns/vrf0
+
+FRR will discover that new namespace name `vrf0` and will get file information with
+stat() function, and will compare the inode and device with the current namespace.
+If both inodes and device is the same, then `vrf0` stands for the default namespace.
+Consequently, the VRF naming `Default-IP-Routing-Table` will be overriden by the new
+discovered namespace name `vrf0`.
+
+For those who don't use VRF backend with *Linux network namespace*, it is possible to
+statically configure and recompile FRR. By using `DFLT_VRF_NAME` definition in file
+`defaults.h`, it is possible to choose an alternate name for default VRF. Then, the
+default VRF naming will automatically by updated with the new name.
+
+
+.. code-block:: linux
+
+   #define DFLT_VRF_NAME    "global"
+
 
 .. _multicast-rib-commands:
 
