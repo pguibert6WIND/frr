@@ -38,6 +38,7 @@
 
 /* default VRF ID value used when VRF backend is not NETNS */
 #define VRF_DEFAULT_INTERNAL 0
+#define VRF_DEFAULT_NAME_INTERNAL "Default-IP-Routing-Table"
 
 DEFINE_MTYPE_STATIC(LIB, VRF, "VRF")
 DEFINE_MTYPE_STATIC(LIB, VRF_BITMAP, "VRF bit-map")
@@ -55,6 +56,7 @@ struct vrf_name_head vrfs_by_name = RB_INITIALIZER(&vrfs_by_name);
 
 static int vrf_backend;
 static struct zebra_privs_t *vrf_daemon_privs;
+static char *vrf_default_name;
 
 /*
  * Turn on/off debug code
@@ -830,6 +832,36 @@ void vrf_cmd_init(int (*writefunc)(struct vty *vty),
 		install_element(VRF_NODE, &vrf_netns_cmd);
 		install_element(VRF_NODE, &no_vrf_netns_cmd);
 	}
+}
+
+void vrf_set_default_name(const char *default_name)
+{
+	char *ptr = vrf_default_name;
+	struct vrf *def_vrf;
+
+	def_vrf = vrf_lookup_by_name(VRF_DEFAULT_NAME);
+	if (!def_vrf)
+		return;
+	if (ptr)
+		XFREE(MTYPE_VRF, ptr);
+	vrf_default_name = XSTRDUP(MTYPE_VRF, default_name);
+	RB_REMOVE(vrf_name_head, &vrfs_by_name, def_vrf);
+	strlcpy(def_vrf->data.l.netns_name,
+		vrf_default_name, NS_NAMSIZ);
+	strlcpy(def_vrf->name, vrf_default_name, sizeof(def_vrf->name));
+	RB_INSERT(vrf_name_head, &vrfs_by_name, def_vrf);
+}
+
+const char *vrf_get_default_name(void)
+{
+	struct vrf *vrf;
+
+	if (vrf_default_name)
+		return vrf_default_name;
+	vrf = vrf_lookup_by_id(VRF_DEFAULT);
+	if (!vrf)
+		return VRF_DEFAULT_NAME_INTERNAL;
+	return vrf->data.l.netns_name;
 }
 
 vrf_id_t vrf_get_default_id(void)
