@@ -616,21 +616,26 @@ executing following commands.
    touch /var/run/netns/vrf0
    mount --bind /proc/self/ns/net /var/run/netns/vrf0
 
-FRR will discover that new namespace name `vrf0` and will get file information with
-stat() function, and will compare the inode and device with the current namespace.
-If both inodes and device is the same, then `vrf0` stands for the default namespace.
-Consequently, the VRF naming `Default-IP-Routing-Table` will be overriden by the new
-discovered namespace name `vrf0`.
+Above command illustrates what happens when the default VRF is visible under
+`var/run/netns/`. Here, the default VRF file is `vrf0`.
+At startup, FRR detects the presence of that file. It detects that the file
+statistics information matches the same file statistics information as
+`/proc/self/ns/net` ( through stat() function). As statistics information
+matches, then `vrf0` stands for the new default namespace name.
+Consequently, the VRF naming `Default` will be overriden by the new discovered
+namespace name `vrf0`.
 
-For those who don't use VRF backend with *Linux network namespace*, it is possible to
-statically configure and recompile FRR. By using `DFLT_VRF_NAME` definition in file
-`defaults.h`, it is possible to choose an alternate name for default VRF. Then, the
-default VRF naming will automatically by updated with the new name.
-
+For those who don't use VRF backend with *Linux network namespace*, it is
+possible to statically configure and recompile FRR. It is possible to choose an
+alternate name for default VRF. Then, the default VRF naming will automatically
+be updated with the new name. To illustrate, if you want to recompile with
+`global` value, use the following command:
 
 .. code-block:: linux
 
-   #define DFLT_VRF_NAME    "global"
+   ./configure --with-defaultvrfname=global
+
+More information about the option in :ref:`_frr-configuration`.
 
 
 Multicast RIB Commands
