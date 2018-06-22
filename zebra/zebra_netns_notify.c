@@ -149,12 +149,30 @@ static int zebra_ns_delete(char *name)
 	return 0;
 }
 
+static int zebra_ns_notify_self_identify(struct stat *netst)
+{
+	char net_path[64];
+	int netns;
+
+	sprintf(net_path, "/proc/self/ns/net");
+	netns = open(net_path, O_RDONLY);
+	if (netns < 0) {
+		return -1;
+	}
+	if (fstat(netns, netst) < 0) {
+		close(netns);
+		return -1;
+	}
+	close(netns);
+	return 0;
+}
 
 static int zebra_ns_ready_read(struct thread *t)
 {
 	struct zebra_netns_info *zns_info = THREAD_ARG(t);
 	const char *netnspath;
 	int err, stop_retry = 0;
+	struct stat default_netns_stat;
 
 	if (!zns_info)
 		return 0;
@@ -181,6 +199,25 @@ static int zebra_ns_ready_read(struct thread *t)
 		zlog_err("Can't lower privileges");
 	if (err < 0)
 		return zebra_ns_continue_read(zns_info, stop_retry);
+
+	/* check against default ns */
+	memset(&default_netns_stat, 0, sizeof(struct stat));
+	if (!zebra_ns_notify_self_identify(&default_netns_stat)) {
+		struct stat st;
+
+		memset(&st, 0, sizeof(struct stat));
+		/* compare with local stat */
+		if (stat(netnspath, &st) == 0 &&
+		    (st.st_dev == default_netns_stat.st_dev) &&
+		    (st.st_ino == default_netns_stat.st_ino)) {
+			zlog_warn(
+				  "NS notify : NS %s is default VRF."
+				  "Changing NS name to %s",
+				  netnspath, basename(netnspath));
+			vrf_set_default_name(basename(netnspath));
+			return zebra_ns_continue_read(zns_info, 1);
+		}
+	}
 
 	/* success : close fd and create zns context */
 	zebra_ns_notify_create_context_from_entry_name(basename(netnspath));
