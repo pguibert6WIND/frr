@@ -35,10 +35,10 @@
 #include "ns.h"
 #include "privs.h"
 #include "nexthop_group.h"
+#include "defaults.h"
 
 /* default VRF ID value used when VRF backend is not NETNS */
 #define VRF_DEFAULT_INTERNAL 0
-#define VRF_DEFAULT_NAME_INTERNAL "Default-IP-Routing-Table"
 
 DEFINE_MTYPE_STATIC(LIB, VRF, "VRF")
 DEFINE_MTYPE_STATIC(LIB, VRF_BITMAP, "VRF bit-map")
@@ -915,7 +915,7 @@ const char *vrf_get_default_name(void)
 		return vrf_default_name;
 	vrf = vrf_lookup_by_id(VRF_DEFAULT);
 	if (!vrf || vrf->data.l.netns_name[0] == '\0')
-		return VRF_DEFAULT_NAME_INTERNAL;
+		return DFLT_VRF_NAME;
 	return vrf->data.l.netns_name;
 }
 
