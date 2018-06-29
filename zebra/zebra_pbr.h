@@ -243,7 +243,7 @@ extern uint32_t zebra_pbr_iptable_hash_key(void *arg);
 extern int zebra_pbr_iptable_hash_equal(const void *arg1, const void *arg2);
 
 extern void zebra_pbr_show_ipset_list(struct vty *vty, char *ipsetname);
-extern void zebra_pbr_show_iptable(struct vty *vty);
+extern void zebra_pbr_show_iptable(struct vty *vty, char *iptable);
 extern void zebra_pbr_iptable_update_interfacelist(struct stream *s,
 				   struct zebra_pbr_iptable *zpi);
 extern void zebra_pbr_init(void);
