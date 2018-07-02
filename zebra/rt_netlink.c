@@ -480,7 +480,13 @@ static int netlink_route_change_read_unicast(struct sockaddr_nl *snl,
 				memcpy(&nh.gate, gate, sz);
 
 			if (index) {
-				ifp = if_lookup_by_index(index, VRF_UNKNOWN);
+				if (vrf_is_backend_netns())
+					ifp = if_lookup_by_index_per_ns(
+							zebra_ns_lookup(ns_id),
+							index);
+				else
+					ifp = if_lookup_by_index(
+							index, VRF_UNKNOWN);
 				if (ifp)
 					nh_vrf_id = ifp->vrf_id;
 			}
@@ -523,7 +529,12 @@ static int netlink_route_change_read_unicast(struct sockaddr_nl *snl,
 					 * using the last one looked
 					 * up right now
 					 */
-					ifp = if_lookup_by_index(index,
+					if (vrf_is_backend_netns())
+						ifp = if_lookup_by_index_per_ns(
+							zebra_ns_lookup(ns_id),
+							index);
+					else
+						ifp = if_lookup_by_index(index,
 								 VRF_UNKNOWN);
 					if (ifp)
 						nh_vrf_id = ifp->vrf_id;
