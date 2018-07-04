@@ -466,10 +466,7 @@ void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
 	      int ((*update)(struct vrf *)))
 {
 	struct vrf *default_vrf;
-	char *local_ptr =  (char *)VRF_DEFAULT_NAME;
 
-	if (local_ptr)
-		vrf_default_name = XSTRDUP(MTYPE_VRF, local_ptr);
 	/* initialise NS, in case VRF backend if NETNS */
 	ns_init();
 	if (debug_vrf)
@@ -483,14 +480,14 @@ void vrf_init(int (*create)(struct vrf *), int (*enable)(struct vrf *),
 	vrf_master.vrf_update_name_hook = update;
 
 	/* The default VRF always exists. */
-	default_vrf = vrf_get(VRF_DEFAULT, vrf_default_name);
+	default_vrf = vrf_get(VRF_DEFAULT, VRF_DEFAULT_NAME);
 	if (!default_vrf) {
 		zlog_err("vrf_init: failed to create the default VRF!");
 		exit(1);
 	}
 	if (vrf_is_backend_netns())
 		strlcpy(default_vrf->data.l.netns_name,
-			vrf_default_name, NS_NAMSIZ);
+			VRF_DEFAULT_NAME, NS_NAMSIZ);
 
 	/* Enable the default VRF. */
 	if (!vrf_enable(default_vrf)) {
