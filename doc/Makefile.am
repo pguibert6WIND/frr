@@ -193,6 +193,7 @@ EXTRA_DIST = frr-sphinx.mk \
 	developer/zebra.rst \
 	user/appendix.rst \
 	user/babeld.rst \
+	user/ldpd.rst \
 	user/basic.rst \
 	user/bgp.rst \
 	user/conf.py \

@@ -16,6 +16,7 @@ FRRouting User Guide
    zebra
    bgp
    babeld
+   ldpd
    eigrpd
    isisd
    nhrpd
