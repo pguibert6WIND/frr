@@ -43,8 +43,16 @@ Besides the common invocation options (:ref:`common-invocation-options`), the
    When *Zebra* starts with this option, the VRF backend is based on Linux
    network namespaces. That implies that all network namespaces discovered by
    ZEBRA will create an associated VRF. The other daemons will operate on the VRF
-   VRF defined by *Zebra*, as usual. More information in the :ref:`VRF Commands`
-   chapter.
+   VRF defined by *Zebra*, as usual.
+
+   .. seealso:: :ref:`zebra-vrf`
+
+.. option:: -o, --vrfdefaultname
+
+   When *Zebra* starts with this option, the default VRF name is changed to the
+   parameter.
+
+   .. seealso:: :ref:`zebra-vrf`
 
 .. program:: configure
 
