@@ -671,7 +671,7 @@ static int netlink_interface(struct sockaddr_nl *snl, struct nlmsghdr *h,
 		SET_FLAG(ifp->status, ZEBRA_INTERFACE_VRF_LOOPBACK);
 
 	/* Update link. */
-	zebra_if_update_link(ifp, link_ifindex);
+	zebra_if_update_link(ifp, link_ifindex, ns_id);
 
 	/* Hardware type and address. */
 	ifp->ll_type = netlink_to_zebra_link_type(ifi->ifi_type);
@@ -1163,7 +1163,7 @@ int netlink_link_change(struct sockaddr_nl *snl, struct nlmsghdr *h,
 					 ZEBRA_INTERFACE_VRF_LOOPBACK);
 
 			/* Update link. */
-			zebra_if_update_link(ifp, link_ifindex);
+			zebra_if_update_link(ifp, link_ifindex, ns_id);
 
 			netlink_interface_update_hw_addr(tb, ifp);
 
