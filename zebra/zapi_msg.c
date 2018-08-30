@@ -1324,16 +1324,232 @@ void zserv_nexthop_num_warn(const char *caller, const struct prefix *p,
 	}
 }
 
+static void zread_route_add_multipath(struct zserv *client,
+				      struct route_entry *re,
+				      struct zapi_route *api)
+{
+	int ret;
+	afi_t afi;
+	struct prefix_ipv6 *src_p = NULL;
+
+	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_DISTANCE))
+		re->distance = api->distance;
+	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_METRIC))
+		re->metric = api->metric;
+	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_TAG))
+		re->tag = api->tag;
+	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_MTU))
+		re->mtu = api->mtu;
+
+	afi = family2afi(api->prefix.family);
+	if (afi != AFI_IP6 && CHECK_FLAG(api->message, ZAPI_MESSAGE_SRCPFX)) {
+		zlog_warn("%s: Received SRC Prefix but afi is not v6",
+			  __PRETTY_FUNCTION__);
+		nexthops_free(re->ng.nexthop);
+		XFREE(MTYPE_RE, re);
+		return;
+	}
+	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_SRCPFX))
+		src_p = &api->src_prefix;
+
+	ret = rib_add_multipath(afi, api->safi, &api->prefix, src_p, re);
+
+	/* Stats */
+	switch (api->prefix.family) {
+	case AF_INET:
+		if (ret > 0)
+			client->v4_route_add_cnt++;
+		else if (ret < 0)
+			client->v4_route_upd8_cnt++;
+		break;
+	case AF_INET6:
+		if (ret > 0)
+			client->v6_route_add_cnt++;
+		else if (ret < 0)
+			client->v6_route_upd8_cnt++;
+		break;
+	}
+}
+
+struct vrf_id_struct {
+	vrf_id_t vrf_id;
+	struct vrf *vrf;
+};
+
+static struct list *zread_route_get_list_cross_vrf(struct zserv *client,
+					   struct zapi_route *api)
+{
+	int i;
+	struct zapi_nexthop *api_nh;
+	struct list *new;
+	struct vrf *dest_vrf;
+	struct vrf_id_struct temp;
+	struct vrf_id_struct *ptr_temp;
+
+	if (!vrf_is_backend_netns() ||
+	    !CHECK_FLAG(api->message, ZAPI_MESSAGE_NEXTHOP))
+		return NULL;
+
+	new = list_new();
+	for (i = 0; i < api->nexthop_num; i++) {
+		api_nh = &api->nexthops[i];
+
+		if (api_nh->type != NEXTHOP_TYPE_IPV4 &&
+		    api_nh->type != NEXTHOP_TYPE_IPV6)
+			continue;
+		if (api_nh->vrf_id == api->vrf_id)
+			continue;
+		dest_vrf = vrf_lookup_by_id(api_nh->vrf_id);
+		if (dest_vrf == NULL)
+			continue;
+		if (api_nh->type == NEXTHOP_TYPE_IPV4 &&
+		    dest_vrf->ipv4_gateway.s_addr == INADDR_ANY)
+			continue;
+		else if (api_nh->type == NEXTHOP_TYPE_IPV6 &&
+			 !memcmp(&dest_vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
+			continue;
+		temp.vrf_id = api_nh->vrf_id;
+		temp.vrf = dest_vrf;
+		/* new vrf */
+		if (!listnode_lookup(new, &temp)) {
+			ptr_temp = XCALLOC(MTYPE_TMP, sizeof(struct vrf_id_struct));
+			ptr_temp->vrf_id = temp.vrf_id;
+			ptr_temp->vrf = temp.vrf;
+			listnode_add(new, ptr_temp);
+		}
+	}
+	return new;
+}
+
+static bool zread_route_add_vrf(struct zserv *client,
+				struct route_entry *orig_re,
+				struct zapi_route *orig_api,
+				struct zapi_nexthop *orig_api_nh,
+				struct nexthop **nexthop)
+{
+	struct vrf *dest_vrf;
+	struct prefix_ipv4 prefix4;
+	struct prefix_ipv6 prefix6;
+	struct zapi_route api;
+	int i = 0;
+	struct route_entry *re;
+	vrf_id_t target_vrf_id;
+
+	if (orig_re->vrf_id == orig_api_nh->vrf_id ||
+	    !vrf_is_backend_netns())
+		return false;
+	/* in the case where vrf netns is configured
+	 * - an additional route is added to reach nexthop through vrf nexthop
+	 * - the current api_nh->gate.ipv4 is replaced with vrf->ipv4_gateway
+	 */
+	dest_vrf = vrf_lookup_by_id(orig_api_nh->vrf_id);
+	if (dest_vrf == NULL)
+		return false;
+
+	if (orig_api_nh->type != NEXTHOP_TYPE_IPV4 &&
+	    orig_api_nh->type != NEXTHOP_TYPE_IPV6 &&
+	    orig_api_nh->type != NEXTHOP_TYPE_IFINDEX)
+		return false;
+
+	if (orig_api_nh->type == NEXTHOP_TYPE_IPV4 &&
+	    dest_vrf->ipv4_gateway.s_addr == INADDR_ANY)
+		return false;
+	else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6 &&
+		 !memcmp(&dest_vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
+		return false;
+	else if (orig_api_nh->type == NEXTHOP_TYPE_IFINDEX) {
+		if (orig_api->prefix.family == AF_INET &&
+		    dest_vrf->ipv4_gateway.s_addr == INADDR_ANY)
+			return false;
+		if (orig_api->prefix.family == AF_INET6 &&
+		  !memcmp(&dest_vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
+			return false;
+	}
+	for (i = 0; i < 2; i++) {
+		re = XCALLOC(MTYPE_RE, sizeof(struct route_entry));
+		memcpy(re, orig_re, sizeof(struct route_entry));
+
+		memcpy(&api, orig_api, sizeof(struct zapi_route));
+		memcpy(&api.nexthops[0], orig_api_nh, sizeof(struct zapi_nexthop));
+		api.nexthop_num = 1;
+		target_vrf_id = re->vrf_id;
+		api.nexthops[0].vrf_id = target_vrf_id;
+		if (!i) {
+		} else {
+			api.vrf_id = target_vrf_id;
+		}
+		/* additional route is added to reach nexthop through vrf nexthop
+		 * ip route <api_nh->gate.ipvx.s_addr>/32 gw
+		 * vrf->ipvx_gateway.s_addr
+		 */
+		if (!i) {
+			if (orig_api_nh->type == NEXTHOP_TYPE_IPV4) {
+				prefix4.family = AF_INET;
+				prefix4.prefixlen = 32;
+				prefix4.prefix.s_addr = orig_api_nh->gate.ipv4.s_addr;
+				memcpy(&api.prefix, &prefix4, sizeof(struct prefix_ipv4));
+				memcpy(&api.nexthops[0].gate, &dest_vrf->ipv4_gateway,
+				       sizeof(struct in6_addr));
+			} else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6) {
+				prefix6.family = AF_INET6;
+				prefix6.prefixlen = 128;
+				memcpy(&prefix6.prefix, &orig_api_nh->gate.ipv6,
+				       sizeof(struct in6_addr));
+				memcpy(&api.prefix, &prefix6, sizeof(struct prefix_ipv6));
+				memcpy(&api.nexthops[0].gate, &dest_vrf->ipv6_gateway,
+				       sizeof(struct in6_addr));
+			} else {
+				/* original entry will be converted
+				 * in nexthop_type_ipv4 or nexthop_type_ipv6
+				 * ip route <prefix> <nexthopvrfipv4|nexthopvrfipv6>
+				 */
+				if (nexthop && orig_api->prefix.family == AF_INET)
+					*nexthop = route_entry_nexthop_ipv4_add(
+					     re, &dest_vrf->ipv4_gateway, NULL,
+					     target_vrf_id);
+				else if (nexthop && orig_api->prefix.family == AF_INET6)
+					*nexthop = route_entry_nexthop_ipv6_add(
+						re, &dest_vrf->ipv6_gateway, target_vrf_id);
+					continue;
+			}
+		}
+		if (IS_ZEBRA_DEBUG_RECV) {
+			char nhbuf[INET6_ADDRSTRLEN] = {0};
+
+			if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
+				inet_ntop(AF_INET, &api.nexthops[0].gate,
+					  nhbuf, INET6_ADDRSTRLEN);
+			else if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
+				inet_ntop(AF_INET6, &api.nexthops[0].gate,
+					  nhbuf, INET6_ADDRSTRLEN);
+			if (orig_api_nh->type != NEXTHOP_TYPE_IFINDEX)
+				zlog_debug("%s: nh=%s, vrf_id=%d",
+					   __func__, nhbuf,
+					   target_vrf_id);
+		}
+		if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
+			route_entry_nexthop_ipv4_add(
+			       re, &api.nexthops[0].gate.ipv4, NULL,
+			       target_vrf_id);
+		else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6)
+			route_entry_nexthop_ipv6_add(
+				     re,  &api.nexthops[0].gate.ipv6, target_vrf_id);
+		else /* ifindex */
+			route_entry_nexthop_ifindex_add(
+				re, orig_api_nh->ifindex, target_vrf_id);
+		zread_route_add_multipath(client, re, &api);
+	}
+	return true;
+}
+
 static void zread_route_add(ZAPI_HANDLER_ARGS)
 {
 	struct stream *s;
 	struct zapi_route api;
 	struct zapi_nexthop *api_nh;
-	afi_t afi;
-	struct prefix_ipv6 *src_p = NULL;
 	struct route_entry *re;
 	struct nexthop *nexthop = NULL;
-	int i, ret;
+	int i;
 	vrf_id_t vrf_id = 0;
 	struct ipaddr vtep_ip;
 
@@ -1384,10 +1600,27 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 
 			switch (api_nh->type) {
 			case NEXTHOP_TYPE_IFINDEX:
-				nexthop = route_entry_nexthop_ifindex_add(
-					re, api_nh->ifindex, api_nh->vrf_id);
+				/* in the case where vrf netns is configured
+				 * - 1 additional route is added to reach nexthop through vrf nexthop
+				 * - 1 additional route is added in separate netns
+				 * - the current entry is kept, but nh_vrf_id is overwritten
+				 */
+				if (zread_route_add_vrf(client, re, &api, api_nh, &nexthop)) {
+					api_nh->vrf_id = vrf_id;
+				} else
+					nexthop = route_entry_nexthop_ifindex_add(
+					  re, api_nh->ifindex, api_nh->vrf_id);
+
 				break;
 			case NEXTHOP_TYPE_IPV4:
+				/* in the case where vrf netns is configured
+				 * - 1 additional route is added to reach nexthop through vrf nexthop
+				 * - 1 additional route is added in separate netns
+				 */
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
+					api.vrf_id = api_nh->vrf_id;
+					re->vrf_id = api.vrf_id;
+				}
 				if (IS_ZEBRA_DEBUG_RECV) {
 					char nhbuf[INET6_ADDRSTRLEN] = {0};
 
@@ -1442,8 +1675,12 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				}
 				break;
 			case NEXTHOP_TYPE_IPV6:
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
+					re->vrf_id = api.vrf_id;
+					api.vrf_id = api_nh->vrf_id;
+				}
 				nexthop = route_entry_nexthop_ipv6_add(
-					re, &api_nh->gate.ipv6, api_nh->vrf_id);
+					       re, &api_nh->gate.ipv6, api_nh->vrf_id);
 				break;
 			case NEXTHOP_TYPE_IPV6_IFINDEX:
 				memset(&vtep_ip, 0, sizeof(struct ipaddr));
@@ -1510,43 +1747,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 			}
 		}
 
-	if (CHECK_FLAG(api.message, ZAPI_MESSAGE_DISTANCE))
-		re->distance = api.distance;
-	if (CHECK_FLAG(api.message, ZAPI_MESSAGE_METRIC))
-		re->metric = api.metric;
-	if (CHECK_FLAG(api.message, ZAPI_MESSAGE_TAG))
-		re->tag = api.tag;
-	if (CHECK_FLAG(api.message, ZAPI_MESSAGE_MTU))
-		re->mtu = api.mtu;
-
-	afi = family2afi(api.prefix.family);
-	if (afi != AFI_IP6 && CHECK_FLAG(api.message, ZAPI_MESSAGE_SRCPFX)) {
-		zlog_warn("%s: Received SRC Prefix but afi is not v6",
-			  __PRETTY_FUNCTION__);
-		nexthops_free(re->ng.nexthop);
-		XFREE(MTYPE_RE, re);
-		return;
-	}
-	if (CHECK_FLAG(api.message, ZAPI_MESSAGE_SRCPFX))
-		src_p = &api.src_prefix;
-
-	ret = rib_add_multipath(afi, api.safi, &api.prefix, src_p, re);
-
-	/* Stats */
-	switch (api.prefix.family) {
-	case AF_INET:
-		if (ret > 0)
-			client->v4_route_add_cnt++;
-		else if (ret < 0)
-			client->v4_route_upd8_cnt++;
-		break;
-	case AF_INET6:
-		if (ret > 0)
-			client->v6_route_add_cnt++;
-		else if (ret < 0)
-			client->v6_route_upd8_cnt++;
-		break;
-	}
+	zread_route_add_multipath(client, re, &api);
 }
 
 static void zread_route_del(ZAPI_HANDLER_ARGS)
@@ -1556,6 +1757,7 @@ static void zread_route_del(ZAPI_HANDLER_ARGS)
 	afi_t afi;
 	struct prefix_ipv6 *src_p = NULL;
 	uint32_t table_id;
+	struct list *list_vrf_nh;
 
 	s = msg;
 	if (zapi_route_decode(s, &api) < 0)
@@ -1575,6 +1777,28 @@ static void zread_route_del(ZAPI_HANDLER_ARGS)
 	else
 		table_id = zvrf->table_id;
 
+	list_vrf_nh = zread_route_get_list_cross_vrf(client, &api);
+	if (list_vrf_nh) {
+		struct listnode *node, *nnode;
+		struct vrf_id_struct *ptr_temp;
+
+		for (ALL_LIST_ELEMENTS(list_vrf_nh, node, nnode, ptr_temp)) {
+			rib_delete(afi, api.safi, ptr_temp->vrf_id, api.type, api.instance,
+				   api.flags, &api.prefix, src_p, NULL, table_id, api.metric,
+				   api.distance, false);
+			/* Stats */
+			switch (api.prefix.family) {
+			case AF_INET:
+				client->v4_route_del_cnt++;
+				break;
+			case AF_INET6:
+				client->v6_route_del_cnt++;
+				break;
+			}
+			XFREE(MTYPE_TMP, ptr_temp);
+		}
+		list_delete_and_null(&list_vrf_nh);
+	}
 	rib_delete(afi, api.safi, zvrf_id(zvrf), api.type, api.instance,
 		   api.flags, &api.prefix, src_p, NULL, table_id, api.metric,
 		   api.distance, false);
