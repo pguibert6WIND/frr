@@ -222,6 +222,7 @@ struct interface {
 	 */
 	ifindex_t ifindex;
 #define IFINDEX_INTERNAL	0
+#define IFINDEX_UNKNOWN		IFINDEX_INTERNAL
 
 	/* Zebra internal interface status */
 	uint8_t status;
