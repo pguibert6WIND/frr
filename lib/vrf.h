@@ -88,6 +88,11 @@ struct vrf {
 	/* Back pointer to namespace context */
 	void *ns_ctxt;
 
+	/* gateway IPs to reach that VRF. only one per address family
+	 * those parameters are only used for now with vrf netns backend
+	 */
+	struct in_addr ipv4_gateway;
+	struct in6_addr ipv6_gateway;
 	QOBJ_FIELDS
 };
 RB_HEAD(vrf_id_head, vrf);

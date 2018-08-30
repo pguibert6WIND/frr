@@ -40,6 +40,7 @@
 /* default VRF ID value used when VRF backend is not NETNS */
 #define VRF_DEFAULT_INTERNAL 0
 #define VRF_DEFAULT_NAME_INTERNAL "default"
+#define VRF_NETNS_HELP_STR "Netns commands\n"
 
 DEFINE_MTYPE_STATIC(LIB, VRF, "VRF")
 DEFINE_MTYPE_STATIC(LIB, VRF_BITMAP, "VRF bit-map")
@@ -778,10 +779,10 @@ DEFUN (no_vrf,
 struct cmd_node vrf_node = {VRF_NODE, "%s(config-vrf)# ", 1};
 
 DEFUN_NOSH (vrf_netns,
-       vrf_netns_cmd,
-       "netns NAME",
-       "Attach VRF to a Namespace\n"
-       "The file name in " NS_RUN_DIR ", or a full pathname\n")
+	vrf_netns_cmd,
+	"netns NAME",
+	VRF_NETNS_HELP_STR
+	"The file name in " NS_RUN_DIR ", or a full pathname to attach\n")
 {
 	int idx_name = 1, ret;
 	char *pathname = ns_netns_pathname(vty, argv[idx_name]->arg);
@@ -802,8 +803,8 @@ DEFUN_NOSH (no_vrf_netns,
 	no_vrf_netns_cmd,
 	"no netns [NAME]",
 	NO_STR
-	"Detach VRF from a Namespace\n"
-	"The file name in " NS_RUN_DIR ", or a full pathname\n")
+	VRF_NETNS_HELP_STR
+	"The file name in " NS_RUN_DIR ", or a full pathname to detach\n")
 {
 	struct ns *ns = NULL;
 
@@ -829,6 +830,63 @@ DEFUN_NOSH (no_vrf_netns,
 	ns_delete(ns);
 	vrf->ns_ctxt = NULL;
 	return CMD_SUCCESS;
+}
+
+DEFUN_NOSH (vrf_option_route_nexthop,
+	vrf_option_route_nexthop_cmd,
+	"[no] vrf route <A.B.C.D|X:X::X:X>",
+	NO_STR
+	"VRF options"
+	"Define nexthop gateway to reach remote VRF\n"
+	"IP address in dot decimal A.B.C.D\n"
+	"IPv6 address (e.g. 3ffe:506::1/48)\n")
+{
+	int idx_address = 0;
+	const char *address;
+	bool no_case = false;
+	struct in_addr ipv4_gw;
+	struct in6_addr ipv6_gw;
+	int ret = CMD_SUCCESS;
+
+	VTY_DECLVAR_CONTEXT(vrf, vrf);
+
+	if (strmatch(argv[0]->text, "no"))
+		no_case = true;
+
+	if (argv_find(argv, argc, "A.B.C.D", &idx_address)
+	    || argv_find(argv, argc, "X:X::X:X", &idx_address))
+		address = argv[idx_address]->arg;
+	else {
+		vty_out(vty, "arg not found");
+		return ret;
+	}
+	ret = inet_pton(AF_INET6, address, &ipv6_gw);
+	if (ret == 1) {
+		/* IPv6 Address */
+		if (!no_case) {
+			memcpy(&vrf->ipv6_gateway, &ipv6_gw,
+			       sizeof(struct in6_addr));
+			SET_FLAG(vrf->status, VRF_CONFIGURED);
+		} else
+			memset(&vrf->ipv6_gateway, 0, sizeof(struct in6_addr));
+		return ret;
+	}
+	ret = inet_pton(AF_INET, address, &ipv4_gw);
+	if (ret == 1) {
+		/* IPv4 Address */
+		if (!no_case) {
+			memcpy(&vrf->ipv4_gateway, &ipv4_gw,
+			       sizeof(struct in_addr));
+			SET_FLAG(vrf->status, VRF_CONFIGURED);
+		} else
+			memset(&vrf->ipv4_gateway, 0, sizeof(struct in_addr));
+		return ret;
+	}
+	/* XXX this function does not take into consideration
+	 * - previous routes relying on the old address
+	 * - faulty routes attempted to be created when the ips were not available
+	 */
+	return ret;
 }
 
 /*
@@ -890,6 +948,7 @@ void vrf_cmd_init(int (*writefunc)(struct vty *vty),
 		vrf_daemon_privs = daemon_privs;
 		install_element(VRF_NODE, &vrf_netns_cmd);
 		install_element(VRF_NODE, &no_vrf_netns_cmd);
+		install_element(VRF_NODE, &vrf_option_route_nexthop_cmd);
 	}
 }
 
