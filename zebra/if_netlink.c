@@ -696,7 +696,7 @@ static int netlink_interface(struct nlmsghdr *h, ns_id_t ns_id, int startup)
 
 /* Request for specific interface or address information from the kernel */
 static int netlink_request_intf_addr(struct zebra_ns *zns, int family, int type,
-				     uint32_t filter_mask)
+				     uint32_t filter_mask, ifindex_t if_index)
 {
 	struct {
 		struct nlmsghdr n;
@@ -709,6 +709,7 @@ static int netlink_request_intf_addr(struct zebra_ns *zns, int family, int type,
 	req.n.nlmsg_type = type;
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
 	req.ifm.ifi_family = family;
+	req.ifm.ifi_index = if_index;
 
 	/* Include filter, if specified. */
 	if (filter_mask)
@@ -723,7 +724,7 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 	int ret;
 
 	/* Get interface information. */
-	ret = netlink_request_intf_addr(zns, AF_PACKET, RTM_GETLINK, 0);
+	ret = netlink_request_intf_addr(zns, AF_PACKET, RTM_GETLINK, 0, 0);
 	if (ret < 0)
 		return ret;
 	ret = netlink_parse_info(netlink_interface, &zns->netlink_cmd, zns, 0,
@@ -733,7 +734,7 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 
 	/* Get interface information - for bridge interfaces. */
 	ret = netlink_request_intf_addr(zns, AF_BRIDGE, RTM_GETLINK,
-					RTEXT_FILTER_BRVLAN);
+					RTEXT_FILTER_BRVLAN, 0);
 	if (ret < 0)
 		return ret;
 	ret = netlink_parse_info(netlink_interface, &zns->netlink_cmd, zns, 0,
@@ -743,7 +744,7 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 
 	/* Get interface information - for bridge interfaces. */
 	ret = netlink_request_intf_addr(zns, AF_BRIDGE, RTM_GETLINK,
-					RTEXT_FILTER_BRVLAN);
+					RTEXT_FILTER_BRVLAN, 0);
 	if (ret < 0)
 		return ret;
 	ret = netlink_parse_info(netlink_interface, &zns->netlink_cmd, zns, 0,
@@ -752,7 +753,7 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 		return ret;
 
 	/* Get IPv4 address of the interfaces. */
-	ret = netlink_request_intf_addr(zns, AF_INET, RTM_GETADDR, 0);
+	ret = netlink_request_intf_addr(zns, AF_INET, RTM_GETADDR, 0, 0);
 	if (ret < 0)
 		return ret;
 	ret = netlink_parse_info(netlink_interface_addr, &zns->netlink_cmd, zns,
@@ -761,7 +762,7 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 		return ret;
 
 	/* Get IPv6 address of the interfaces. */
-	ret = netlink_request_intf_addr(zns, AF_INET6, RTM_GETADDR, 0);
+	ret = netlink_request_intf_addr(zns, AF_INET6, RTM_GETADDR, 0, 0);
 	if (ret < 0)
 		return ret;
 	ret = netlink_parse_info(netlink_interface_addr, &zns->netlink_cmd, zns,
@@ -770,6 +771,22 @@ int interface_lookup_netlink(struct zebra_ns *zns)
 		return ret;
 
 	return 0;
+}
+
+static int interface_lookup_netlink_ipv6(struct interface *ifp,
+					 struct zebra_ns *zns,
+					 int startup)
+{
+	int ret;
+
+	zlog_err("=== %s ===", __func__);
+	ret = netlink_request_intf_addr(zns, AF_INET6, RTM_GETADDR,
+					0, ifp->ifindex);
+	if (ret < 0)
+		return ret;
+	ret = netlink_parse_info(netlink_interface_addr, &zns->netlink_cmd, zns,
+				 0, 1);
+	return ret;
 }
 
 int kernel_interface_set_master(struct interface *master,
@@ -1291,6 +1308,7 @@ int netlink_link_change(struct nlmsghdr *h, ns_id_t ns_id, int startup)
 				zebra_l2if_update_bridge_slave(ifp,
 							       bridge_ifindex);
 		}
+		interface_lookup_netlink_ipv6(ifp, zns, startup);
 	} else {
 		/* Delete interface notification from kernel */
 		if (ifp == NULL) {
