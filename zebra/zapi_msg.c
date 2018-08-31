@@ -735,8 +735,6 @@ static int route_notify_internal(const struct prefix *p, int type,
 int zsend_route_notify_owner(struct route_entry *re, const struct prefix *p,
 			     enum zapi_route_notify_owner note)
 {
-	if (re->status & ROUTE_ENTRY_ONLY_ZEBRA)
-		return 0;
 	return (route_notify_internal(p, re->type, re->instance, re->vrf_id,
 				      re->table, note));
 }
@@ -1471,7 +1469,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 	for (i = 0; i < 2; i++) {
 		re = XCALLOC(MTYPE_RE, sizeof(struct route_entry));
 		memcpy(re, orig_re, sizeof(struct route_entry));
-		re->status |= ROUTE_ENTRY_ONLY_ZEBRA;
+
 		memcpy(&api, orig_api, sizeof(struct zapi_route));
 		memcpy(&api.nexthops[0], orig_api_nh, sizeof(struct zapi_nexthop));
 		api.nexthop_num = 1;
