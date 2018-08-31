@@ -52,11 +52,7 @@ static void static_uninstall_route(vrf_id_t vrf_id, safi_t safi,
 				   struct route_node *rn,
 				   struct static_route *si_changed)
 {
-
-	if (rn->info)
-		static_zebra_route_add(rn, si_changed, vrf_id, safi, true);
-	else
-		static_zebra_route_add(rn, si_changed, vrf_id, safi, false);
+	static_zebra_route_add(rn, si_changed, vrf_id, safi, false);
 }
 
 int static_add_route(afi_t afi, safi_t safi, uint8_t type, struct prefix *p,
@@ -243,6 +239,12 @@ int static_delete_route(afi_t afi, safi_t safi, uint8_t type, struct prefix *p,
 
 	static_zebra_nht_register(si, false);
 
+	/*
+	 * If we have other si nodes then route replace
+	 * else delete the route
+	 */
+	static_uninstall_route(si->vrf_id, safi, rn, si);
+
 	/* Unlink static route from linked list. */
 	if (si->prev)
 		si->prev->next = si->next;
@@ -251,11 +253,6 @@ int static_delete_route(afi_t afi, safi_t safi, uint8_t type, struct prefix *p,
 	if (si->next)
 		si->next->prev = si->prev;
 
-	/*
-	 * If we have other si nodes then route replace
-	 * else delete the route
-	 */
-	static_uninstall_route(si->vrf_id, safi, rn, si);
 	route_unlock_node(rn);
 
 	/* Free static route configuration. */
