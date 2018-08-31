@@ -1783,6 +1783,7 @@ static void zread_route_del(ZAPI_HANDLER_ARGS)
 		struct vrf_id_struct *ptr_temp;
 
 		for (ALL_LIST_ELEMENTS(list_vrf_nh, node, nnode, ptr_temp)) {
+			zlog_err(" XXXXXX try to delete in %u", ptr_temp->vrf_id);
 			rib_delete(afi, api.safi, ptr_temp->vrf_id, api.type, api.instance,
 				   api.flags, &api.prefix, src_p, NULL, table_id, api.metric,
 				   api.distance, false);

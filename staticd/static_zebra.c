@@ -379,12 +379,14 @@ extern void static_zebra_route_add(struct route_node *rn,
 	}
 	for (/*loaded above*/; si; si = si->next) {
 		api_nh = &api.nexthops[nh_num];
+		zlog_err("%s si %x", __func__, si);
 		if (si->nh_vrf_id == VRF_UNKNOWN)
 			continue;
 
 		if (si->distance != si_changed->distance)
 			continue;
-
+		zlog_err("%s si %x type %d vrf %d",
+			 __func__, si, si->type, si->nh_vrf_id);
 		api_nh->vrf_id = si->nh_vrf_id;
 		switch (si->type) {
 		case STATIC_IFNAME:
