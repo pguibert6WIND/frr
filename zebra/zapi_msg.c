@@ -1432,6 +1432,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 	struct vrf *dest_vrf;
 	struct prefix_ipv4 prefix4;
 	struct prefix_ipv6 prefix6;
+	struct nexthop *nexthop_local = NULL;
 	struct zapi_route api;
 	int i = 0;
 	struct route_entry *re;
@@ -1474,11 +1475,15 @@ static bool zread_route_add_vrf(struct zserv *client,
 		memcpy(&api, orig_api, sizeof(struct zapi_route));
 		memcpy(&api.nexthops[0], orig_api_nh, sizeof(struct zapi_nexthop));
 		api.nexthop_num = 1;
-		target_vrf_id = re->vrf_id;
-		api.nexthops[0].vrf_id = target_vrf_id;
 		if (!i) {
+			/* creation of route to reach NH in local VRF */
+			target_vrf_id = re->vrf_id;
+			api.nexthops[0].vrf_id = target_vrf_id;
 		} else {
+			/* creation of route in remote VRF */
+			target_vrf_id = api.nexthops[0].vrf_id;
 			api.vrf_id = target_vrf_id;
+			re->vrf_id = target_vrf_id;
 		}
 		/* additional route is added to reach nexthop through vrf nexthop
 		 * ip route <api_nh->gate.ipvx.s_addr>/32 gw
@@ -1505,41 +1510,44 @@ static bool zread_route_add_vrf(struct zserv *client,
 				 * in nexthop_type_ipv4 or nexthop_type_ipv6
 				 * ip route <prefix> <nexthopvrfipv4|nexthopvrfipv6>
 				 */
-				if (nexthop && orig_api->prefix.family == AF_INET)
-					*nexthop = route_entry_nexthop_ipv4_add(
-					     re, &dest_vrf->ipv4_gateway, NULL,
-					     target_vrf_id);
-				else if (nexthop && orig_api->prefix.family == AF_INET6)
-					*nexthop = route_entry_nexthop_ipv6_add(
-						re, &dest_vrf->ipv6_gateway, target_vrf_id);
-					continue;
+				if (nexthop && orig_api->prefix.family == AF_INET) {
+					api.nexthops[0].type = NEXTHOP_TYPE_IPV4;
+					memcpy(&api.nexthops[0].gate, &dest_vrf->ipv4_gateway,
+					       sizeof(struct in6_addr));
+				}else if (nexthop && orig_api->prefix.family == AF_INET6) {
+					api.nexthops[0].type = NEXTHOP_TYPE_IPV6;
+					memcpy(&api.nexthops[0].gate, &dest_vrf->ipv6_gateway,
+					       sizeof(struct in6_addr));
+				}
 			}
 		}
 		if (IS_ZEBRA_DEBUG_RECV) {
 			char nhbuf[INET6_ADDRSTRLEN] = {0};
 
-			if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
+			if (api.nexthops[0].type == NEXTHOP_TYPE_IPV4)
 				inet_ntop(AF_INET, &api.nexthops[0].gate,
 					  nhbuf, INET6_ADDRSTRLEN);
-			else if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
+			else if (api.nexthops[0].type == NEXTHOP_TYPE_IPV4)
 				inet_ntop(AF_INET6, &api.nexthops[0].gate,
 					  nhbuf, INET6_ADDRSTRLEN);
-			if (orig_api_nh->type != NEXTHOP_TYPE_IFINDEX)
+			if (api.nexthops[0].type != NEXTHOP_TYPE_IFINDEX)
 				zlog_debug("%s: nh=%s, vrf_id=%d",
 					   __func__, nhbuf,
 					   target_vrf_id);
 		}
 		if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
-			route_entry_nexthop_ipv4_add(
+			nexthop_local = route_entry_nexthop_ipv4_add(
 			       re, &api.nexthops[0].gate.ipv4, NULL,
 			       target_vrf_id);
 		else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6)
-			route_entry_nexthop_ipv6_add(
+			nexthop_local = route_entry_nexthop_ipv6_add(
 				     re,  &api.nexthops[0].gate.ipv6, target_vrf_id);
 		else /* ifindex */
 			route_entry_nexthop_ifindex_add(
 				re, orig_api_nh->ifindex, target_vrf_id);
 		zread_route_add_multipath(client, re, &api);
+		if (!i && nexthop)
+			*nexthop = nexthop_local;
 	}
 	return true;
 }
@@ -1619,10 +1627,8 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added to reach nexthop through vrf nexthop
 				 * - 1 additional route is added in separate netns
 				 */
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
-					api.vrf_id = api_nh->vrf_id;
-					re->vrf_id = api.vrf_id;
-				}
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
+					api_nh->vrf_id = vrf_id;
 				if (IS_ZEBRA_DEBUG_RECV) {
 					char nhbuf[INET6_ADDRSTRLEN] = {0};
 
@@ -1677,10 +1683,8 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				}
 				break;
 			case NEXTHOP_TYPE_IPV6:
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
-					re->vrf_id = api.vrf_id;
-					api.vrf_id = api_nh->vrf_id;
-				}
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
+					api_nh->vrf_id = vrf_id;
 				nexthop = route_entry_nexthop_ipv6_add(
 					       re, &api_nh->gate.ipv6, api_nh->vrf_id);
 				break;
