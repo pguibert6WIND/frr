@@ -836,7 +836,7 @@ DEFUN_NOSH (vrf_option_route_nexthop,
 	vrf_option_route_nexthop_cmd,
 	"[no] vrf route <A.B.C.D|X:X::X:X>",
 	NO_STR
-	"VRF options"
+	"VRF options\n"
 	"Define nexthop gateway to reach remote VRF\n"
 	"IP address in dot decimal A.B.C.D\n"
 	"IPv6 address (e.g. 3ffe:506::1/48)\n")

@@ -2143,6 +2143,14 @@ DEFSH(VTYSH_ZEBRA, vtysh_no_vrf_netns_cmd,
       "Detach VRF from a Namespace\n"
       "The file name in " NS_RUN_DIR ", or a full pathname\n")
 
+DEFSH(VTYSH_ZEBRA, vtysh_vrf_option_route_nexthop_cmd,
+	"[no] vrf route <A.B.C.D|X:X::X:X>",
+	NO_STR
+	"VRF options\n"
+	"Define nexthop gateway to reach remote VRF\n"
+	"IP address in dot decimal A.B.C.D\n"
+	"IPv6 address (e.g. 3ffe:506::1/48)\n")
+
 DEFUNSH(VTYSH_NS, vtysh_exit_logicalrouter,
 	vtysh_exit_logicalrouter_cmd, "exit",
 	"Exit current mode and down to previous mode\n")
@@ -3788,6 +3796,7 @@ void vtysh_init_vty(void)
 	install_element(CONFIG_NODE, &vtysh_vrf_cmd);
 	install_element(VRF_NODE, &vtysh_vrf_netns_cmd);
 	install_element(VRF_NODE, &vtysh_no_vrf_netns_cmd);
+	install_element(VRF_NODE, &vtysh_vrf_option_route_nexthop_cmd);
 	install_element(VRF_NODE, &exit_vrf_config_cmd);
 
 	install_element(CONFIG_NODE, &vtysh_no_nexthop_group_cmd);
