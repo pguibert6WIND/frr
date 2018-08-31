@@ -87,6 +87,11 @@ struct route_entry {
 #define ROUTE_ENTRY_NEXTHOPS_CHANGED 0x2
 #define ROUTE_ENTRY_CHANGED          0x4
 #define ROUTE_ENTRY_LABELS_CHANGED   0x8
+/* route entry created for vrf route leak across netns
+ * those routes should be hidden to other daemons,
+ * then should not be notified
+ */
+#define ROUTE_ENTRY_ONLY_ZEBRA       0xf
 
 	/* Nexthop information. */
 	uint8_t nexthop_num;
