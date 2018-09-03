@@ -2377,12 +2377,14 @@ stream_failure:
 
 static void zread_vrf_label(ZAPI_HANDLER_ARGS)
 {
-	struct interface *ifp;
+	struct interface *ifp = NULL;
+	union g_addr *gate = NULL;
 	mpls_label_t nlabel;
 	afi_t afi;
 	struct stream *s;
 	struct zebra_vrf *def_zvrf;
 	enum lsp_types_t ltype;
+	int nexthop_type = NEXTHOP_TYPE_IFINDEX;
 
 	s = msg;
 	STREAM_GETL(s, nlabel);
@@ -2396,12 +2398,29 @@ static void zread_vrf_label(ZAPI_HANDLER_ARGS)
 
 	STREAM_GETC(s, ltype);
 
-	if (zvrf->vrf->vrf_id != VRF_DEFAULT)
-		ifp = if_lookup_by_name(zvrf->vrf->name, zvrf->vrf->vrf_id);
-	else
+	if (zvrf->vrf->vrf_id != VRF_DEFAULT) {
+		if (vrf_is_backend_netns()) {
+			struct vrf *dest_vrf = vrf_lookup_by_id(zvrf->vrf->vrf_id);
+
+			if (dest_vrf) {
+				if (afi == AFI_IP &&
+				    dest_vrf->ipv4_gateway.s_addr != INADDR_ANY) {
+					gate = (union g_addr *)&dest_vrf->ipv4_gateway;
+					nexthop_type = NEXTHOP_TYPE_IPV4;
+				} else if (afi == AFI_IP6 &&
+					 memcmp(&dest_vrf->ipv6_gateway, &in6addr_any,
+						sizeof(struct in6_addr))) {
+					gate = (union g_addr *)&dest_vrf->ipv6_gateway;
+					nexthop_type = NEXTHOP_TYPE_IPV6;
+				}
+			}
+		} else {
+			ifp = if_lookup_by_name(zvrf->vrf->name, zvrf->vrf->vrf_id);
+		}
+	} else
 		ifp = if_lookup_by_name("lo", VRF_DEFAULT);
 
-	if (!ifp) {
+	if (!ifp && !gate) {
 		zlog_debug("Unable to find specified Interface for %s",
 			   zvrf->vrf->name);
 		return;
@@ -2429,14 +2448,14 @@ static void zread_vrf_label(ZAPI_HANDLER_ARGS)
 
 		if (really_remove)
 			mpls_lsp_uninstall(def_zvrf, ltype, zvrf->label[afi],
-					   NEXTHOP_TYPE_IFINDEX, NULL,
-					   ifp->ifindex);
+					   nexthop_type, gate,
+					   ifp != NULL ? ifp->ifindex : 0);
 	}
 
 	if (nlabel != MPLS_LABEL_NONE)
 		mpls_lsp_install(def_zvrf, ltype, nlabel,
-				 MPLS_LABEL_IMPLICIT_NULL, NEXTHOP_TYPE_IFINDEX,
-				 NULL, ifp->ifindex);
+				 MPLS_LABEL_IMPLICIT_NULL, nexthop_type,
+				 gate, ifp != NULL ? ifp->ifindex : 0);
 
 	zvrf->label[afi] = nlabel;
 stream_failure:
