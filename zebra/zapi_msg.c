@@ -1435,6 +1435,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 	int i = 0;
 	struct route_entry *re;
 	vrf_id_t target_vrf_id;
+	struct zapi_nexthop *api_nh;
 
 	if (orig_re->vrf_id == orig_api_nh->vrf_id ||
 	    !vrf_is_backend_netns())
@@ -1483,6 +1484,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 			api.vrf_id = target_vrf_id;
 			re->vrf_id = target_vrf_id;
 		}
+		api_nh = &api.nexthops[0];
 		/* additional route is added to reach nexthop through vrf nexthop
 		 * ip route <api_nh->gate.ipvx.s_addr>/32 gw
 		 * vrf->ipvx_gateway.s_addr
@@ -1543,6 +1545,27 @@ static bool zread_route_add_vrf(struct zserv *client,
 		else /* ifindex */
 			route_entry_nexthop_ifindex_add(
 				re, orig_api_nh->ifindex, target_vrf_id);
+		/* MPLS labels for BGP-LU or Segment Routing */
+		if (i && CHECK_FLAG(api.message, ZAPI_MESSAGE_LABEL)
+		    && api_nh->type != NEXTHOP_TYPE_IFINDEX
+		    && api_nh->type != NEXTHOP_TYPE_BLACKHOLE) {
+			enum lsp_types_t label_type;
+
+			label_type =
+				lsp_type_from_re_type(client->proto);
+
+			if (IS_ZEBRA_DEBUG_RECV) {
+				zlog_debug(
+					   "%s: adding %d labels of type %d (1st=%u)",
+					   __func__, api_nh->label_num,
+					   label_type, api_nh->labels[0]);
+			}
+
+			nexthop_add_labels(nexthop_local, label_type,
+					   api_nh->label_num,
+					   &api_nh->labels[0]);
+		}
+
 		zread_route_add_multipath(client, re, &api);
 		if (!i && nexthop)
 			*nexthop = nexthop_local;
@@ -1560,6 +1583,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 	int i;
 	vrf_id_t vrf_id = 0;
 	struct ipaddr vtep_ip;
+	bool vrf_netns_leak_applied = false;
 
 	s = msg;
 	if (zapi_route_decode(s, &api) < 0) {
@@ -1625,8 +1649,10 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added to reach nexthop through vrf nexthop
 				 * - 1 additional route is added in separate netns
 				 */
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
+					vrf_netns_leak_applied = true;
 					api_nh->vrf_id = vrf_id;
+				}
 				if (IS_ZEBRA_DEBUG_RECV) {
 					char nhbuf[INET6_ADDRSTRLEN] = {0};
 
@@ -1681,8 +1707,10 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				}
 				break;
 			case NEXTHOP_TYPE_IPV6:
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
+					vrf_netns_leak_applied = true;
 					api_nh->vrf_id = vrf_id;
+				}
 				nexthop = route_entry_nexthop_ipv6_add(
 					       re, &api_nh->gate.ipv6, api_nh->vrf_id);
 				break;
@@ -1732,7 +1760,8 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 			/* MPLS labels for BGP-LU or Segment Routing */
 			if (CHECK_FLAG(api.message, ZAPI_MESSAGE_LABEL)
 			    && api_nh->type != NEXTHOP_TYPE_IFINDEX
-			    && api_nh->type != NEXTHOP_TYPE_BLACKHOLE) {
+			    && api_nh->type != NEXTHOP_TYPE_BLACKHOLE
+			    && !vrf_netns_leak_applied) {
 				enum lsp_types_t label_type;
 
 				label_type =
