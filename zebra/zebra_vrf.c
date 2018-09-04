@@ -479,40 +479,36 @@ static int vrf_config_write(struct vty *vty)
 {
 	struct vrf *vrf;
 	struct zebra_vrf *zvrf;
+	char buf[INET_ADDRSTRLEN];
 
 	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
 		zvrf = vrf->info;
 
 		if (!zvrf)
 			continue;
-
-		if (zvrf_id(zvrf) == VRF_DEFAULT) {
-			if (zvrf->l3vni)
-				vty_out(vty, "vni %u\n", zvrf->l3vni);
-			vty_out(vty, "!\n");
-		} else {
-			char buf[INET_ADDRSTRLEN];
-
-			vty_frame(vty, "vrf %s\n", zvrf_name(zvrf));
-			if (zvrf->l3vni)
-				vty_out(vty, " vni %u%s\n", zvrf->l3vni,
-					is_l3vni_for_prefix_routes_only(
+		if ((zvrf_id(zvrf) == VRF_DEFAULT) &&
+		    (!zvrf->l3vni &&
+		     (vrf->ipv4_gateway.s_addr == INADDR_ANY) &&
+		     (!memcmp(&vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))))
+			continue;
+		vty_frame(vty, "vrf %s\n", zvrf_name(zvrf));
+		if (zvrf->l3vni)
+			vty_out(vty, " vni %u%s\n", zvrf->l3vni,
+				is_l3vni_for_prefix_routes_only(
 						zvrf->l3vni)
-						? " prefix-routes-only"
-						: "");
-			zebra_ns_config_write(vty, (struct ns *)vrf->ns_ctxt);
-			if (vrf->ipv4_gateway.s_addr != INADDR_ANY)
-				vty_out(vty, " netns route %s\n", inet_ntop(AF_INET,
-									  &vrf->ipv4_gateway,
-									  buf, sizeof(buf)));
-			if (memcmp(&vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
-				vty_out(vty, " netns route %s\n", inet_ntop(AF_INET6,
-									  &vrf->ipv6_gateway,
-									  buf, sizeof(buf)));
-		}
-
+				? " prefix-routes-only"
+				: "");
 		if (zvrf_id(zvrf) != VRF_DEFAULT)
-			vty_endframe(vty, " exit-vrf\n!\n");
+			zebra_ns_config_write(vty, (struct ns *)vrf->ns_ctxt);
+		if (vrf->ipv4_gateway.s_addr != INADDR_ANY)
+			vty_out(vty, " vrf route %s\n", inet_ntop(AF_INET,
+								  &vrf->ipv4_gateway,
+								  buf, sizeof(buf)));
+		if (memcmp(&vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
+			vty_out(vty, " vrf route %s\n", inet_ntop(AF_INET6,
+								  &vrf->ipv6_gateway,
+								  buf, sizeof(buf)));
+		vty_endframe(vty, " exit-vrf\n!\n");
 	}
 	return 0;
 }
