@@ -1468,8 +1468,12 @@ static bool zread_route_add_vrf(struct zserv *client,
 			return false;
 	}
 	for (i = 0; i < 2; i++) {
+		/* if mpls detected, create a local static route so that nexthop
+		 * can be routed thanks to mpls information from vrf per default
+		 * like that, double encapsulation will be achieved
+		 */
 		if (i && CHECK_FLAG(orig_api->message, ZAPI_MESSAGE_LABEL))
-		    continue;
+			continue;
 		re = XCALLOC(MTYPE_RE, sizeof(struct route_entry));
 		memcpy(re, orig_re, sizeof(struct route_entry));
 
@@ -1492,16 +1496,25 @@ static bool zread_route_add_vrf(struct zserv *client,
 		 * vrf->ipvx_gateway.s_addr
 		 */
 		if (!i) {
+			struct route_entry *re_other_vrf = NULL;
+			/* update MPLS label with the one associated with
+			 * orig_api_nh-><gate>
+			 */
 			if (orig_api_nh->type == NEXTHOP_TYPE_IPV4) {
 				prefix4.family = AF_INET;
 				prefix4.prefixlen = 32;
 				prefix4.prefix.s_addr = orig_api_nh->gate.ipv4.s_addr;
+				if (CHECK_FLAG(api.message, ZAPI_MESSAGE_LABEL))
+					re_other_vrf = rib_lookup_ipv4(&prefix4,
+								       orig_api_nh->vrf_id);
 				memcpy(&api.prefix, &prefix4, sizeof(struct prefix_ipv4));
 				memcpy(&api.nexthops[0].gate, &dest_vrf->ipv4_gateway,
 				       sizeof(struct in6_addr));
 			} else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6) {
 				prefix6.family = AF_INET6;
 				prefix6.prefixlen = 128;
+
+				/* XXX need a rib_ipv6_lookup function for MPLS */
 				memcpy(&prefix6.prefix, &orig_api_nh->gate.ipv6,
 				       sizeof(struct in6_addr));
 				memcpy(&api.prefix, &prefix6, sizeof(struct prefix_ipv6));
@@ -1520,6 +1533,36 @@ static bool zread_route_add_vrf(struct zserv *client,
 					api.nexthops[0].type = NEXTHOP_TYPE_IPV6;
 					memcpy(&api.nexthops[0].gate, &dest_vrf->ipv6_gateway,
 					       sizeof(struct in6_addr));
+				}
+			}
+			if (re_other_vrf) {
+				struct nexthop *nexthop_other_vrf;
+				struct mpls_label_stack *nh_label;
+				int i;
+				int nb_nexthop = 0;
+
+				for (nexthop_other_vrf = re_other_vrf->ng.nexthop; nexthop_other_vrf;
+				     nexthop_other_vrf = nexthop_other_vrf->next) {
+					if (!CHECK_FLAG(nexthop_other_vrf->flags, NEXTHOP_FLAG_ACTIVE))
+						continue;
+					if (!nexthop_other_vrf->nh_label)
+						continue;
+					nb_nexthop ++;
+					if (nb_nexthop > 1) {
+						zlog_warn("warning: MPLS ECMP not yet supported in vrf netns mode");
+						break;
+					}
+					nh_label = nexthop_other_vrf->nh_label;
+					api_nh->type = nexthop_other_vrf->type;
+					api_nh->label_num = 0;
+					for (i = 0; i < nh_label->num_labels; i++) {
+						if (i > MPLS_MAX_LABELS) {
+							zlog_warn("warning: maximum number of labels supported");
+							break;
+						}
+						api_nh->labels[i] = nh_label->label[i];
+						api_nh->label_num ++;
+					}
 				}
 			}
 		}
@@ -1548,7 +1591,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 			route_entry_nexthop_ifindex_add(
 				re, orig_api_nh->ifindex, target_vrf_id);
 		/* MPLS labels for BGP-LU or Segment Routing */
-		if (i && CHECK_FLAG(api.message, ZAPI_MESSAGE_LABEL)
+		if (CHECK_FLAG(api.message, ZAPI_MESSAGE_LABEL)
 		    && api_nh->type != NEXTHOP_TYPE_IFINDEX
 		    && api_nh->type != NEXTHOP_TYPE_BLACKHOLE) {
 			enum lsp_types_t label_type;
@@ -1585,7 +1628,6 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 	int i;
 	vrf_id_t vrf_id = 0;
 	struct ipaddr vtep_ip;
-	bool vrf_netns_leak_applied = false;
 
 	s = msg;
 	if (zapi_route_decode(s, &api) < 0) {
@@ -1651,10 +1693,8 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added to reach nexthop through vrf nexthop
 				 * - 1 additional route is added in separate netns
 				 */
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
-					vrf_netns_leak_applied = true;
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
 					api_nh->vrf_id = vrf_id;
-				}
 				if (IS_ZEBRA_DEBUG_RECV) {
 					char nhbuf[INET6_ADDRSTRLEN] = {0};
 
@@ -1709,10 +1749,8 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				}
 				break;
 			case NEXTHOP_TYPE_IPV6:
-				if (zread_route_add_vrf(client, re, &api, api_nh, NULL)) {
-					vrf_netns_leak_applied = true;
+				if (zread_route_add_vrf(client, re, &api, api_nh, NULL))
 					api_nh->vrf_id = vrf_id;
-				}
 				nexthop = route_entry_nexthop_ipv6_add(
 					       re, &api_nh->gate.ipv6, api_nh->vrf_id);
 				break;
