@@ -1497,6 +1497,7 @@ static bool zread_route_add_vrf(struct zserv *client,
 		 */
 		if (!i) {
 			struct route_entry *re_other_vrf = NULL;
+			zebra_lsp_t *lsp = NULL;
 			/* update MPLS label with the one associated with
 			 * orig_api_nh-><gate>
 			 */
@@ -1537,6 +1538,8 @@ static bool zread_route_add_vrf(struct zserv *client,
 			}
 			if (re_other_vrf) {
 				struct nexthop *nexthop_other_vrf;
+				zebra_lsp_t *lsp = NULL;
+				struct zebra_vrf *zvrf = vrf_info_lookup(orig_api_nh->vrf_id);
 				struct mpls_label_stack *nh_label;
 				int i;
 				int nb_nexthop = 0;
@@ -1560,8 +1563,16 @@ static bool zread_route_add_vrf(struct zserv *client,
 							zlog_warn("warning: maximum number of labels supported");
 							break;
 						}
-						api_nh->labels[i] = nh_label->label[i];
-						api_nh->label_num ++;
+						if (orig_api->prefix.family == AF_INET) {
+							lsp = zebra_mpls_lookup_entry(&prefix4, zvrf, nh_label->label[i]);
+						} else if (orig_api->prefix.family == AF_INET6) {
+							lsp = zebra_mpls_lookup_entry(&prefix6, zvrf, nh_label->label[i]);
+							api_nh->labels[i] = nh_label->label[i];
+						}
+						if (lsp) {
+							api_nh->label_num = 1;
+							api_nh->labels[0] = lsp->ile.in_label;
+						}
 					}
 				}
 			}

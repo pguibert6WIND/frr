@@ -2725,6 +2725,38 @@ void zebra_mpls_print_lsp(struct vty *vty, struct zebra_vrf *zvrf,
 		lsp_print(lsp, (void *)vty);
 }
 
+zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf, 	mpls_label_t out_label)
+{
+	struct list *lsp_list;
+	zebra_lsp_t *lsp = NULL;
+	struct listnode *node = NULL;
+	zebra_nhlfe_t *nhlfe = NULL;
+	struct nexthop *nexthop = NULL;
+
+	if (!zvrf->lsp_table)
+		return NULL;
+	lsp_list = hash_get_sorted_list(zvrf->lsp_table, lsp_cmp);
+	for (ALL_LIST_ELEMENTS_RO(lsp_list, node, lsp)) {
+		for (nhlfe = lsp->nhlfe_list; nhlfe;
+		     nhlfe = nhlfe->next) {
+			nexthop = nhlfe->nexthop;
+			if (nexthop->nh_label->num_labels == 0)
+				continue;
+			if (nexthop->type == NEXTHOP_TYPE_IPV4 &&
+			    p->family == AF_INET &&
+			    !memcmp(&nexthop->gate.ipv4, &(p->u.prefix4), 4) &&
+			    nexthop->nh_label->label[0] == out_label)
+				return lsp;
+			else if (nexthop->type == NEXTHOP_TYPE_IPV6 &&
+				 p->family == AF_INET6 &&
+				 !memcmp(&nexthop->gate.ipv6, &(p->u.prefix6), 16) &&
+				 nexthop->nh_label->label[0] == out_label)
+				return lsp;
+		}
+	}
+	return NULL;
+}
+
 /*
  * Display MPLS label forwarding table (VTY command handler).
  */

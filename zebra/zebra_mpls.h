@@ -163,6 +163,8 @@ struct zebra_fec_t_ {
 
 /* Function declarations. */
 
+extern zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf, 	mpls_label_t out_label);
+
 /*
  * Add/update global label block.
  */
