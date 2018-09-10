@@ -308,11 +308,8 @@ int zebra_vrf_has_config(struct zebra_vrf *zvrf)
 	/* VRF nexthop set, for reaching VRF */
 	if (!zvrf->vrf)
 		return 0;
-	if (zvrf->vrf->ipv4_gateway.s_addr != INADDR_ANY)
+	if (zvrf->vrf->route_interface_root)
 		return 1;
-	if (memcmp(&zvrf->vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
-		return 1;
-
 	return 0;
 }
 
@@ -479,7 +476,6 @@ static int vrf_config_write(struct vty *vty)
 {
 	struct vrf *vrf;
 	struct zebra_vrf *zvrf;
-	char buf[INET_ADDRSTRLEN];
 
 	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
 		zvrf = vrf->info;
@@ -487,9 +483,8 @@ static int vrf_config_write(struct vty *vty)
 		if (!zvrf)
 			continue;
 		if ((zvrf_id(zvrf) == VRF_DEFAULT) &&
-		    (!zvrf->l3vni &&
-		     (vrf->ipv4_gateway.s_addr == INADDR_ANY) &&
-		     (!memcmp(&vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))))
+		    !zvrf->l3vni &&
+		    !vrf->route_interface_root)
 			continue;
 		vty_frame(vty, "vrf %s\n", zvrf_name(zvrf));
 		if (zvrf->l3vni)
@@ -500,14 +495,8 @@ static int vrf_config_write(struct vty *vty)
 				: "");
 		if (zvrf_id(zvrf) != VRF_DEFAULT)
 			zebra_ns_config_write(vty, (struct ns *)vrf->ns_ctxt);
-		if (vrf->ipv4_gateway.s_addr != INADDR_ANY)
-			vty_out(vty, " vrf route %s\n", inet_ntop(AF_INET,
-								  &vrf->ipv4_gateway,
-								  buf, sizeof(buf)));
-		if (memcmp(&vrf->ipv6_gateway, &in6addr_any, sizeof(struct in6_addr)))
-			vty_out(vty, " vrf route %s\n", inet_ntop(AF_INET6,
-								  &vrf->ipv6_gateway,
-								  buf, sizeof(buf)));
+		    if (vrf->route_interface_root)
+			    vty_out(vty, " vrf route %s\n", vrf->route_interface_root);
 		vty_endframe(vty, " exit-vrf\n!\n");
 	}
 	return 0;
