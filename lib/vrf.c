@@ -43,6 +43,7 @@
 #define VRF_NETNS_HELP_STR "Netns commands\n"
 
 DEFINE_MTYPE_STATIC(LIB, VRF, "VRF")
+DEFINE_MTYPE_STATIC(LIB, VRF_NEXT_INTERFACE, "VRF Next Interface")
 DEFINE_MTYPE_STATIC(LIB, VRF_BITMAP, "VRF bit-map")
 
 DEFINE_QOBJ_TYPE(vrf)
@@ -834,18 +835,15 @@ DEFUN_NOSH (no_vrf_netns,
 
 DEFUN_NOSH (vrf_option_route_nexthop,
 	vrf_option_route_nexthop_cmd,
-	"[no] vrf route <A.B.C.D|X:X::X:X>",
+	"[no] vrf route INTERFACE",
 	NO_STR
 	"VRF options\n"
-	"Define nexthop gateway to reach remote VRF\n"
-	"IP address in dot decimal A.B.C.D\n"
-	"IPv6 address (e.g. 3ffe:506::1/48)\n")
+	"Define route to reach remote VRF\n"
+	"Interface Name\n")
 {
-	int idx_address = 0;
-	const char *address;
+	int idx_interface = 0;
+	const char *interface;
 	bool no_case = false;
-	struct in_addr ipv4_gw;
-	struct in6_addr ipv6_gw;
 	int ret = CMD_SUCCESS;
 
 	VTY_DECLVAR_CONTEXT(vrf, vrf);
@@ -853,39 +851,18 @@ DEFUN_NOSH (vrf_option_route_nexthop,
 	if (strmatch(argv[0]->text, "no"))
 		no_case = true;
 
-	if (argv_find(argv, argc, "A.B.C.D", &idx_address)
-	    || argv_find(argv, argc, "X:X::X:X", &idx_address))
-		address = argv[idx_address]->arg;
+	if (argv_find(argv, argc, "INTERFACE", &idx_interface))
+		interface = argv[idx_interface]->arg;
 	else {
 		vty_out(vty, "arg not found");
 		return ret;
 	}
-	ret = inet_pton(AF_INET6, address, &ipv6_gw);
-	if (ret == 1) {
-		/* IPv6 Address */
-		if (!no_case) {
-			memcpy(&vrf->ipv6_gateway, &ipv6_gw,
-			       sizeof(struct in6_addr));
-			SET_FLAG(vrf->status, VRF_CONFIGURED);
-		} else
-			memset(&vrf->ipv6_gateway, 0, sizeof(struct in6_addr));
-		return ret;
-	}
-	ret = inet_pton(AF_INET, address, &ipv4_gw);
-	if (ret == 1) {
-		/* IPv4 Address */
-		if (!no_case) {
-			memcpy(&vrf->ipv4_gateway, &ipv4_gw,
-			       sizeof(struct in_addr));
-			SET_FLAG(vrf->status, VRF_CONFIGURED);
-		} else
-			memset(&vrf->ipv4_gateway, 0, sizeof(struct in_addr));
-		return ret;
-	}
-	/* XXX this function does not take into consideration
-	 * - previous routes relying on the old address
-	 * - faulty routes attempted to be created when the ips were not available
-	 */
+	if (vrf->route_interface_root)
+		XFREE(MTYPE_VRF_NEXT_INTERFACE, vrf->route_interface_root);
+	if (no_case)
+		vrf->route_interface_root = NULL;
+	else
+		vrf->route_interface_root = XSTRDUP(MTYPE_VRF_NEXT_INTERFACE, interface);
 	return ret;
 }
 
