@@ -2060,7 +2060,7 @@ static void zread_mpls_labels(ZAPI_HANDLER_ARGS)
 		return;
 
 	if (hdr->command == ZEBRA_MPLS_LABELS_ADD) {
-		mpls_lsp_install(zvrf, type, in_label, out_label, gtype, &gate,
+		mpls_lsp_install(zvrf, type, in_label, 1, &out_label, gtype, &gate,
 				 ifindex);
 		mpls_ftn_update(1, zvrf, type, &prefix, gtype, &gate, ifindex,
 				distance, out_label);
@@ -2531,10 +2531,13 @@ static void zread_vrf_label(ZAPI_HANDLER_ARGS)
 					   ifp != NULL ? ifp->ifindex : 0);
 	}
 
-	if (nlabel != MPLS_LABEL_NONE)
+	if (nlabel != MPLS_LABEL_NONE) {
+		mpls_label_t label_arg = MPLS_LABEL_IMPLICIT_NULL;
+
 		mpls_lsp_install(def_zvrf, ltype, nlabel,
-				 MPLS_LABEL_IMPLICIT_NULL, nexthop_type,
+				 1, &label_arg, nexthop_type,
 				 gate, ifp != NULL ? ifp->ifindex : 0);
+	}
 
 	zvrf->label[afi] = nlabel;
 stream_failure:
