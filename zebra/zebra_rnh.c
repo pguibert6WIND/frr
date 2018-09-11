@@ -66,7 +66,8 @@ static void copy_state(struct rnh *rnh, struct route_entry *re,
 static int compare_state(struct route_entry *r1, struct route_entry *r2);
 static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 		       vrf_id_t vrf_id);
-static void print_rnh(struct route_node *rn, struct vty *vty);
+static void print_rnh(struct zebra_ns *zns, struct route_node *rn,
+		      struct vty *vty);
 static int zebra_client_cleanup_rnh(struct zserv *client);
 
 int zebra_rnh_ip_default_route = 0;
@@ -764,16 +765,21 @@ void zebra_print_rnh_table(vrf_id_t vrfid, int af, struct vty *vty,
 {
 	struct route_table *table;
 	struct route_node *rn;
+	struct zebra_vrf *zvrf;
 
 	table = get_rnh_table(vrfid, af, type);
 	if (!table) {
 		zlog_debug("print_rnhs: rnh table not found\n");
 		return;
 	}
-
+	zvrf = zebra_vrf_lookup_by_id(vrfid);
+	if (!zvrf || !zvrf->zns) {
+		zlog_debug("print_rnhs: zvrf or zns not found\n");
+		return;
+	}
 	for (rn = route_top(table); rn; rn = route_next(rn))
 		if (rn->info)
-			print_rnh(rn, vty);
+			print_rnh(zvrf->zns, rn, vty);
 }
 
 /**
@@ -944,10 +950,10 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 	return zserv_send_message(client, s);
 }
 
-static void print_nh(struct nexthop *nexthop, struct vty *vty)
+static void print_nh(struct zebra_ns *zns, struct nexthop *nexthop,
+		     struct vty *vty)
 {
 	char buf[BUFSIZ];
-	struct zebra_ns *zns = zebra_ns_lookup(NS_DEFAULT);
 
 	switch (nexthop->type) {
 	case NEXTHOP_TYPE_IPV4:
@@ -978,7 +984,8 @@ static void print_nh(struct nexthop *nexthop, struct vty *vty)
 	vty_out(vty, "\n");
 }
 
-static void print_rnh(struct route_node *rn, struct vty *vty)
+static void print_rnh(struct zebra_ns *zns, struct route_node *rn,
+		      struct vty *vty)
 {
 	struct rnh *rnh;
 	struct nexthop *nexthop;
@@ -996,7 +1003,7 @@ static void print_rnh(struct route_node *rn, struct vty *vty)
 			zebra_route_string(rnh->state->type));
 		for (nexthop = rnh->state->ng.nexthop; nexthop;
 		     nexthop = nexthop->next)
-			print_nh(nexthop, vty);
+			print_nh(zns, nexthop, vty);
 	} else
 		vty_out(vty, " unresolved%s\n",
 			CHECK_FLAG(rnh->flags, ZEBRA_NHT_CONNECTED)
