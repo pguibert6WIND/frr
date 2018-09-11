@@ -2738,7 +2738,8 @@ void zebra_mpls_print_lsp(struct vty *vty, struct zebra_vrf *zvrf,
 		lsp_print(lsp, (void *)vty);
 }
 
-zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf, 	mpls_label_t out_label)
+zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf,
+				     mpls_label_t out_label)
 {
 	struct list *lsp_list;
 	zebra_lsp_t *lsp = NULL;
@@ -2755,12 +2756,14 @@ zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf, 	
 			nexthop = nhlfe->nexthop;
 			if (nexthop->nh_label->num_labels == 0)
 				continue;
-			if (nexthop->type == NEXTHOP_TYPE_IPV4 &&
+			if ((nexthop->type == NEXTHOP_TYPE_IPV4 ||
+			     nexthop->type == NEXTHOP_TYPE_IPV4_IFINDEX) &&
 			    p->family == AF_INET &&
 			    !memcmp(&nexthop->gate.ipv4, &(p->u.prefix4), 4) &&
 			    nexthop->nh_label->label[0] == out_label)
 				return lsp;
-			else if (nexthop->type == NEXTHOP_TYPE_IPV6 &&
+			else if ((nexthop->type == NEXTHOP_TYPE_IPV6 ||
+				  nexthop->type == NEXTHOP_TYPE_IPV6_IFINDEX ) &&
 				 p->family == AF_INET6 &&
 				 !memcmp(&nexthop->gate.ipv6, &(p->u.prefix6), 16) &&
 				 nexthop->nh_label->label[0] == out_label)

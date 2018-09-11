@@ -1433,12 +1433,10 @@ static bool zread_route_add_vrf(struct zserv *client,
 	struct vrf *dest_vrf, *orig_vrf;
 	struct prefix_ipv4 prefix4;
 	struct prefix_ipv6 prefix6;
-	struct nexthop *nexthop_local = NULL;
 	ifindex_t ifindex_local = 0;
 	struct zapi_route api;
 	struct route_entry *re;
 	vrf_id_t target_vrf_id;
-	struct zapi_nexthop *api_nh;
 	char name[INTERFACE_NAMSIZ];
 	struct interface *ifp;
 
@@ -1476,6 +1474,24 @@ static bool zread_route_add_vrf(struct zserv *client,
 	if (ifindex)
 		*ifindex = ifindex_local;
 
+	/* copy nexthop entry in prefix4 or prefix6 */
+	if (orig_api_nh->type == NEXTHOP_TYPE_IPV4 ||
+	    orig_api_nh->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
+		prefix4.family = AF_INET;
+		prefix4.prefixlen = 32;
+		prefix4.prefix.s_addr = orig_api_nh->gate.ipv4.s_addr;
+	} else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6 ||
+	    orig_api_nh->type == NEXTHOP_TYPE_IPV6_IFINDEX) {
+		prefix6.family = AF_INET6;
+		prefix6.prefixlen = 128;
+		memcpy(&prefix6.prefix, &orig_api_nh->gate.ipv6,
+		       sizeof(struct in6_addr));
+	}
+
+#if 0
+	struct zapi_nexthop *api_nh;
+
+	api_nh = &api.nexthops[0];
 	/* step 1 : create a local route to cross vrf interface
 	 * if mpls detected, current label is appended on that route
 	 */
@@ -1495,18 +1511,10 @@ static bool zread_route_add_vrf(struct zserv *client,
 	 */
 	api_nh->type = NEXTHOP_TYPE_IFINDEX;
 	api_nh->ifindex = ifindex_local;
-	if (orig_api_nh->type == NEXTHOP_TYPE_IPV4) {
-		prefix4.family = AF_INET;
-		prefix4.prefixlen = 32;
-		prefix4.prefix.s_addr = orig_api_nh->gate.ipv4.s_addr;
+	if (orig_api_nh->type == NEXTHOP_TYPE_IPV4)
 		memcpy(&api.prefix, &prefix4, sizeof(struct prefix_ipv4));
-	} else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6) {
-		prefix6.family = AF_INET6;
-		prefix6.prefixlen = 128;
-		memcpy(&prefix6.prefix, &orig_api_nh->gate.ipv6,
-		       sizeof(struct in6_addr));
+	else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6)
 		memcpy(&api.prefix, &prefix6, sizeof(struct prefix_ipv6));
-	}
 	nexthop_local = route_entry_nexthop_ifindex_add(
 				re, ifindex_local, target_vrf_id);
 	/* if original message contains label, then this route must be
@@ -1534,14 +1542,12 @@ static bool zread_route_add_vrf(struct zserv *client,
 				   &api_nh->labels[0]);
 	}
 	zread_route_add_multipath(client, re, &api);
-
+#endif
 	/* step 2 : create a route in remote vrf
 	 * if mpls detected, create a LSP entry: double encapsulation
 	 * has to be done
 	 */
 	target_vrf_id = orig_api_nh->vrf_id;
-	api.vrf_id = target_vrf_id;
-	re->vrf_id = target_vrf_id;
 
 	/* - case static route : ip route prefix A NH1
 	 * - case mpls entry : create LSP entry.
@@ -1588,13 +1594,15 @@ static bool zread_route_add_vrf(struct zserv *client,
 				}
 				nh_label = nexthop_other_vrf->nh_label;
 				memset(&nh_prefix, 0, sizeof(nh_prefix));
-				if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4) {
+				if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4 ||
+				    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
 					nh_prefix.family = AF_INET;
 					nh_prefix.prefixlen = IPV4_MAX_BITLEN;
 					memcpy(&nh_prefix.u.prefix4,
 					       &(nexthop_other_vrf->gate.ipv4),
 					       nh_prefix.prefixlen/8);
-				} else if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6) {
+				} else if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6 ||
+				    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6_IFINDEX) {
 					nh_prefix.family = AF_INET6;
 					nh_prefix.prefixlen = IPV6_MAX_BITLEN;
 					memcpy(&nh_prefix.u.prefix6,
@@ -1636,11 +1644,13 @@ static bool zread_route_add_vrf(struct zserv *client,
 			type = ZEBRA_LSP_STATIC;
 		else
 			return false;
-		if (orig_api_nh->type == NEXTHOP_TYPE_IPV4) {
-			addr = (union g_addr *)&prefix6.prefix;
+		if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4 ||
+		    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
+			addr = (union g_addr *)&nh_prefix.u.prefix6;
 			nh_type = NEXTHOP_TYPE_IPV4;
-		} else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6) {
-			addr = (union g_addr *)&prefix4.prefix;
+		} else if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6 ||
+		    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6_IFINDEX) {
+			addr = (union g_addr *)&nh_prefix.u.prefix4;
 			nh_type = NEXTHOP_TYPE_IPV6;
 		} else if  (orig_api_nh->type == NEXTHOP_TYPE_IFINDEX) {
 			addr = NULL;
@@ -1663,8 +1673,11 @@ static bool zread_route_add_vrf(struct zserv *client,
 	zlog_err("XXXX step2. static route entry");
 	memcpy(&api, orig_api, sizeof(struct zapi_route));
 	memcpy(&api.nexthops[0], orig_api_nh, sizeof(struct zapi_nexthop));
+
+	api.vrf_id = target_vrf_id;
+	re->vrf_id = target_vrf_id;
+
 	api.nexthop_num = 1;
-	api_nh = &api.nexthops[0];
 
 	if (IS_ZEBRA_DEBUG_RECV) {
 		char nhbuf[INET6_ADDRSTRLEN] = {0};
@@ -1771,7 +1784,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added in separate netns
 				 */
 				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
-					api_nh->vrf_id = vrf_id;
+					//					api_nh->vrf_id = vrf_id;
 					api_nh->type = NEXTHOP_TYPE_IPV4_IFINDEX;
 					nexthop = route_entry_nexthop_ipv4_ifindex_add(
 						       re, &api_nh->gate.ipv4, NULL,
@@ -1833,7 +1846,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				break;
 			case NEXTHOP_TYPE_IPV6:
 				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
-					api_nh->vrf_id = vrf_id;
+					//					api_nh->vrf_id = vrf_id;
 					api_nh->type = NEXTHOP_TYPE_IPV6_IFINDEX;
 					nexthop = route_entry_nexthop_ipv6_ifindex_add(
 						       re, &api_nh->gate.ipv6, ifindex,
