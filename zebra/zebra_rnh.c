@@ -860,6 +860,12 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 	zclient_create_header(s, cmd, vrf_id);
 
 	stream_putw(s, rn->p.family);
+	{
+		char buf[PREFIX_STRLEN];
+
+		zlog_debug("XXX %s prefix: %s, vrf_id", __func__,
+			   prefix2str(&(rn->p), buf, sizeof(buf)), vrf_id);
+	}
 	switch (rn->p.family) {
 	case AF_INET:
 		stream_putc(s, rn->p.prefixlen);
@@ -893,8 +899,12 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 				case NEXTHOP_TYPE_IPV4_IFINDEX:
 					stream_put_in_addr(s, &nh->gate.ipv4);
 					stream_putl(s, nh->ifindex);
+					zlog_debug("XXX %s nh ifindex %u NH %x", __func__,
+						   nh->ifindex, nh->gate.ipv4.s_addr);
 					break;
 				case NEXTHOP_TYPE_IFINDEX:
+					zlog_debug("XXX %s nh ifindex %u ", __func__,
+						   nh->ifindex);
 					stream_putl(s, nh->ifindex);
 					break;
 				case NEXTHOP_TYPE_IPV6:

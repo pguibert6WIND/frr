@@ -1717,7 +1717,7 @@ static void rib_process(struct route_node *rn)
 					SET_FLAG(re->status,
 						 ROUTE_ENTRY_REMOVED);
 			}
-
+			zlog_err("%s : XXX nexthop active update prevents me", __func__);
 			continue;
 		}
 

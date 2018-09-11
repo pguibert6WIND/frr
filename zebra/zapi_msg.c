@@ -1465,8 +1465,10 @@ static bool zread_route_add_vrf(struct zserv *client,
 	sprintf(name, "%s%u", orig_vrf->route_interface_root, dest_vrf->vrf_id);
 	/* retrieve interface index of local interface used for cross vrf */
 	ifp = if_lookup_by_name(name, orig_re->vrf_id);
-	if (!ifp)
+	if (!ifp) {
+		zlog_err("XXXX iflookupbyname %s vrf %u found none", name, orig_re->vrf_id);
 		return false;
+	}
 	ifindex_local = ifp->ifindex;
 	/* calling function will use the ifindex to create local route
 	 * ip route <Prefix> NH(local VRF)
@@ -1523,6 +1525,9 @@ static bool zread_route_add_vrf(struct zserv *client,
 				   __func__, api_nh->label_num,
 				   label_type, api_nh->labels[0]);
 		}
+		zlog_err("XXXX step1. add route with MPLS label nb %u value first %u",
+			 api_nh->label_num,
+			 api_nh->labels[0]);
 
 		nexthop_add_labels(nexthop_local, label_type,
 				   api_nh->label_num,
@@ -1561,10 +1566,16 @@ static bool zread_route_add_vrf(struct zserv *client,
 			re_other_vrf = rib_lookup_ipv4(&prefix4, target_vrf_id);
 		else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6)
 			re_other_vrf = rib_lookup_ipv6(&prefix6, target_vrf_id);
+		zlog_err("XXXX step2. mpls look for nexthop in target vrf %u returns %x",
+			 target_vrf_id, re_other_vrf);
 		if (re_other_vrf) {
 			for (nexthop_other_vrf = re_other_vrf->ng.nexthop;
 			     nexthop_other_vrf;
 			     nexthop_other_vrf = nexthop_other_vrf->next) {
+				zlog_err("XXX from %x nexthop %x flag %x, label %x",
+					 re_other_vrf, nexthop_other_vrf,
+					 nexthop_other_vrf->flags,
+					 nexthop_other_vrf->nh_label);
 				if (!CHECK_FLAG(nexthop_other_vrf->flags,
 						NEXTHOP_FLAG_ACTIVE))
 					continue;
@@ -1593,6 +1604,10 @@ static bool zread_route_add_vrf(struct zserv *client,
 					/* XXX if nexthop is interface, can not handle it for now */
 					continue;
 				}
+				char buf[PREFIX_STRLEN];
+
+				zlog_debug("XXXX prefix: %s",
+					   prefix2str(&nh_prefix, buf, sizeof(buf)));
 				for (j = 0; j < nh_label->num_labels; j++) {
 					lsp = zebra_mpls_lookup_entry(&nh_prefix,
 								      zvrf,
@@ -1601,6 +1616,8 @@ static bool zread_route_add_vrf(struct zserv *client,
 						zlog_err("XXXX i %d obtains label in %u", j, lsp->ile.in_label);
 						break;
 					}
+					zlog_err("XXXX i %d for out label %u not found",
+						 j, nh_label->label[j]);
 				}
 			}
 		}
@@ -1636,12 +1653,14 @@ static bool zread_route_add_vrf(struct zserv *client,
 		if (mpls_lsp_install(zvrf, type, lsp->ile.in_label, 2,
 				     out_label, nh_type, addr, ifindex_lsp))
 			return false;
+		zlog_err("XXXX step2. mpls lsp entry created");
 		return true;
 	}
 	/* - case static route : ip route prefix A NH1 */
 	re = XCALLOC(MTYPE_RE, sizeof(struct route_entry));
 	memcpy(re, orig_re, sizeof(struct route_entry));
 
+	zlog_err("XXXX step2. static route entry");
 	memcpy(&api, orig_api, sizeof(struct zapi_route));
 	memcpy(&api.nexthops[0], orig_api_nh, sizeof(struct zapi_nexthop));
 	api.nexthop_num = 1;
