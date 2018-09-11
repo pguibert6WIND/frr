@@ -273,7 +273,8 @@ int mpls_ftn_update(int add, struct zebra_vrf *zvrf, enum lsp_types_t type,
  * the out-label for an existing NHLFE (update case).
  */
 int mpls_lsp_install(struct zebra_vrf *zvrf, enum lsp_types_t type,
-		     mpls_label_t in_label, mpls_label_t out_label,
+		     mpls_label_t in_label, uint8_t num_labels,
+		     mpls_label_t *out_label,
 		     enum nexthop_types_t gtype, union g_addr *gate,
 		     ifindex_t ifindex);
 

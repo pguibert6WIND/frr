@@ -103,7 +103,8 @@ static zebra_nhlfe_t *nhlfe_find(zebra_lsp_t *lsp, enum lsp_types_t lsp_type,
 				 ifindex_t ifindex);
 static zebra_nhlfe_t *nhlfe_add(zebra_lsp_t *lsp, enum lsp_types_t lsp_type,
 				enum nexthop_types_t gtype, union g_addr *gate,
-				ifindex_t ifindex, mpls_label_t out_label);
+				ifindex_t ifindex, uint8_t num_labels,
+				mpls_label_t *out_label);
 static int nhlfe_del(zebra_nhlfe_t *snhlfe);
 static void nhlfe_out_label_update(zebra_nhlfe_t *nhlfe,
 				   struct mpls_label_stack *nh_label);
@@ -217,7 +218,7 @@ static int lsp_install(struct zebra_vrf *zvrf, mpls_label_t label,
 			/* Add LSP entry to this nexthop */
 			nhlfe = nhlfe_add(lsp, lsp_type, nexthop->type,
 					  &nexthop->gate, nexthop->ifindex,
-					  nexthop->nh_label->label[0]);
+					  1, (mpls_label_t *)&nexthop->nh_label->label[0]);
 			if (!nhlfe)
 				return -1;
 
@@ -1178,7 +1179,8 @@ static zebra_nhlfe_t *nhlfe_find(zebra_lsp_t *lsp, enum lsp_types_t lsp_type,
  */
 static zebra_nhlfe_t *nhlfe_add(zebra_lsp_t *lsp, enum lsp_types_t lsp_type,
 				enum nexthop_types_t gtype, union g_addr *gate,
-				ifindex_t ifindex, mpls_label_t out_label)
+				ifindex_t ifindex, uint8_t num_labels,
+				mpls_label_t *out_label)
 {
 	zebra_nhlfe_t *nhlfe;
 	struct nexthop *nexthop;
@@ -1197,7 +1199,7 @@ static zebra_nhlfe_t *nhlfe_add(zebra_lsp_t *lsp, enum lsp_types_t lsp_type,
 		XFREE(MTYPE_NHLFE, nhlfe);
 		return NULL;
 	}
-	nexthop_add_labels(nexthop, lsp_type, 1, &out_label);
+	nexthop_add_labels(nexthop, lsp_type, num_labels, out_label);
 
 	nexthop->vrf_id = VRF_DEFAULT;
 	nexthop->type = gtype;
@@ -2309,7 +2311,8 @@ int mpls_ftn_update(int add, struct zebra_vrf *zvrf, enum lsp_types_t type,
  * the out-label for an existing NHLFE (update case).
  */
 int mpls_lsp_install(struct zebra_vrf *zvrf, enum lsp_types_t type,
-		     mpls_label_t in_label, mpls_label_t out_label,
+		     mpls_label_t in_label, uint8_t num_labels,
+		     mpls_label_t *out_label,
 		     enum nexthop_types_t gtype, union g_addr *gate,
 		     ifindex_t ifindex)
 {
@@ -2317,7 +2320,7 @@ int mpls_lsp_install(struct zebra_vrf *zvrf, enum lsp_types_t type,
 	zebra_ile_t tmp_ile;
 	zebra_lsp_t *lsp;
 	zebra_nhlfe_t *nhlfe;
-	char buf[BUFSIZ];
+	char buf[BUFSIZ], buf2[BUFSIZ];
 
 	/* Lookup table. */
 	lsp_table = zvrf->lsp_table;
@@ -2338,33 +2341,43 @@ int mpls_lsp_install(struct zebra_vrf *zvrf, enum lsp_types_t type,
 
 		/* Clear deleted flag (in case it was set) */
 		UNSET_FLAG(nhlfe->flags, NHLFE_FLAG_DELETED);
-		if (nh->nh_label->label[0] == out_label)
+		if (nh->nh_label->num_labels == num_labels &&
+		    !memcmp(nh->nh_label->label, out_label, num_labels))
 			/* No change */
 			return 0;
 
 		if (IS_ZEBRA_DEBUG_MPLS) {
+			char buf3[BUFSIZ];
+
+			mpls_label2str(num_labels,
+				       out_label, buf2, BUFSIZ, 1);
+			mpls_label2str(nh->nh_label->num_labels,
+				       nh->nh_label->label, buf3, BUFSIZ, 1);
 			nhlfe2str(nhlfe, buf, BUFSIZ);
 			zlog_debug(
 				"LSP in-label %u type %d nexthop %s "
-				"out-label changed to %u (old %u)",
-				in_label, type, buf, out_label,
-				nh->nh_label->label[0]);
+				"out-label changed to %s (old %s)",
+				in_label, type, buf, buf2, buf3);
 		}
 
 		/* Update out label, trigger processing. */
-		nh->nh_label->label[0] = out_label;
+		nexthop_del_labels(nh);
+		nexthop_add_labels(nh, type, num_labels, out_label);
 	} else {
 		/* Add LSP entry to this nexthop */
-		nhlfe = nhlfe_add(lsp, type, gtype, gate, ifindex, out_label);
+		nhlfe = nhlfe_add(lsp, type, gtype, gate, ifindex,
+				  num_labels, out_label);
 		if (!nhlfe)
 			return -1;
 
 		if (IS_ZEBRA_DEBUG_MPLS) {
+			mpls_label2str(num_labels,
+				       out_label, buf2, BUFSIZ, 1);
 			nhlfe2str(nhlfe, buf, BUFSIZ);
 			zlog_debug(
 				"Add LSP in-label %u type %d nexthop %s "
-				"out-label %u",
-				in_label, type, buf, out_label);
+				"out-label %s",
+				in_label, type, buf, buf2);
 		}
 
 		lsp->addr_family = NHLFE_FAMILY(nhlfe);
@@ -2605,7 +2618,7 @@ int zebra_mpls_static_lsp_add(struct zebra_vrf *zvrf, mpls_label_t in_label,
 	}
 
 	/* (Re)Install LSP in the main table. */
-	if (mpls_lsp_install(zvrf, ZEBRA_LSP_STATIC, in_label, out_label, gtype,
+	if (mpls_lsp_install(zvrf, ZEBRA_LSP_STATIC, in_label, 1, &out_label, gtype,
 			     gate, ifindex))
 		return -1;
 
