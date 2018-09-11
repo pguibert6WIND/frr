@@ -323,6 +323,8 @@ extern struct route_entry *rib_match_ipv4_multicast(vrf_id_t vrf_id,
 
 extern struct route_entry *rib_lookup_ipv4(struct prefix_ipv4 *p,
 					   vrf_id_t vrf_id);
+extern struct route_entry *rib_lookup_ipv6(struct prefix_ipv6 *p,
+					   vrf_id_t vrf_id);
 
 extern void rib_update(vrf_id_t vrf_id, rib_update_event_t event);
 extern void rib_update_table(struct route_table *table,

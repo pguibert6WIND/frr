@@ -746,16 +746,19 @@ enum multicast_mode multicast_mode_ipv4_get(void)
 	return ipv4_multicast_mode;
 }
 
-struct route_entry *rib_lookup_ipv4(struct prefix_ipv4 *p, vrf_id_t vrf_id)
+static struct route_entry *rib_lookup_ip(struct prefix *p, vrf_id_t vrf_id)
 {
-	struct route_table *table;
+	struct route_table *table = NULL;
 	struct route_node *rn;
 	struct route_entry *match = NULL;
 	struct nexthop *nexthop;
 	rib_dest_t *dest;
 
 	/* Lookup table.  */
-	table = zebra_vrf_table(AFI_IP, SAFI_UNICAST, vrf_id);
+	if (p->family == AF_INET)
+		table = zebra_vrf_table(AFI_IP, SAFI_UNICAST, vrf_id);
+	else if (p->family == AF_INET6)
+		table = zebra_vrf_table(AFI_IP6, SAFI_UNICAST, vrf_id);
 	if (!table)
 		return 0;
 
@@ -784,6 +787,16 @@ struct route_entry *rib_lookup_ipv4(struct prefix_ipv4 *p, vrf_id_t vrf_id)
 			return match;
 
 	return NULL;
+}
+
+struct route_entry *rib_lookup_ipv4(struct prefix_ipv4 *p, vrf_id_t vrf_id)
+{
+	return rib_lookup_ip((struct prefix *)p, vrf_id);
+}
+
+struct route_entry *rib_lookup_ipv6(struct prefix_ipv6 *p, vrf_id_t vrf_id)
+{
+	return rib_lookup_ip((struct prefix *)p, vrf_id);
 }
 
 /*
