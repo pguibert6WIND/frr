@@ -2753,9 +2753,15 @@ zebra_lsp_t *zebra_mpls_lookup_entry(struct prefix *p, struct zebra_vrf *zvrf,
 	for (ALL_LIST_ELEMENTS_RO(lsp_list, node, lsp)) {
 		for (nhlfe = lsp->nhlfe_list; nhlfe;
 		     nhlfe = nhlfe->next) {
+			char buf[PREFIX_STRLEN];
+
 			nexthop = nhlfe->nexthop;
 			if (nexthop->nh_label->num_labels == 0)
 				continue;
+			zlog_err("%s XXX next type %u, prefix %s, label %u",
+				 __func__, nexthop->type,
+				 prefix2str(p, buf, sizeof(buf)),
+				 nexthop->nh_label->label[0]);
 			if ((nexthop->type == NEXTHOP_TYPE_IPV4 ||
 			     nexthop->type == NEXTHOP_TYPE_IPV4_IFINDEX) &&
 			    p->family == AF_INET &&

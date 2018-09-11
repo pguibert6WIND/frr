@@ -869,7 +869,7 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 	{
 		char buf[PREFIX_STRLEN];
 
-		zlog_debug("XXX %s prefix: %s, vrf_id", __func__,
+		zlog_debug("XXX %s prefix: %s, vrf_id %d", __func__,
 			   prefix2str(&(rn->p), buf, sizeof(buf)), vrf_id);
 	}
 	switch (rn->p.family) {
@@ -925,6 +925,8 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 				if (nh->nh_label) {
 					stream_putc(s,
 						    nh->nh_label->num_labels);
+					zlog_err("num label %u, label[0] is %u",
+						nh->nh_label->num_labels, nh->nh_label->label[0]);
 					if (nh->nh_label->num_labels)
 						stream_put(
 							s,

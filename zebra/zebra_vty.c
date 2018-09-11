@@ -675,7 +675,7 @@ static void vty_show_ip_route(struct vty *vty, struct route_node *rn,
 			struct vrf *vrf = vrf_lookup_by_id(nexthop->vrf_id);
 
 			if (vrf)
-				vty_out(vty, "(vrf %s)", vrf->name);
+				vty_out(vty, "(vrf %s, re %d)", vrf->name, re->vrf_id);
 			else
 				vty_out(vty, "(vrf UKNOWN)");
 		}

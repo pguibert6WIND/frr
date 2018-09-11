@@ -1578,9 +1578,10 @@ static bool zread_route_add_vrf(struct zserv *client,
 			for (nexthop_other_vrf = re_other_vrf->ng.nexthop;
 			     nexthop_other_vrf;
 			     nexthop_other_vrf = nexthop_other_vrf->next) {
-				zlog_err("XXX from %x nexthop %x flag %x, label %x",
+				zlog_err("XXX from %x nexthop %x flag %x, type %d label %x",
 					 re_other_vrf, nexthop_other_vrf,
 					 nexthop_other_vrf->flags,
+					 nexthop_other_vrf->type,
 					 nexthop_other_vrf->nh_label);
 				if (!CHECK_FLAG(nexthop_other_vrf->flags,
 						NEXTHOP_FLAG_ACTIVE))
@@ -1660,6 +1661,8 @@ static bool zread_route_add_vrf(struct zserv *client,
 			return false;
 		out_label[0] = lsp->ile.in_label;
 		out_label[1] = nh_label->label[j];
+		zlog_err("XXXX ADD Label [0]=%d [1]=%d",
+			 out_label[0], out_label[1]);
 		if (mpls_lsp_install(zvrf, type, lsp->ile.in_label, 2,
 				     out_label, nh_type, addr, ifindex_lsp))
 			return false;
