@@ -1645,20 +1645,16 @@ static bool zread_route_add_vrf(struct zserv *client,
 			type = ZEBRA_LSP_STATIC;
 		else
 			return false;
-		if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4 ||
-		    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
-			addr = (union g_addr *)&nh_prefix.u.prefix6;
-			nh_type = NEXTHOP_TYPE_IPV4;
-		} else if (nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6 ||
-		    nexthop_other_vrf->type == NEXTHOP_TYPE_IPV6_IFINDEX) {
+		if (nh_prefix.family == AF_INET) {
 			addr = (union g_addr *)&nh_prefix.u.prefix4;
+			nh_type = NEXTHOP_TYPE_IPV4;
+		} else if (nh_prefix.family == AF_INET6) {
+			addr = (union g_addr *)&nh_prefix.u.prefix6;
 			nh_type = NEXTHOP_TYPE_IPV6;
 		} else if  (orig_api_nh->type == NEXTHOP_TYPE_IFINDEX) {
-			addr = NULL;
-			ifindex_lsp = orig_api_nh->ifindex;
-			nh_type = NEXTHOP_TYPE_IFINDEX;
-		} else
+			zlog_err("warning errr");
 			return false;
+		}
 		out_label[0] = lsp->ile.in_label;
 		out_label[1] = nh_label->label[j];
 		zlog_err("XXXX ADD Label [0]=%d [1]=%d",
