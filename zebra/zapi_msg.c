@@ -1785,26 +1785,20 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added to reach nexthop through vrf nexthop
 				 * - 1 additional route is added in separate netns
 				 */
-				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
+				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex))
 					api_nh->vrf_id = vrf_id;
-					api_nh->type = NEXTHOP_TYPE_IPV4_IFINDEX;
-					nexthop = route_entry_nexthop_ipv4_ifindex_add(
-						       re, &api_nh->gate.ipv4, NULL,
-						       ifindex, api_nh->vrf_id);
-				} else {
-					if (IS_ZEBRA_DEBUG_RECV) {
-						char nhbuf[INET6_ADDRSTRLEN] = {0};
+				if (IS_ZEBRA_DEBUG_RECV) {
+					char nhbuf[INET6_ADDRSTRLEN] = {0};
 
-						inet_ntop(AF_INET, &api_nh->gate.ipv4,
-							  nhbuf, INET6_ADDRSTRLEN);
-						zlog_debug("%s: nh=%s, vrf_id=%d",
-							   __func__, nhbuf,
-							   api_nh->vrf_id);
-					}
-					nexthop = route_entry_nexthop_ipv4_add(
-							re, &api_nh->gate.ipv4, NULL,
-							api_nh->vrf_id);
+					inet_ntop(AF_INET, &api_nh->gate.ipv4,
+						  nhbuf, INET6_ADDRSTRLEN);
+					zlog_debug("%s: nh=%s, vrf_id=%d",
+						   __func__, nhbuf,
+						   api_nh->vrf_id);
 				}
+				nexthop = route_entry_nexthop_ipv4_add(
+					       re, &api_nh->gate.ipv4, NULL,
+					       api_nh->vrf_id);
 				break;
 			case NEXTHOP_TYPE_IPV4_IFINDEX:
 
@@ -1847,16 +1841,10 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				}
 				break;
 			case NEXTHOP_TYPE_IPV6:
-				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
+				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex))
 					api_nh->vrf_id = vrf_id;
-					api_nh->type = NEXTHOP_TYPE_IPV6_IFINDEX;
-					nexthop = route_entry_nexthop_ipv6_ifindex_add(
-						       re, &api_nh->gate.ipv6, ifindex,
-						       api_nh->vrf_id);
-				} else {
-					nexthop = route_entry_nexthop_ipv6_add(
+				nexthop = route_entry_nexthop_ipv6_add(
 					       re, &api_nh->gate.ipv6, api_nh->vrf_id);
-				}
 				break;
 			case NEXTHOP_TYPE_IPV6_IFINDEX:
 				memset(&vtep_ip, 0, sizeof(struct ipaddr));
