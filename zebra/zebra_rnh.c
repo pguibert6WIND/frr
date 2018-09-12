@@ -534,9 +534,13 @@ zebra_rnh_resolve_nexthop_entry(vrf_id_t vrfid, int family,
 		return NULL;
 
 	rn = route_node_match(route_table, &nrn->p);
-	if (!rn)
-		return NULL;
+	if (!rn) {
+		char buf[PREFIX_STRLEN];
 
+		zlog_debug("XXX %s prefix: %s not found", __func__,
+			   prefix2str(&nrn->p, buf, sizeof(buf)));
+		return NULL;
+	}
 	/* Unlock route node - we don't need to lock when walking the tree. */
 	route_unlock_node(rn);
 
@@ -544,6 +548,10 @@ zebra_rnh_resolve_nexthop_entry(vrf_id_t vrfid, int family,
 	 * most-specific match. Do similar logic as in zebra_rib.c
 	 */
 	while (rn) {
+		char buf[PREFIX_STRLEN];
+
+		zlog_debug("XXX %s prefix: %s found", __func__,
+			   prefix2str(&nrn->p, buf, sizeof(buf)));
 		/* Do not resolve over default route unless allowed &&
 		 * match route to be exact if so specified
 		 */
@@ -553,6 +561,8 @@ zebra_rnh_resolve_nexthop_entry(vrf_id_t vrfid, int family,
 
 		/* Identify appropriate route entry. */
 		RNODE_FOREACH_RE (rn, re) {
+			zlog_err("XXX  %s rn %x re %x, status re %x, flags re %x rnh flags %x",
+				 __func__, rn, re, re->status, re->flags, rnh->flags);
 			if (CHECK_FLAG(re->status, ROUTE_ENTRY_REMOVED))
 				continue;
 			if (!CHECK_FLAG(re->flags, ZEBRA_FLAG_SELECTED))
@@ -583,10 +593,12 @@ zebra_rnh_resolve_nexthop_entry(vrf_id_t vrfid, int family,
 			return re;
 		}
 
-		if (CHECK_FLAG(rnh->flags, ZEBRA_NHT_CONNECTED))
+		if (CHECK_FLAG(rnh->flags, ZEBRA_NHT_CONNECTED)) {
+			zlog_err("rnh NHT CONNECTED");
 			rn = rn->parent;
-		else
+		} else {
 			return NULL;
+		}
 	}
 
 	return NULL;
