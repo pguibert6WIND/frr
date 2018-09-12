@@ -1787,7 +1787,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				 * - 1 additional route is added in separate netns
 				 */
 				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
-					//					api_nh->vrf_id = vrf_id;
+					api_nh->vrf_id = vrf_id;
 					api_nh->type = NEXTHOP_TYPE_IPV4_IFINDEX;
 					nexthop = route_entry_nexthop_ipv4_ifindex_add(
 						       re, &api_nh->gate.ipv4, NULL,
@@ -1849,7 +1849,7 @@ static void zread_route_add(ZAPI_HANDLER_ARGS)
 				break;
 			case NEXTHOP_TYPE_IPV6:
 				if (zread_route_add_vrf(client, re, &api, api_nh, &ifindex)) {
-					//					api_nh->vrf_id = vrf_id;
+					api_nh->vrf_id = vrf_id;
 					api_nh->type = NEXTHOP_TYPE_IPV6_IFINDEX;
 					nexthop = route_entry_nexthop_ipv6_ifindex_add(
 						       re, &api_nh->gate.ipv6, ifindex,
