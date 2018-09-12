@@ -1488,7 +1488,6 @@ static bool zread_route_add_vrf(struct zserv *client,
 		       sizeof(struct in6_addr));
 	}
 
-#if 0
 	struct zapi_nexthop *api_nh;
 
 	api_nh = &api.nexthops[0];
@@ -1515,8 +1514,9 @@ static bool zread_route_add_vrf(struct zserv *client,
 		memcpy(&api.prefix, &prefix4, sizeof(struct prefix_ipv4));
 	else if (orig_api_nh->type == NEXTHOP_TYPE_IPV6)
 		memcpy(&api.prefix, &prefix6, sizeof(struct prefix_ipv6));
-	nexthop_local = route_entry_nexthop_ifindex_add(
-				re, ifindex_local, target_vrf_id);
+	route_entry_nexthop_ifindex_add(
+					re, ifindex_local, target_vrf_id);
+#if 0
 	/* if original message contains label, then this route must be
 	 * appended with an MPLS label
 	 */
@@ -1541,8 +1541,8 @@ static bool zread_route_add_vrf(struct zserv *client,
 				   api_nh->label_num,
 				   &api_nh->labels[0]);
 	}
-	zread_route_add_multipath(client, re, &api);
 #endif
+	zread_route_add_multipath(client, re, &api);
 	/* step 2 : create a route in remote vrf
 	 * if mpls detected, create a LSP entry: double encapsulation
 	 * has to be done
@@ -1655,11 +1655,14 @@ static bool zread_route_add_vrf(struct zserv *client,
 			zlog_err("warning errr");
 			return false;
 		}
+		/* incoming label : api_nh->labels[0]
+		 * output label : lsp->ile.in_label, api_nh->labels[0]
+		 */
 		out_label[0] = lsp->ile.in_label;
-		out_label[1] = nh_label->label[j];
+		out_label[1] = orig_api_nh->labels[0];
 		zlog_err("XXXX ADD Label [0]=%d [1]=%d",
 			 out_label[0], out_label[1]);
-		if (mpls_lsp_install(zvrf, type, lsp->ile.in_label, 2,
+		if (mpls_lsp_install(zvrf, type, orig_api_nh->labels[0], 2,
 				     out_label, nh_type, addr, ifindex_lsp))
 			return false;
 		zlog_err("XXXX step2. mpls lsp entry created");
