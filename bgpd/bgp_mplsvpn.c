@@ -1659,7 +1659,7 @@ void vrf_unimport_from_vrf(struct bgp *to_bgp, struct bgp *from_bgp,
 /* For testing purpose, static route of MPLS-VPN. */
 DEFUN (vpnv4_network,
        vpnv4_network_cmd,
-       "network A.B.C.D/M rd ASN:NN_OR_IP-ADDRESS:NN <tag|label> (0-1048575)",
+       "network A.B.C.D/M rd ASN:NN_OR_IP-ADDRESS:NN <tag|label> (0-1048575) nexthop A.B.C.D",
        "Specify a network to announce via BGP\n"
        "IPv4 prefix\n"
        "Specify Route Distinguisher\n"
@@ -1671,10 +1671,11 @@ DEFUN (vpnv4_network,
 	int idx_ipv4_prefixlen = 1;
 	int idx_ext_community = 3;
 	int idx_label = 5;
+	int idx_nhop = 7;
 	return bgp_static_set_safi(
 		AFI_IP, SAFI_MPLS_VPN, vty, argv[idx_ipv4_prefixlen]->arg,
 		argv[idx_ext_community]->arg, argv[idx_label]->arg, NULL, 0,
-		NULL, NULL, NULL, NULL);
+		NULL, argv[idx_nhop]->arg, NULL, NULL);
 }
 
 DEFUN (vpnv4_network_route_map,

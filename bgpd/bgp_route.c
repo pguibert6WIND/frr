@@ -5199,7 +5199,10 @@ int bgp_static_set_safi(afi_t afi, safi_t safi, struct vty *vty,
 		bgp_static->backdoor = 0;
 		bgp_static->valid = 0;
 		bgp_static->igpmetric = 0;
-		bgp_static->igpnexthop.s_addr = 0;
+		if (safi == SAFI_MPLS_VPN && afi == AFI_IP && gwip)
+			inet_pton(AF_INET, gwip, &bgp_static->igpnexthop);
+		else
+			bgp_static->igpnexthop.s_addr = 0;
 		bgp_static->label = label;
 		bgp_static->prd = prd;
 
