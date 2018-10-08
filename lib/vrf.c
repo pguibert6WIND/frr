@@ -1022,3 +1022,22 @@ int vrf_sockunion_socket(const union sockunion *su, vrf_id_t vrf_id,
 	}
 	return ret;
 }
+
+/* if vrf is not default one, and if vrf backend is vrf-lite
+ * this function returns the "vrf->name" interface pointer
+ * otherwise it returns the "lo" interface pointer, if it is default vrf
+ * otherwise it returns the "<interface veth>" pointer available
+ */
+extern struct interface *vrf_lookup_main_interface_by_id(vrf_id_t vrf_id)
+{
+	struct interface *ifp = NULL;
+
+	if (vrf_id != VRF_DEFAULT && !vrf_is_backend_netns())
+		ifp = if_lookup_by_name(vrf_id_to_name(vrf_id), vrf_id);
+	else if (vrf_id == VRF_DEFAULT)
+		ifp = if_lookup_by_name("lo", vrf_id);
+	else {
+		; /* TODO */
+	}
+	return ifp;
+}
