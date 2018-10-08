@@ -4823,7 +4823,8 @@ static void bgp_static_update_safi(struct bgp *bgp, struct prefix *p,
    route should be installed as valid.  */
 static int bgp_static_set(struct vty *vty, const char *negate,
 			  const char *ip_str, afi_t afi, safi_t safi,
-			  const char *rmap, int backdoor, uint32_t label_index)
+			  const char *rmap, int backdoor, uint32_t label_index,
+			  const char *nexthop)
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	int ret;
@@ -4924,9 +4925,11 @@ static int bgp_static_set(struct vty *vty, const char *negate,
 			bgp_static->backdoor = backdoor;
 			bgp_static->valid = 0;
 			bgp_static->igpmetric = 0;
-			bgp_static->igpnexthop.s_addr = 0;
 			bgp_static->label_index = label_index;
-
+			if (nexthop)
+				inet_pton(AF_INET, nexthop, &bgp_static->igpnexthop);
+			else
+				bgp_static->igpnexthop.s_addr = 0;
 			if (rmap) {
 				if (bgp_static->rmap.name)
 					XFREE(MTYPE_ROUTE_MAP_NAME,
@@ -5384,7 +5387,7 @@ DEFPY(bgp_network,
 	"[no] network \
 	<A.B.C.D/M$prefix|A.B.C.D$address [mask A.B.C.D$netmask]> \
 	[{route-map WORD$map_name|label-index (0-1048560)$label_index| \
-	backdoor$backdoor}]",
+	backdoor$backdoor| nexthop A.B.C.D$nexthop}]",
 	NO_STR
 	"Specify a network to announce via BGP\n"
 	"IPv4 prefix\n"
@@ -5395,7 +5398,9 @@ DEFPY(bgp_network,
 	"Name of the route map\n"
 	"Label index to associate with the prefix\n"
 	"Label index value\n"
-	"Specify a BGP backdoor route\n")
+	"Specify a BGP backdoor route\n"
+	"Nexthop Address\n"
+	"Specify a nexthop IP Address\n")
 {
 	char addr_prefix_str[BUFSIZ];
 
@@ -5413,7 +5418,8 @@ DEFPY(bgp_network,
 	return bgp_static_set(
 		vty, no, address_str ? addr_prefix_str : prefix_str, AFI_IP,
 		bgp_node_safi(vty), map_name, backdoor ? 1 : 0,
-		label_index ? (uint32_t)label_index : BGP_INVALID_LABEL_INDEX);
+		label_index ? (uint32_t)label_index : BGP_INVALID_LABEL_INDEX,
+		nexthop_str);
 }
 
 DEFPY(ipv6_bgp_network,
@@ -5430,7 +5436,8 @@ DEFPY(ipv6_bgp_network,
 {
 	return bgp_static_set(
 		vty, no, prefix_str, AFI_IP6, bgp_node_safi(vty), map_name, 0,
-		label_index ? (uint32_t)label_index : BGP_INVALID_LABEL_INDEX);
+		label_index ? (uint32_t)label_index : BGP_INVALID_LABEL_INDEX,
+		NULL);
 }
 
 /* Aggreagete address:
