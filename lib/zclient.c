@@ -48,6 +48,11 @@ enum event { ZCLIENT_SCHEDULE, ZCLIENT_READ, ZCLIENT_CONNECT };
 /* Prototype for event manager. */
 static void zclient_event(enum event, struct zclient *);
 
+/* Prototype for if_set_value_option_index */
+static void zebra_interface_if_set_value_option_index(struct stream *s,
+						      struct interface *ifp,
+						      bool ifindexread);
+
 struct sockaddr_storage zclient_addr;
 socklen_t zclient_addr_len;
 
@@ -1610,17 +1615,38 @@ static void zclient_vrf_delete(struct zclient *zclient, vrf_id_t vrf_id)
 
 struct interface *zebra_interface_add_read(struct stream *s, vrf_id_t vrf_id)
 {
-	struct interface *ifp;
+	struct interface *ifp = NULL;
 	char ifname_tmp[INTERFACE_NAMSIZ];
+	ifindex_t ifindex;
+	bool already_in_list = false;
+	struct vrf *vrf;
 
 	/* Read interface name. */
 	stream_get(ifname_tmp, s, INTERFACE_NAMSIZ);
 
-	/* Lookup/create interface by name. */
-	ifp = if_get_by_name(ifname_tmp, vrf_id, 0);
+	/* Read interface index.
+	 * this can be an interface rename
+	 */
+	ifindex = stream_getl(s);
+	if (ifindex != IFINDEX_INTERNAL) {
+		ifp = if_lookup_by_index(ifindex, vrf_id);
+		if (ifp) {
+			already_in_list = true;
+			/* overwrite name */
+			strlcpy(ifp->name, ifname_tmp, sizeof(ifp->name));
+		}
+	}
+	if (!already_in_list)
+		/* Lookup/create interface by name. */
+		ifp = if_get_by_name(ifname_tmp, vrf_id, 0);
+	if (ifp)
+		ifp->ifindex = ifindex;
+	zebra_interface_if_set_value_option_index(s, ifp, true);
 
-	zebra_interface_if_set_value(s, ifp);
-
+	/* append to if list per ifindex */
+	vrf = vrf_lookup_by_id(vrf_id);
+	if (!already_in_list && vrf)
+		IFINDEX_RB_INSERT(vrf, ifp);
 	return ifp;
 }
 
@@ -1713,14 +1739,19 @@ struct interface *zebra_interface_link_params_read(struct stream *s)
 	return ifp;
 }
 
-void zebra_interface_if_set_value(struct stream *s, struct interface *ifp)
+static void zebra_interface_if_set_value_option_index(struct stream *s,
+						      struct interface *ifp,
+						      bool ifindexread)
 {
 	uint8_t link_params_status = 0;
 	ifindex_t old_ifindex;
 
+	if (!ifp)
+		return;
 	old_ifindex = ifp->ifindex;
-	/* Read interface's index. */
-	if_set_index(ifp, stream_getl(s));
+	if (!ifindexread)
+		/* Read interface's index. */
+		if_set_index(ifp, stream_getl(s));
 	ifp->status = stream_getc(s);
 
 	/* Read interface's value. */
@@ -1748,6 +1779,12 @@ void zebra_interface_if_set_value(struct stream *s, struct interface *ifp)
 
 	nexthop_group_interface_state_change(ifp, old_ifindex);
 }
+
+void zebra_interface_if_set_value(struct stream *s, struct interface *ifp)
+{
+	zebra_interface_if_set_value_option_index(s, ifp, false);
+}
+
 
 size_t zebra_interface_link_params_write(struct stream *s,
 					 struct interface *ifp)
