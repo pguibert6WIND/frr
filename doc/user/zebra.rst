@@ -54,8 +54,6 @@ Besides the common invocation options (:ref:`common-invocation-options`), the
 
    .. seealso:: :ref:`zebra-vrf`
 
-.. program:: configure
-
 .. _interface-commands:
 
 Configuration Addresses behaviour
@@ -484,7 +482,7 @@ presence of the entry.
    21     Static       10.125.0.2  IPv4 Explicit Null
 
 
-.. _multicast-rib-commands:
+.. _zebra-vrf:
 
 VRF (Virtual Routing and Forwarding)
 ====================================
@@ -572,7 +570,7 @@ commands in relationship to VRF. Here is an extract of some of those commands:
    on configuration mode, this applies to default VRF. Otherwise, this command
    applies to the VRF of the vrf configuration mode. This command is used to
    configure a vrf route leak across 2 VRFs. This command is only available when
-    *Zebra* is launched without :option:`-n` option.
+   *Zebra* is launched without :option:`-n` option.
 
 .. index:: ip route NETWORK NETMASK GATEWAY table TABLENO
 .. clicmd:: ip route NETWORK NETMASK GATEWAY table TABLENO
@@ -643,8 +641,7 @@ be updated with the new name. To illustrate, if you want to recompile with
 
    ./configure --with-defaultvrfname=global
 
-More information about the option in :ref:`_frr-configuration`.
-
+.. _multicast-rib-commands:
 
 Multicast RIB Commands
 ======================
@@ -813,6 +810,8 @@ as well. We refer to the component that programs the forwarding plane
 The FIB push interface comprises of a TCP connection between zebra and
 the FPM. The connection is initiated by zebra -- that is, the FPM acts
 as the TCP server.
+
+.. program:: configure
 
 The relevant zebra code kicks in when zebra is configured with the
 :option:`--enable-fpm` flag. Zebra periodically attempts to connect to
