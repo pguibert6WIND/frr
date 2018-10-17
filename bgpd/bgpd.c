@@ -7449,6 +7449,12 @@ static void bgp_config_write_family(struct vty *vty, struct bgp *bgp, afi_t afi,
 	bgp_config_write_maxpaths(vty, bgp, afi, safi);
 	bgp_config_write_table_map(vty, bgp, afi, safi);
 
+	/* BGP flag dampening - only for ipv4 multicast */
+	if (safi == SAFI_MULTICAST &&
+	    CHECK_FLAG(bgp->af_flags[afi][safi],
+		       BGP_CONFIG_DAMPENING))
+		bgp_config_write_damp(vty, true);
+
 	if (safi == SAFI_EVPN)
 		bgp_config_write_evpn_info(vty, bgp, afi, safi);
 
@@ -7730,7 +7736,7 @@ int bgp_config_write(struct vty *vty)
 		/* BGP flag dampening. */
 		if (CHECK_FLAG(bgp->af_flags[AFI_IP][SAFI_UNICAST],
 			       BGP_CONFIG_DAMPENING))
-			bgp_config_write_damp(vty);
+			bgp_config_write_damp(vty, false);
 
 		/* BGP timers configuration. */
 		if (bgp->default_keepalive != BGP_DEFAULT_KEEPALIVE

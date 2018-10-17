@@ -501,22 +501,28 @@ int bgp_damp_disable(struct bgp *bgp, afi_t afi, safi_t safi)
 	return 0;
 }
 
-void bgp_config_write_damp(struct vty *vty)
+void bgp_config_write_damp(struct vty *vty, bool shift)
 {
+	char buf[2];
+
+	if (shift)
+		sprintf(buf, " ");
+	else
+		sprintf(buf, "");
 	if (bgp_damp_cfg.half_life == DEFAULT_HALF_LIFE * 60
 	    && bgp_damp_cfg.reuse_limit == DEFAULT_REUSE
 	    && bgp_damp_cfg.suppress_value == DEFAULT_SUPPRESS
 	    && bgp_damp_cfg.max_suppress_time == bgp_damp_cfg.half_life * 4)
-		vty_out(vty, " bgp dampening\n");
+		vty_out(vty, " %sbgp dampening\n", buf);
 	else if (bgp_damp_cfg.half_life != DEFAULT_HALF_LIFE * 60
 		 && bgp_damp_cfg.reuse_limit == DEFAULT_REUSE
 		 && bgp_damp_cfg.suppress_value == DEFAULT_SUPPRESS
 		 && bgp_damp_cfg.max_suppress_time
 			    == bgp_damp_cfg.half_life * 4)
-		vty_out(vty, " bgp dampening %lld\n",
+		vty_out(vty, " %sbgp dampening %lld\n", buf,
 			bgp_damp_cfg.half_life / 60LL);
 	else
-		vty_out(vty, " bgp dampening %lld %d %d %lld\n",
+		vty_out(vty, " %sbgp dampening %lld %d %d %lld\n", buf,
 			bgp_damp_cfg.half_life / 60LL, bgp_damp_cfg.reuse_limit,
 			bgp_damp_cfg.suppress_value,
 			bgp_damp_cfg.max_suppress_time / 60LL);
