@@ -70,7 +70,7 @@ extern struct zclient *zclient;
 
 
 static void ospf_remove_vls_through_area(struct ospf *, struct ospf_area *);
-void ospf_network_free(struct ospf *, struct ospf_network *);
+static void ospf_network_free(struct ospf *, struct ospf_network *);
 static void ospf_area_free(struct ospf_area *);
 static void ospf_network_run(struct prefix *, struct ospf_area *);
 static void ospf_network_run_interface(struct ospf *, struct interface *,
@@ -980,16 +980,13 @@ static void add_ospf_interface(struct connected *co, struct ospf_area *area)
 
 	ospf_area_add_if(oi->area, oi);
 
-	if (area->ospf->passive_interface_default == OSPF_IF_PASSIVE)
-		oi->passive_interface = OSPF_IF_PASSIVE;
 	/*
 	 * if router_id is not configured, dont bring up
 	 * interfaces.
 	 * ospf_router_id_update() will call ospf_if_update
 	 * whenever r-id is configured instead.
 	 */
-	if ((area->ospf->router_id.s_addr != 0) && if_is_operative(co->ifp) &&
-			oi->passive_interface == OSPF_IF_ACTIVE)
+	if ((area->ospf->router_id.s_addr != 0) && if_is_operative(co->ifp))
 		ospf_if_up(oi);
 }
 
@@ -1042,7 +1039,7 @@ static struct ospf_network *ospf_network_new(struct in_addr area_id)
 	return new;
 }
 
-void ospf_network_free(struct ospf *ospf, struct ospf_network *network)
+static void ospf_network_free(struct ospf *ospf, struct ospf_network *network)
 {
 	ospf_area_check_free(ospf, network->area_id);
 	ospf_schedule_abr_task(ospf);
