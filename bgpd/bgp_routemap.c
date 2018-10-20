@@ -1258,6 +1258,8 @@ static route_map_result_t route_set_ip_nexthop(void *rule,
 	struct bgp_info *bgp_info;
 	struct peer *peer;
 
+	if (prefix->family == AF_INET6)
+		return RMAP_OKAY;
 	if (type == RMAP_BGP) {
 		bgp_info = object;
 		peer = bgp_info->peer;
