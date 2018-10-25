@@ -38,6 +38,9 @@ struct distribute {
 	/* Name of the interface. */
 	char *ifname;
 
+	/* Name of the interface. */
+	char *vrfname;
+
 	/* Filter name of `in' and `out' */
 	char *list[DISTRIBUTE_MAX];
 
@@ -46,13 +49,13 @@ struct distribute {
 };
 
 /* Prototypes for distribute-list. */
-extern void distribute_list_init(int);
+extern void distribute_list_init(int node, const char *(*)(struct vty *vty));
 extern void distribute_list_reset(void);
 extern void distribute_list_add_hook(void (*)(struct distribute *));
 extern void distribute_list_delete_hook(void (*)(struct distribute *));
-extern struct distribute *distribute_lookup(const char *);
-extern int config_write_distribute(struct vty *);
-extern int config_show_distribute(struct vty *);
+extern struct distribute *distribute_lookup(const char *ifname, const char *vrfname);
+extern int config_write_distribute(struct vty *vty, const char *vrfname);
+extern int config_show_distribute(struct vty *vty, const char *vrfname);
 
 extern enum filter_type distribute_apply_in(struct interface *,
 					    struct prefix *);
