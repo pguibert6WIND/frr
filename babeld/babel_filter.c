@@ -77,7 +77,7 @@ babel_filter(int output, const unsigned char *prefix, unsigned short plen,
     }
 
     /* All interface filter check. */
-    dist = distribute_lookup (NULL);
+    dist = distribute_lookup (NULL, VRF_DEFAULT_NAME);
     if (dist) {
         if (dist->list[distribute]) {
             alist = access_list_lookup (p.family, dist->list[distribute]);
