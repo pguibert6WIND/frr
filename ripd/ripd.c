@@ -299,7 +299,7 @@ static void rip_timeout_update(struct rip_info *rinfo)
 }
 
 static int rip_filter(int rip_distribute, struct prefix_ipv4 *p,
-		      struct rip_interface *ri)
+		      struct rip_interface *ri, vrf_id_t vrf_id)
 {
 	struct distribute *dist;
 	struct access_list *alist;
@@ -333,7 +333,7 @@ static int rip_filter(int rip_distribute, struct prefix_ipv4 *p,
 	}
 
 	/* All interface filter check. */
-	dist = distribute_lookup(NULL);
+	dist = distribute_lookup(NULL, vrf_id_to_name(vrf_id));
 	if (dist) {
 		if (dist->list[distribute]) {
 			alist = access_list_lookup(AFI_IP,
@@ -423,7 +423,7 @@ static void rip_rte_process(struct rte *rte, struct sockaddr_in *from,
 	/* Apply input filters. */
 	ri = ifp->info;
 
-	ret = rip_filter(RIP_FILTER_IN, &p, ri);
+	ret = rip_filter(RIP_FILTER_IN, &p, ri, ifp->vrf_id);
 	if (ret < 0)
 		return;
 
@@ -2183,7 +2183,7 @@ void rip_output_process(struct connected *ifc, struct sockaddr_in *to,
 				p = (struct prefix_ipv4 *)&rp->p;
 
 			/* Apply output filters. */
-			ret = rip_filter(RIP_FILTER_OUT, p, ri);
+			ret = rip_filter(RIP_FILTER_OUT, p, ri, VRF_DEFAULT);
 			if (ret < 0)
 				continue;
 
@@ -3837,7 +3837,7 @@ static int show_ip_rip_status_command(struct vty *vty, struct rip *rip)
 	vty_out(vty, " garbage collect after %ld seconds\n", rip->garbage_time);
 
 	/* Filtering status show. */
-	config_show_distribute(vty);
+	config_show_distribute(vty, VRF_DEFAULT_NAME);
 
 	/* Default metric information. */
 	vty_out(vty, "  Default redistribution metric is %d\n",
@@ -3989,7 +3989,7 @@ static int config_write_rip(struct vty *vty)
 				rip->default_metric);
 
 		/* Distribute configuration. */
-		write += config_write_distribute(vty);
+		write += config_write_distribute(vty, VRF_DEFAULT_NAME);
 
 		/* Interface routemap configuration */
 		write += config_write_if_rmap(vty);
@@ -4026,6 +4026,11 @@ static int config_write_rip(struct vty *vty)
 
 /* RIP node structure. */
 static struct cmd_node rip_node = {RIP_NODE, "%s(config-router)# ", 1};
+
+static const char *rip_distribute_get_vrf_fn(struct vty *vty)
+{
+	return VRF_DEFAULT_NAME;
+}
 
 /* Distribute-list update functions. */
 static void rip_distribute_update_ifp(struct distribute *dist,
@@ -4089,18 +4094,17 @@ static void rip_distribute_update(struct distribute *dist)
 	if (!dist->ifname)
 		return;
 
-	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
-		ifp = if_lookup_by_name(dist->ifname, vrf->vrf_id);
-		if (ifp)
-			rip_distribute_update_ifp(dist, ifp);
-	}
+	ifp = if_lookup_by_name(dist->ifname,
+				vrf_name_to_id(dist->vrfname));
+	if (ifp)
+		rip_distribute_update_ifp(dist, ifp);
 }
 
 void rip_distribute_update_interface(struct interface *ifp)
 {
 	struct distribute *dist;
 
-	dist = distribute_lookup(ifp->name);
+	dist = distribute_lookup(ifp->name, vrf_id_to_name(ifp->vrf_id));
 	if (dist)
 		rip_distribute_update_ifp(dist, ifp);
 }
@@ -4362,7 +4366,7 @@ void rip_init(void)
 	prefix_list_delete_hook(rip_distribute_update_all);
 
 	/* Distribute list install. */
-	distribute_list_init(RIP_NODE);
+	distribute_list_init(RIP_NODE, rip_distribute_get_vrf_fn);
 	distribute_list_add_hook(rip_distribute_update);
 	distribute_list_delete_hook(rip_distribute_update);
 
