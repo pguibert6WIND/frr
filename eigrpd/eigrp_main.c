@@ -209,7 +209,7 @@ int main(int argc, char **argv, char **envp)
 	  if_rmap_hook_delete (eigrp_if_rmap_update);*/
 
 	/* Distribute list install. */
-	distribute_list_init(EIGRP_NODE);
+	distribute_list_init(EIGRP_NODE, NULL);
 	distribute_list_add_hook(eigrp_distribute_update);
 	distribute_list_delete_hook(eigrp_distribute_update);
 
