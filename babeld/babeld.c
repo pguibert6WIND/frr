@@ -121,7 +121,7 @@ babel_config_write (struct vty *vty)
         }
     }
 
-    lines += config_write_distribute (vty);
+    lines += config_write_distribute (vty, VRF_DEFAULT_NAME);
 
     return lines;
 }
@@ -542,7 +542,8 @@ babel_distribute_update (struct distribute *dist)
     if (! dist->ifname)
         return;
 
-    ifp = if_lookup_by_name (dist->ifname, VRF_DEFAULT);
+    ifp = if_lookup_by_name (dist->ifname,
+			     vrf_name_to_id(dist->vrfname));
     if (ifp == NULL)
         return;
 
@@ -569,7 +570,7 @@ babel_distribute_update_interface (struct interface *ifp)
 {
     struct distribute *dist;
 
-    dist = distribute_lookup (ifp->name);
+    dist = distribute_lookup (ifp->name, vrf_id_to_name(ifp->vrf_id));
     if (dist)
         babel_distribute_update (dist);
 }
@@ -729,7 +730,7 @@ babeld_quagga_init(void)
     prefix_list_delete_hook (babel_distribute_update_all);
 
     /* Distribute list install. */
-    distribute_list_init (BABEL_NODE);
+    distribute_list_init (BABEL_NODE, NULL);
     distribute_list_add_hook (babel_distribute_update);
     distribute_list_delete_hook (babel_distribute_update);
 }

@@ -1247,7 +1247,7 @@ DEFUN (show_babel_parameters,
     vty_out (vty, "    -- Babel running configuration --\n");
     show_babel_main_configuration(vty);
     vty_out (vty, "    -- distribution lists --\n");
-    config_show_distribute(vty);
+    config_show_distribute(vty, VRF_DEFAULT_NAME);
 
     return CMD_SUCCESS;
 }
