@@ -585,7 +585,7 @@ static void ripng_timeout_update(struct ripng_info *rinfo)
 }
 
 static int ripng_filter(int ripng_distribute, struct prefix_ipv6 *p,
-			struct ripng_interface *ri)
+			struct ripng_interface *ri, vrf_id_t vrf_id)
 {
 	struct distribute *dist;
 	struct access_list *alist;
@@ -620,7 +620,7 @@ static int ripng_filter(int ripng_distribute, struct prefix_ipv6 *p,
 	}
 
 	/* All interface filter check. */
-	dist = distribute_lookup(NULL);
+	dist = distribute_lookup(NULL, vrf_id_to_name(vrf_id));
 	if (dist) {
 		if (dist->list[distribute]) {
 			alist = access_list_lookup(AFI_IP6,
@@ -688,7 +688,7 @@ static void ripng_route_process(struct rte *rte, struct sockaddr_in6 *from,
 	/* Apply input filters. */
 	ri = ifp->info;
 
-	ret = ripng_filter(RIPNG_FILTER_IN, &p, ri);
+	ret = ripng_filter(RIPNG_FILTER_IN, &p, ri, ifp->vrf_id);
 	if (ret < 0)
 		return;
 
@@ -1583,7 +1583,7 @@ void ripng_output_process(struct interface *ifp, struct sockaddr_in6 *to,
 				rinfo->nexthop_out = rinfo->nexthop;
 
 			/* Apply output filters. */
-			ret = ripng_filter(RIPNG_FILTER_OUT, p, ri);
+			ret = ripng_filter(RIPNG_FILTER_OUT, p, ri, ifp->vrf_id);
 			if (ret < 0)
 				continue;
 
@@ -1719,7 +1719,7 @@ void ripng_output_process(struct interface *ifp, struct sockaddr_in6 *to,
 			       sizeof(aggregate->nexthop_out));
 
 			/* Apply output filters.*/
-			ret = ripng_filter(RIPNG_FILTER_OUT, p, ri);
+			ret = ripng_filter(RIPNG_FILTER_OUT, p, ri, ifp->vrf_id);
 			if (ret < 0)
 				continue;
 
@@ -2078,7 +2078,7 @@ DEFUN (show_ipv6_ripng_status,
 		ripng->garbage_time);
 
 	/* Filtering status show. */
-	config_show_distribute(vty);
+	config_show_distribute(vty, VRF_DEFAULT_NAME);
 
 	/* Default metric information. */
 	vty_out(vty, "  Default redistribution metric is %d\n",
@@ -2712,7 +2712,7 @@ static int ripng_config_write(struct vty *vty)
 	vty_out (vty, " garbage-timer %d\n", ripng->garbage_time);
 #endif /* 0 */
 
-		write += config_write_distribute(vty);
+		write += config_write_distribute(vty, VRF_DEFAULT_NAME);
 
 		write += config_write_if_rmap(vty);
 
@@ -2726,6 +2726,11 @@ static struct cmd_node cmd_ripng_node = {
 	RIPNG_NODE, "%s(config-router)# ", 1,
 };
 
+static const char *ripng_distribute_get_vrf_fn(struct vty *vty)
+{
+	return VRF_DEFAULT_NAME;
+}
+
 static void ripng_distribute_update(struct distribute *dist)
 {
 	struct interface *ifp;
@@ -2736,7 +2741,8 @@ static void ripng_distribute_update(struct distribute *dist)
 	if (!dist->ifname)
 		return;
 
-	ifp = if_lookup_by_name(dist->ifname, VRF_DEFAULT);
+	ifp = if_lookup_by_name(dist->ifname,
+				vrf_name_to_id(dist->vrfname));
 	if (ifp == NULL)
 		return;
 
@@ -2787,7 +2793,7 @@ void ripng_distribute_update_interface(struct interface *ifp)
 {
 	struct distribute *dist;
 
-	dist = distribute_lookup(ifp->name);
+	dist = distribute_lookup(ifp->name, vrf_id_to_name(ifp->vrf_id));
 	if (dist)
 		ripng_distribute_update(dist);
 }
@@ -3038,7 +3044,7 @@ void ripng_init()
 	prefix_list_delete_hook(ripng_distribute_update_all);
 
 	/* Distribute list install. */
-	distribute_list_init(RIPNG_NODE);
+	distribute_list_init(RIPNG_NODE, ripng_distribute_get_vrf_fn);
 	distribute_list_add_hook(ripng_distribute_update);
 	distribute_list_delete_hook(ripng_distribute_update);
 
