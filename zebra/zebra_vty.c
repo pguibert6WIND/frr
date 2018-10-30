@@ -1982,6 +1982,23 @@ DEFUN (show_ip_nht,
 	return CMD_SUCCESS;
 }
 
+DEFUN (show_ip_import_check,
+       show_ip_import_check_cmd,
+       "show ip import-check [vrf NAME]",
+       SHOW_STR
+       IP_STR
+       "IP import check tracking table\n"
+       VRF_CMD_HELP_STR)
+{
+	int idx_vrf = 4;
+	vrf_id_t vrf_id = VRF_DEFAULT;
+
+	if (argc == 5)
+		VRF_GET_ID(vrf_id, argv[idx_vrf]->arg);
+
+	zebra_print_rnh_table(vrf_id, AF_INET, vty, RNH_IMPORT_CHECK_TYPE);
+	return CMD_SUCCESS;
+}
 
 DEFUN (show_ip_nht_vrf_all,
        show_ip_nht_vrf_all_cmd,
@@ -4204,6 +4221,7 @@ void zebra_vty_init(void)
 	install_element(VIEW_NODE, &show_route_detail_cmd);
 	install_element(VIEW_NODE, &show_route_summary_cmd);
 	install_element(VIEW_NODE, &show_ip_nht_cmd);
+	install_element(VIEW_NODE, &show_ip_import_check_cmd);
 	install_element(VIEW_NODE, &show_ip_nht_vrf_all_cmd);
 	install_element(VIEW_NODE, &show_ipv6_nht_cmd);
 	install_element(VIEW_NODE, &show_ipv6_nht_vrf_all_cmd);
