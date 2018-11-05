@@ -245,6 +245,15 @@ extern void vrf_set_default_name(const char *default_name, bool force);
 extern const char *vrf_get_default_name(void);
 #define VRF_DEFAULT_NAME    vrf_get_default_name()
 
+#define ROUTE_LEAK_VRF_NOT_POSSIBLE	0
+#define ROUTE_LEAK_VRF_LITE_POSSIBLE	1
+#define ROUTE_LEAK_VRF_NETNS_POSSIBLE	2
+#define ROUTE_LEAK_ROUTING_POSSIBLE	3
+#define ROUTE_LEAK_VRF_NETNS_MAYBE	4
+int vrf_route_leak_possible(vrf_id_t vrf_id_orig,
+			    vrf_id_t vrf_id_target,
+			    ifindex_t *ifindex);
+
 /* VRF switch from NETNS */
 extern int vrf_switch_to_netns(vrf_id_t vrf_id);
 extern int vrf_switchback_to_initial(void);
