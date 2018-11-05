@@ -721,6 +721,57 @@ int vrf_is_mapped_on_netns(struct vrf *vrf)
 	return 1;
 }
 
+/* return ROUTE_LEAK_VRF_LITE_POSSIBLE
+ *   if vrf route leak is possible, because it is vrf lite
+ * return ROUTE_LEAK_VRF_NETNS_POSSIBLE
+ *   if vrf is netns based and virtual ethernet is available
+ * return ROUTE_LEAK_VRF_NOT_POSSIBLE on other cases
+ */
+int vrf_route_leak_possible(vrf_id_t vrf_id_orig,
+			    vrf_id_t vrf_id_target,
+			    ifindex_t *ifindex)
+{
+	struct interface *ifp;
+	struct vrf *vrf_orig, *vrf_target;
+	int ret = ROUTE_LEAK_VRF_NOT_POSSIBLE;
+
+	if (vrf_id_target == vrf_id_orig)
+		return ROUTE_LEAK_ROUTING_POSSIBLE;
+	if (vrf_id_target == VRF_UNKNOWN
+	    || vrf_id_orig == VRF_UNKNOWN)
+		return ret;
+	/* if not netns, then vrf lite, then natively supported */
+	vrf_orig = vrf_lookup_by_id(vrf_id_orig);
+	vrf_target = vrf_lookup_by_id(vrf_id_target);
+	if (!vrf_is_mapped_on_netns(vrf_orig) ||
+	    !vrf_is_mapped_on_netns(vrf_target))
+		return ROUTE_LEAK_VRF_LITE_POSSIBLE;
+	if (!vrf_orig || !vrf_target)
+		return ret;
+	/* on netns based vrf, solution consists in having interface
+	 * name matching target vrf name
+	 * example: communication between vrf0 and vrf1
+	 * to reach vrf1, interface vrf1 must exist in vrf vrf0
+	 */
+	ifp = if_lookup_by_name(vrf_orig->name, vrf_id_target);
+	if (!ifp)
+		return ret;
+	ifp = if_lookup_by_name(vrf_target->name, vrf_id_orig);
+	if (!ifp)
+		return ret;
+	/* return interface index of the interface to use
+	 * in case a route leak must be established to reach vrf_target
+	 */
+	if (ifindex)
+		*ifindex = ifp->ifindex;
+	/* having interface name is not enough. one should check:
+	 * - that mac addresses are the same
+	 * - that interfaces are veth based
+	 * this check is not done here
+	 */
+	return ROUTE_LEAK_VRF_NETNS_POSSIBLE;
+}
+
 /* vrf CLI commands */
 DEFUN_NOSH(vrf_exit,
            vrf_exit_cmd,
