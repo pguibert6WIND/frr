@@ -116,7 +116,7 @@ static int ospf_interface_add(int command, struct zclient *zclient,
 			ifp->vrf_id, ifp->ifindex,
 			(unsigned long long)ifp->flags, ifp->metric, ifp->mtu);
 
-	/* the interface may already be present in case */
+	assert(ifp->info);
 
 	if (IF_DEF_PARAMS(ifp)
 	    && !OSPF_IF_PARAM_CONFIGURED(IF_DEF_PARAMS(ifp), type)) {
