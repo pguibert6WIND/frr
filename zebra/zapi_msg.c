@@ -2317,12 +2317,14 @@ static void zread_mpls_labels(ZAPI_HANDLER_ARGS)
 	if (hdr->command == ZEBRA_MPLS_LABELS_ADD) {
 		mpls_lsp_install(zvrf, type, in_label, out_label, gtype, &gate,
 				 ifindex);
-		mpls_ftn_update(1, zvrf, type, &prefix, gtype, &gate, ifindex,
-				distance, out_label);
+		if (prefix.prefixlen)
+			mpls_ftn_update(1, zvrf, type, &prefix, gtype, &gate, ifindex,
+					distance, out_label);
 	} else if (hdr->command == ZEBRA_MPLS_LABELS_DELETE) {
 		mpls_lsp_uninstall(zvrf, type, in_label, gtype, &gate, ifindex);
-		mpls_ftn_update(0, zvrf, type, &prefix, gtype, &gate, ifindex,
-				distance, out_label);
+		if (prefix.prefixlen)
+			mpls_ftn_update(0, zvrf, type, &prefix, gtype, &gate, ifindex,
+					distance, out_label);
 	}
 stream_failure:
 	return;
