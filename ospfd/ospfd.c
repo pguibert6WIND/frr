@@ -1161,6 +1161,20 @@ void ospf_interface_area_unset(struct ospf *ospf, struct interface *ifp)
 	update_redistributed(ospf, 0); /* interfaces possibly removed */
 }
 
+bool ospf_interface_area_is_already_set(struct ospf *ospf,
+					struct interface *ifp)
+{
+	struct route_node *rn_oi;
+	struct ospf_if_params *params;
+
+	if (!ospf)
+		return false; /* Ospf not ready yet */
+        params = IF_DEF_PARAMS(ifp);
+        if (OSPF_IF_PARAM_CONFIGURED(params, if_area))
+	    return true;
+	return false;
+}
+
 /* Check whether interface matches given network
  * returns: 1, true. 0, false
  */
