@@ -2845,6 +2845,10 @@ static struct rip *rip_cmd_lookup_rip(struct vty *vty,
 	if (argv_find(argv, argc, "vrf", &idx_vrf))
 		vrf_name = argv[idx_vrf + 1]->arg;
 	if (rip_global) {
+		if (rip_global->name == NULL &&
+		    (vrf_name == NULL ||
+		     strmatch(vrf_name, VRF_DEFAULT_NAME)))
+				return rip_global;
 		if (rip_global->name == NULL && vrf_name == NULL)
 			return rip_global;
 		if (vrf_name == NULL || rip_global->name == NULL)
