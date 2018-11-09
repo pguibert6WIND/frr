@@ -1345,8 +1345,13 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 			continue;
 
 		api_nh = &api.nexthops[valid_nh_count];
-		api_nh->vrf_id = nh_othervrf ? info->extra->bgp_orig->vrf_id
-					     : bgp->vrf_id;
+		if (nh_othervrf) {
+			if (info->extra->ifindex)
+				api_nh->vrf_id = bgp->vrf_id;
+			else
+				api_nh->vrf_id = info->extra->bgp_orig->vrf_id;
+		} else
+			api_nh->vrf_id = bgp->vrf_id;
 		if (nh_family == AF_INET) {
 			if (bgp_debug_zebra(&api.prefix)) {
 				if (mpinfo->extra) {
@@ -1369,10 +1374,15 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 				local_attr = *mpinfo->attr;
 				mpinfo_cp->attr = &local_attr;
 				if (nh_othervrf) {
-					/* allow route-map to modify */
-					local_attr.nexthop =
-						info->extra->nexthop_orig.u
+					if (info->extra->ifindex) {
+						local_attr.nh_ifindex = info->extra->ifindex;
+						mpinfo_cp->attr->nexthop.s_addr = INADDR_ANY;
+					} else {
+						/* allow route-map to modify */
+						local_attr.nexthop =
+							info->extra->nexthop_orig.u
 							.prefix4;
+					}
 				}
 			}
 
@@ -1404,12 +1414,18 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 				local_attr = *mpinfo->attr;
 				mpinfo_cp->attr = &local_attr;
 				if (nh_othervrf) {
-					/* allow route-map to modify */
-					local_attr.mp_nexthop_global =
-						info->extra->nexthop_orig.u
+					if (info->extra->ifindex) {
+						local_attr.nh_ifindex = info->extra->ifindex;
+						memcpy(&api_nh->gate.ipv6.s6_addr,
+						       &in6addr_any, IPV6_MAX_BYTELEN);
+					} else {
+						/* allow route-map to modify */
+						local_attr.mp_nexthop_global =
+							info->extra->nexthop_orig.u
 							.prefix6;
-					local_attr.mp_nexthop_len =
-						BGP_ATTR_NHLEN_IPV6_GLOBAL;
+						local_attr.mp_nexthop_len =
+							BGP_ATTR_NHLEN_IPV6_GLOBAL;
+					}
 				}
 			}
 
@@ -1445,11 +1461,20 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 		if (mpinfo->extra
 		    && bgp_is_valid_label(&mpinfo->extra->label[0])
 		    && !CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE)) {
-			has_valid_label = 1;
-			label = label_pton(&mpinfo->extra->label[0]);
-
-			api_nh->label_num = 1;
-			api_nh->labels[0] = label;
+			if (mpinfo->extra->label_route_leak &&
+			    bgp_is_valid_label(&mpinfo->extra->label_route_leak)) {
+				has_valid_label = 1;
+				label = label_pton(&mpinfo->extra->label[0]);
+				api_nh->label_num = 2;
+				api_nh->labels[1] = label;
+				label = label_pton(&mpinfo->extra->label_route_leak);
+				api_nh->labels[0] = label;
+			} else {
+				has_valid_label = 1;
+				label = label_pton(&mpinfo->extra->label[0]);
+				api_nh->label_num = 1;
+				api_nh->labels[0] = label;
+			}
 		}
 		valid_nh_count++;
 	}
@@ -1479,7 +1504,7 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 	if (bgp_debug_zebra(p)) {
 		char prefix_buf[PREFIX_STRLEN];
 		char nh_buf[INET6_ADDRSTRLEN];
-		char label_buf[20];
+		char label_buf[40];
 		int i;
 
 		prefix2str(&api.prefix, prefix_buf, sizeof(prefix_buf));
@@ -1503,9 +1528,13 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 
 			label_buf[0] = '\0';
 			if (has_valid_label
-			    && !CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE))
-				sprintf(label_buf, "label %u",
-					api_nh->labels[0]);
+			    && !CHECK_FLAG(api.flags, ZEBRA_FLAG_EVPN_ROUTE)) {
+				char *ptr = label_buf;
+				ptr += sprintf(ptr, "label %u",
+					       api_nh->labels[0]);
+				if (api_nh->label_num == 2)
+					sprintf(ptr, ", %u", api_nh->labels[1]);
+			}
 			zlog_debug("  nhop [%d]: %s if %u VRF %u %s",
 				   i + 1, nh_buf, api_nh->ifindex,
 				   api_nh->vrf_id, label_buf);
