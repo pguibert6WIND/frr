@@ -636,6 +636,24 @@ zebra_rnh_resolve_nexthop_entry(struct zebra_vrf *zvrf, int family,
 
 		/* Route entry found, we're done; else, walk up the tree. */
 		if (re) {
+			/* we found out a route in the targeted nexthop vrf
+			 * however, if the route comes from an imported route entry
+			 * then a new route must be found
+			 */
+			int ret;
+			ifindex_t ifindex;
+
+			ret = vrf_route_leak_possible(rnh->vrf_id_route,
+						      rnh->vrf_id, &ifindex);
+			if (ret == ROUTE_LEAK_VRF_NETNS_POSSIBLE) {
+				/* it is possible to create a route
+				 * using interface as nexthop
+				 */
+				rnh->ifindex = ifindex;
+			} else if (ret == ROUTE_LEAK_VRF_NOT_POSSIBLE)
+				/* route leak has been found and no route has been
+				 * made available */
+				return NULL;
 			*prn = rn;
 			return re;
 		}
