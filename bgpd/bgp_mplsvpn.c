@@ -1658,6 +1658,7 @@ int bgp_vpn_leak_mpls_callback(mpls_label_t label,
 
 	memset(&nhop, 0, sizeof(struct prefix));
 	blm->label_new = label;
+	blm->flags &= ~BGP_LEAK_MPLS_ALLOCATION_IN_PROGRESS;
 
 	if (debug)
 		zlog_debug("%s: label=%u, allocated=%d",

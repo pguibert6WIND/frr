@@ -37,6 +37,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_nexthop.h"
+#include "bgpd/bgp_label.h"
 #include "bgpd/bgp_mplsvpn.h"
 #include "bgpd/bgp_debug.h"
 #include "bgpd/bgp_nht.h"
@@ -764,10 +765,26 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 
 			bnc_is_valid_nexthop =
 				bgp_isvalid_labeled_nexthop(bnc) ? 1 : 0;
+			/* special case : bnc nexthop is implicit label */
+			if (bnc->ifindex)
+				bnc_is_valid_nexthop = 1;
 			if (bnc->ifindex) {
 				struct bgp_leak_mpls *blm;
 
 				blm = bgp_nht_lookup_leak_mpls(bnc, path->extra, 1);
+				if(blm->label_new == 0) {
+					bnc_is_valid_nexthop = 0;
+					if (!(blm->flags & BGP_LEAK_MPLS_ALLOCATION_IN_PROGRESS)) {
+						blm->flags |= BGP_LEAK_MPLS_ALLOCATION_IN_PROGRESS;
+						bgp_lp_get(LP_TYPE_VRF_VETH, blm,
+							   bgp_vpn_leak_mpls_callback);
+					}
+				} else {
+					/* insert new mpls value */
+					encode_label(blm->label_new,
+						     &path->extra->label_route_leak);
+					bgp_set_valid_label(&path->extra->label_route_leak);
+				}
 			}
 		} else {
 			bnc_is_valid_nexthop =
@@ -807,6 +824,14 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 		    || CHECK_FLAG(bnc->change_flags, BGP_NEXTHOP_CHANGED))
 			SET_FLAG(path->flags, BGP_INFO_IGP_CHANGED);
 
+		/* if we are on route leak, and an interface has to be used
+		 * to reach the nexthop,
+		 */
+		if (bnc->ifindex) {
+			if (!path->extra)
+				path->extra = bgp_info_extra_get(path);
+			path->extra->ifindex = bnc->ifindex;
+		}
 		bgp_process(bgp_path, rn, afi, safi);
 	}
 
