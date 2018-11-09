@@ -83,4 +83,5 @@ extern void bgp_cleanup_nexthops(struct bgp *bgp);
 extern void path_nh_map(struct bgp_info *path,
 			struct bgp_nexthop_cache *bnc, bool make);
 
+extern void evaluate_paths(struct bgp_nexthop_cache *bnc);
 #endif /* _BGP_NHT_H */

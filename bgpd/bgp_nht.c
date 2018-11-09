@@ -37,6 +37,7 @@
 #include "bgpd/bgp_route.h"
 #include "bgpd/bgp_attr.h"
 #include "bgpd/bgp_nexthop.h"
+#include "bgpd/bgp_mplsvpn.h"
 #include "bgpd/bgp_debug.h"
 #include "bgpd/bgp_nht.h"
 #include "bgpd/bgp_fsm.h"
@@ -49,7 +50,6 @@ static void register_zebra_rnh(struct bgp_nexthop_cache *bnc,
 			       int is_bgp_static_route);
 static void unregister_zebra_rnh(struct bgp_nexthop_cache *bnc,
 				 int is_bgp_static_route);
-static void evaluate_paths(struct bgp_nexthop_cache *bnc);
 static int make_prefix(int afi, struct bgp_info *ri, struct prefix *p);
 
 DEFINE_MTYPE_STATIC(BGPD, BGP_NEXTHOP_LEAK_LABEL, "Bgp Nexthop Label used for VRF route leak");
@@ -708,7 +708,7 @@ static void unregister_zebra_rnh(struct bgp_nexthop_cache *bnc,
  * RETURNS:
  *   void.
  */
-static void evaluate_paths(struct bgp_nexthop_cache *bnc)
+void evaluate_paths(struct bgp_nexthop_cache *bnc)
 {
 	struct bgp_node *rn;
 	struct bgp_info *path;
