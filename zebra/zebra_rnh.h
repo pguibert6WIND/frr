@@ -50,6 +50,10 @@ struct rnh {
 	 * if this has been filtered for the client
 	 */
 	int filtered[ZEBRA_ROUTE_MAX];
+
+	ifindex_t ifindex;		/* used in case route leaks
+					 * that are not connected
+					 */
 };
 
 typedef enum { RNH_NEXTHOP_TYPE, RNH_IMPORT_CHECK_TYPE } rnh_type_t;
