@@ -424,7 +424,8 @@ void bgp_parse_nexthop_update(int command, vrf_id_t vrf_id)
 			vrf_id, buf, nhr.metric, bnc->metric, nhr.nexthop_num,
 			bnc->nexthop_num, bnc->flags);
 	}
-
+	if (nhr.ifindex != bnc->ifindex)
+		bnc->change_flags |= BGP_NEXTHOP_ROUTE_LEAK_CHANGED;
 	if (nhr.metric != bnc->metric)
 		bnc->change_flags |= BGP_NEXTHOP_METRIC_CHANGED;
 
@@ -438,6 +439,7 @@ void bgp_parse_nexthop_update(int command, vrf_id_t vrf_id)
 
 		bnc->flags |= BGP_NEXTHOP_VALID;
 		bnc->metric = nhr.metric;
+		bnc->ifindex = nhr.ifindex;
 		bnc->nexthop_num = nhr.nexthop_num;
 
 		bnc->flags &= ~BGP_NEXTHOP_LABELED_VALID; /* check below */

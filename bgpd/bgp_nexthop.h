@@ -57,16 +57,17 @@ struct bgp_nexthop_cache {
 
 	uint16_t change_flags;
 
-#define BGP_NEXTHOP_CHANGED           (1 << 0)
-#define BGP_NEXTHOP_METRIC_CHANGED    (1 << 1)
-#define BGP_NEXTHOP_CONNECTED_CHANGED (1 << 2)
-
+#define BGP_NEXTHOP_CHANGED			(1 << 0)
+#define BGP_NEXTHOP_METRIC_CHANGED		(1 << 1)
+#define BGP_NEXTHOP_CONNECTED_CHANGED		(1 << 2)
+#define BGP_NEXTHOP_ROUTE_LEAK_CHANGED		(1 << 3)
 	struct bgp_node *node;
 	void *nht_info; /* In BGP, peer session */
 	LIST_HEAD(path_list, bgp_info) paths;
 	unsigned int path_count;
 	struct bgp *bgp;
 	struct bgp *bgp_route; /* originator of the request */
+	ifindex_t ifindex; /* used on vrf route leak */
 };
 
 /* BGP own address structure */
