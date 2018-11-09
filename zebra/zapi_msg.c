@@ -1087,7 +1087,7 @@ static void zread_rnh_register(ZAPI_HANDLER_ARGS)
 		STREAM_GETL(s, vrf_id_route);
 		l += 4;
 
-		rnh = zebra_add_rnh(&p, zvrf_id(zvrf), type, &exist);
+		rnh = zebra_add_rnh(&p, zvrf_id(zvrf), type, &exist, vrf_id_route);
 		if (!rnh)
 			return;
 		if (type == RNH_NEXTHOP_TYPE) {
@@ -1175,7 +1175,7 @@ static void zread_rnh_unregister(ZAPI_HANDLER_ARGS)
 		STREAM_GETL(s, vrf_id_route);
 		l += 4;
 
-		rnh = zebra_lookup_rnh(&p, zvrf_id(zvrf), type);
+		rnh = zebra_lookup_rnh(&p, zvrf_id(zvrf), type, vrf_id_route);
 		if (rnh) {
 			client->nh_dereg_time = monotime(NULL);
 			zebra_remove_rnh_client(rnh, client, type);
