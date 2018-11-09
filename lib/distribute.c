@@ -324,8 +324,7 @@ DEFUN (no_distribute_list,
 		DISTRIBUTE_V4_IN : DISTRIBUTE_V4_OUT;
 
 	/* Set appropriate function call */
-	int (*distfn)(const char *, enum distribute_type,
-		      const char *, struct vty *) =
+	int (*distfn)(const char *, enum distribute_type, const char *) =
 		prefix ? &distribute_list_prefix_unset : &distribute_list_unset;
 
 	/* if interface is present, get name */
