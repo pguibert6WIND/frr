@@ -348,6 +348,7 @@ struct zapi_route {
 
 	/* for vrf route leak */
 	vrf_id_t vrf_id_route;
+	ifindex_t ifindex;
 };
 
 /* Zebra IPv4 route message API. */
