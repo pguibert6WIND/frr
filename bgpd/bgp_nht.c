@@ -52,6 +52,8 @@ static void unregister_zebra_rnh(struct bgp_nexthop_cache *bnc,
 static void evaluate_paths(struct bgp_nexthop_cache *bnc);
 static int make_prefix(int afi, struct bgp_info *ri, struct prefix *p);
 
+DEFINE_MTYPE_STATIC(BGPD, BGP_NEXTHOP_LEAK_LABEL, "Bgp Nexthop Label used for VRF route leak");
+
 static int bgp_isvalid_nexthop(struct bgp_nexthop_cache *bnc)
 {
 	return (bgp_zebra_num_connects() == 0
@@ -62,6 +64,28 @@ static int bgp_isvalid_labeled_nexthop(struct bgp_nexthop_cache *bnc)
 {
 	return (bgp_zebra_num_connects() == 0
 		|| (bnc && CHECK_FLAG(bnc->flags, BGP_NEXTHOP_LABELED_VALID)));
+}
+
+static struct bgp_leak_mpls *bgp_nht_lookup_leak_mpls(struct bgp_nexthop_cache *bnc,
+						      struct bgp_info_extra *extra,
+						      bool create)
+{
+	struct listnode *node, *next;
+	struct bgp_leak_mpls *blm;
+
+	if (!bnc || !bnc->leak_mpls ||
+	    !extra || extra->num_labels != 1)
+		return NULL;
+	for (ALL_LIST_ELEMENTS(bnc->leak_mpls, node, next, blm))
+		if (blm->label_origin == extra->label[0])
+			return blm;
+	if (!create)
+		return NULL;
+	blm = XCALLOC(MTYPE_BGP_NEXTHOP_LEAK_LABEL, sizeof(struct bgp_leak_mpls));
+	blm->label_origin = extra->label[0];
+	blm->bnc = bnc;
+	listnode_add(bnc->leak_mpls, blm);
+	return blm;
 }
 
 static struct bgp_nexthop_cache *bgp_lookup_bnc_per_route(struct list *route,
@@ -227,6 +251,7 @@ int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
 		bnc->node = rn;
 		bnc->bgp = bgp_nexthop;
 		bnc->bgp_route = bgp_route;
+		bnc->leak_mpls = list_new();
 		bgp_lock_node(rn);
 		if (BGP_DEBUG(nht, NHT)) {
 			char buf[PREFIX2STR_BUFFER];
@@ -739,6 +764,11 @@ static void evaluate_paths(struct bgp_nexthop_cache *bnc)
 
 			bnc_is_valid_nexthop =
 				bgp_isvalid_labeled_nexthop(bnc) ? 1 : 0;
+			if (bnc->ifindex) {
+				struct bgp_leak_mpls *blm;
+
+				blm = bgp_nht_lookup_leak_mpls(bnc, path->extra, 1);
+			}
 		} else {
 			bnc_is_valid_nexthop =
 				bgp_isvalid_nexthop(bnc) ? 1 : 0;
