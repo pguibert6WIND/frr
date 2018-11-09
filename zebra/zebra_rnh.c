@@ -1146,12 +1146,14 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 				num++;
 			}
 		stream_putc_at(s, nump, num);
+		stream_putl(s, rnh->ifindex); // type
 	} else {
 		stream_putc(s, 0); // type
 		stream_putw(s, 0); // instance
 		stream_putc(s, 0); // distance
 		stream_putl(s, 0); // metric
 		stream_putc(s, 0); // nexthops
+		stream_putl(s, 0); // ifindex
 	}
 	stream_putw_at(s, 0, stream_get_endp(s));
 
