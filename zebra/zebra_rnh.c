@@ -1202,13 +1202,21 @@ static void print_rnh(struct rnh *rnh, struct vty *vty)
 	char buf[BUFSIZ];
 	struct route_node *rn = rnh->node;
 
-	vty_out(vty, "%s%s\n",
+	vty_out(vty, "%s%s",
 		inet_ntop(rn->p.family, &rn->p.u.prefix, buf, BUFSIZ),
 		CHECK_FLAG(rnh->flags, ZEBRA_NHT_CONNECTED) ? "(Connected)"
 							    : "");
+	if (rnh->vrf_id != rnh->vrf_id_route)
+		vty_out(vty, " from vrf %s",
+			vrf_id_to_name(rnh->vrf_id_route));
+	vty_out(vty, "\n");
 	if (rnh->state) {
-		vty_out(vty, " resolved via %s\n",
+		vty_out(vty, " resolved via %s",
 			zebra_route_string(rnh->state->type));
+		if (rnh->ifindex)
+			vty_out(vty, " (using %s)",
+				ifindex2ifname(rnh->ifindex, rnh->vrf_id_route));
+		vty_out(vty, "\n");
 		for (nexthop = rnh->state->ng.nexthop; nexthop;
 		     nexthop = nexthop->next)
 			print_nh(nexthop, vty);
