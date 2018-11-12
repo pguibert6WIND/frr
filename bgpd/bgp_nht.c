@@ -790,7 +790,17 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 			bnc_is_valid_nexthop =
 				bgp_isvalid_nexthop(bnc) ? 1 : 0;
 		}
+		/* case inter vrf route leak - no nexthop defined */
+		if (bnc->ifindex == 0 &&
+		    bgp_path && bnc->bgp && bgp_path != bnc->bgp) {
+			int is_vrf_route_leak_possible = 0;
 
+			is_vrf_route_leak_possible =
+				vrf_route_leak_possible(bgp_path->vrf_id,
+							bnc->bgp->vrf_id, NULL, NULL);
+			if (is_vrf_route_leak_possible == ROUTE_LEAK_VRF_NOT_POSSIBLE)
+				bnc_is_valid_nexthop = 0;
+		}
 		if (BGP_DEBUG(nht, NHT)) {
 			char buf[PREFIX_STRLEN];
 
