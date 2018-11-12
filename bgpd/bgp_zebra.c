@@ -1345,9 +1345,16 @@ void bgp_zebra_announce(struct bgp_node *rn, struct prefix *p,
 
 		api_nh = &api.nexthops[valid_nh_count];
 		if (nh_othervrf) {
+			ifindex_t ifindex;
+
 			if (info->extra->ifindex)
 				api_nh->vrf_id = bgp->vrf_id;
-			else
+			else if (vrf_route_leak_possible(api.vrf_id,
+							 info->extra->bgp_orig->vrf_id, &ifindex)
+				 == ROUTE_LEAK_VRF_NETNS_POSSIBLE) {
+				info->extra->ifindex = ifindex;
+				api_nh->vrf_id = bgp->vrf_id;
+			} else
 				api_nh->vrf_id = info->extra->bgp_orig->vrf_id;
 		} else
 			api_nh->vrf_id = bgp->vrf_id;
