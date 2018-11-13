@@ -75,6 +75,10 @@ struct optspec {
 	const struct option *longopts;
 };
 
+void ly_ctx_set_priv_dup_clb(struct ly_ctx *ctx, void *(*priv_dup_clb)(const void *priv)){}
+void *lyd_set_private(const struct lyd_node *node, void *priv){}
+
+
 static void opt_extend(const struct optspec *os)
 {
 	const struct option *lo;
