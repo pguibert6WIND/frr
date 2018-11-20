@@ -1099,6 +1099,10 @@ static const char *zebra_ziftype_2str(zebra_iftype_t zif_type)
 		return "VETH";
 		break;
 
+	case ZEBRA_IF_GRE:
+		return "GRE";
+		break;
+
 	default:
 		return "Unknown";
 		break;
@@ -1116,11 +1120,14 @@ struct interface *if_lookup_tunnel_interface(struct nexthop *nh, vrf_id_t vrf_id
 
 	if (!vrf)
 		return NULL;
-	if (nh->type == NEXTHOP_TYPE_IPV4 &&
+	if (nh->type == NEXTHOP_TYPE_IPV4 ||
 	    nh->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
-		FOR_ALL_INTERFACES (vrf, ifp)
-			if (IS_ZEBRA_IF_GRE(ifp))
-			    return ifp;
+		FOR_ALL_INTERFACES (vrf, ifp) {
+			if (!if_is_running(ifp))
+				continue;
+			if (ifp->ll_type == ZEBRA_LLT_IPGRE)
+				return ifp;
+		}
 	}
 	return NULL;
 }
