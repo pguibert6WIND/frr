@@ -790,12 +790,34 @@ zebra_rnh_resolve_nexthop_entry(vrf_id_t vrfid, int family,
 			ret = vrf_route_leak_possible(rnh->vrf_id_route,
 						      rnh->vrf_id, NULL,
 						      &ifindex);
-			if (ret == ROUTE_LEAK_VRF_NETNS_POSSIBLE)
+			if (ret == ROUTE_LEAK_VRF_NETNS_POSSIBLE) {
+				struct nexthop *nexthop = NULL;
+				struct interface *ifp = NULL;
+
 				/* it is possible to create a route
 				 * using interface as nexthop
 				 */
 				rnh->ifindex = ifindex;
-			else if (ret == ROUTE_LEAK_VRF_NOT_POSSIBLE)
+				/* check there is a underlay label */
+				for (nexthop = re->ng.nexthop; nexthop;
+				     nexthop = nexthop->next)
+					if (nexthop->nh_label)
+						break;
+				/* no label. then an other outgoing interface
+				 * is needed. look for tunnel interfaces
+				 */
+				if (!nexthop) {
+					for (nexthop = re->ng.nexthop; nexthop;
+					     nexthop = nexthop->next) {
+						ifp = if_lookup_tunnel_interface(nexthop,
+										 rnh->vrf_id);
+						if (ifp)
+							break;
+					}
+					if (ifp) /* replaces with nexthop interface gre */
+						rnh->ifindex_tunnel = ifp->ifindex;
+				}
+			} else if (ret == ROUTE_LEAK_VRF_NOT_POSSIBLE)
 				/* route leak has been found and no route has been
 				 * made available */
 				return NULL;
@@ -1166,6 +1188,7 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 			}
 		stream_putc_at(s, nump, num);
 		stream_putl(s, rnh->ifindex); // type
+		stream_putl(s, rnh->ifindex_tunnel); // type
 	} else {
 		stream_putc(s, 0); // type
 		stream_putw(s, 0); // instance
@@ -1173,6 +1196,7 @@ static int send_client(struct rnh *rnh, struct zserv *client, rnh_type_t type,
 		stream_putl(s, 0); // metric
 		stream_putc(s, 0); // nexthops
 		stream_putl(s, 0); // ifindex
+		stream_putl(s, 0); // ifindex_tunnel
 	}
 	stream_putw_at(s, 0, stream_get_endp(s));
 

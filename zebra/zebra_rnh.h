@@ -50,6 +50,9 @@ struct rnh {
 					  */
 	ifindex_t ifindex;		/* used in case route leaks
 					 * that are not connected
+					*/
+	ifindex_t ifindex_tunnel;	/* used in case route leaks
+					 * on tunnel
 					 */
 };
 

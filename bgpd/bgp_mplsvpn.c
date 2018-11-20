@@ -1654,7 +1654,8 @@ int bgp_vpn_leak_mpls_callback(mpls_label_t label,
 	struct nexthop *nexthop;
 	struct bgp_nexthop_cache *bnc;
 	struct prefix nhop;
-	mpls_label_t label_out = 0;
+	mpls_label_t label_out = MPLS_LABEL_IMPLICIT_NULL;
+	ifindex_t ifindex_tunnel = 0;
 
 	memset(&nhop, 0, sizeof(struct prefix));
 	blm->label_new = label;
@@ -1699,12 +1700,18 @@ int bgp_vpn_leak_mpls_callback(mpls_label_t label,
 	}
 	if (!nhop.family || !label_out)
 		goto error_disallocate_label;
+	/* need an underlay other than MPLS
+	 * trick to associate output to gre interface
+	 */
+	if (label_out == MPLS_LABEL_IMPLICIT_NULL &&
+	    bnc->ifindex_tunnel)
+		ifindex_tunnel = bnc->ifindex_tunnel;
 	memcpy(&blm->nhop, &nhop, sizeof(struct prefix));
 	blm->label_out = label_out;
 	bgp_zebra_send_mpls_label(ZEBRA_MPLS_LABELS_ADD,
 				  blm->label_new,
 				  label_out,
-				  &nhop);
+				  &nhop, ifindex_tunnel);
 	/* call evaluate paths again */
 	evaluate_paths(bnc);
 	return 0;

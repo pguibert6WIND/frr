@@ -499,6 +499,7 @@ void bgp_parse_nexthop_update(int command, vrf_id_t vrf_id)
 		bnc->flags |= BGP_NEXTHOP_VALID;
 		bnc->metric = nhr.metric;
 		bnc->ifindex = nhr.ifindex;
+		bnc->ifindex_tunnel = nhr.ifindex_tunnel;
 		bnc->nexthop_num = nhr.nexthop_num;
 
 		bnc->flags &= ~BGP_NEXTHOP_LABELED_VALID; /* check below */

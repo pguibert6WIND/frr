@@ -68,6 +68,7 @@ struct bgp_nexthop_cache {
 	struct bgp *bgp;
 	struct bgp *bgp_route; /* originator of the request */
 	ifindex_t ifindex; /* used on vrf route leak */
+	ifindex_t ifindex_tunnel; /* used on vrf route leak */
 	struct list *leak_mpls; /* label values for vrf route leak to that NH */
 };
 
