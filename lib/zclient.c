@@ -1468,6 +1468,7 @@ bool zapi_nexthop_update_decode(struct stream *s, struct zapi_route *nhr)
 					   * sizeof(mpls_label_t));
 	}
 	STREAM_GETL(s, nhr->ifindex);
+	STREAM_GETL(s, nhr->ifindex_tunnel);
 	return true;
 stream_failure:
 	return false;
