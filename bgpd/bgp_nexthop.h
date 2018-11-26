@@ -80,6 +80,9 @@ struct bgp_leak_mpls {
 	struct bgp_nexthop_cache *bnc;
 #define BGP_LEAK_MPLS_ALLOCATION_IN_PROGRESS 1
 	uint16_t flags;
+	uint16_t refcnt;
+	mpls_label_t label_out;
+	struct prefix nhop; /* used to store gateway */
 };
 
 /* BGP own address structure */

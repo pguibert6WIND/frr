@@ -1699,6 +1699,8 @@ int bgp_vpn_leak_mpls_callback(mpls_label_t label,
 	}
 	if (!nhop.family || !label_out)
 		goto error_disallocate_label;
+	memcpy(&blm->nhop, &nhop, sizeof(struct prefix));
+	blm->label_out = label_out;
 	bgp_zebra_send_mpls_label(ZEBRA_MPLS_LABELS_ADD,
 				  blm->label_new,
 				  label_out,

@@ -89,6 +89,39 @@ static struct bgp_leak_mpls *bgp_nht_lookup_leak_mpls(struct bgp_nexthop_cache *
 	return blm;
 }
 
+static void bgp_nht_leak_mpls_detach(struct bgp_info_extra *extra,
+				     struct bgp_nexthop_cache *bnc)
+{
+	struct bgp_leak_mpls *blm;
+
+	if (!bnc)
+		return;
+
+	blm = bgp_nht_lookup_leak_mpls(bnc, extra, 0);
+	/* suppress additional mpls entry */
+	if (!blm)
+		return;
+	if (blm->label_new &&
+	    bgp_is_valid_label(&extra->label_route_leak) &&
+	    decode_label(&extra->label_route_leak) == blm->label_new) {
+		blm->refcnt--;
+		extra->label_route_leak = 0;
+		if (!blm->refcnt) {
+			/* flush MPLS LSP entry */
+			bgp_zebra_send_mpls_label(ZEBRA_MPLS_LABELS_DELETE,
+						  blm->label_new,
+						  blm->label_out,
+						  &blm->nhop);
+			/* flush allocated label */
+			bgp_lp_release(LP_TYPE_VRF_VETH, blm, blm->label_new);
+			/* flush blm */
+			listnode_delete(bnc->leak_mpls, blm);
+			XFREE(MTYPE_BGP_NEXTHOP_LEAK_LABEL, blm);
+			blm = NULL;
+		}
+	}
+}
+
 static struct bgp_nexthop_cache *bgp_lookup_bnc_per_route(struct list *route,
 							  vrf_id_t vrfid_route)
 {
@@ -765,10 +798,13 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 
 			bnc_is_valid_nexthop =
 				bgp_isvalid_labeled_nexthop(bnc) ? 1 : 0;
-			/* special case : bnc nexthop is implicit label */
-			if (bnc->ifindex)
+			if (!bnc->nexthop_num &&
+			    (bnc->change_flags & BGP_NEXTHOP_CHANGED)) {
+				bgp_nht_leak_mpls_detach(path->extra, bnc);
+			} else if (bnc->ifindex && bnc->nexthop_num)
 				bnc_is_valid_nexthop = 1;
-			if (bnc->ifindex) {
+			if (bnc->ifindex && bnc_is_valid_nexthop &&
+			    bnc->nexthop_num) {
 				struct bgp_leak_mpls *blm;
 
 				blm = bgp_nht_lookup_leak_mpls(bnc, path->extra, 1);
@@ -780,10 +816,14 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 							   bgp_vpn_leak_mpls_callback);
 					}
 				} else {
-					/* insert new mpls value */
-					encode_label(blm->label_new,
-						     &path->extra->label_route_leak);
-					bgp_set_valid_label(&path->extra->label_route_leak);
+					if (!bgp_is_valid_label(&path->extra->label_route_leak) ||
+					    decode_label(&path->extra->label_route_leak) != blm->label_new) {
+						blm->refcnt++;
+						/* insert new mpls value */
+						encode_label(blm->label_new,
+							     &path->extra->label_route_leak);
+						bgp_set_valid_label(&path->extra->label_route_leak);
+					}
 				}
 			}
 		} else {
@@ -869,6 +909,7 @@ void path_nh_map(struct bgp_info *path, struct bgp_nexthop_cache *bnc,
 {
 	if (path->nexthop) {
 		LIST_REMOVE(path, nh_thread);
+		bgp_nht_leak_mpls_detach(path->extra, path->nexthop);
 		path->nexthop->path_count--;
 		path->nexthop = NULL;
 	}
