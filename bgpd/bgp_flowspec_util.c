@@ -446,8 +446,14 @@ int bgp_flowspec_match_rules_fill(uint8_t *nlri_content, int len,
 			if (error < 0)
 				zlog_err("%s: flowspec_ip_address error %d",
 					 __func__, error);
-			else
-				bpem->match_bitmask |= bitmask;
+			else {
+				/* if src or dst address is 0.0.0.0, ignore that rule */
+				if (prefix.family == AF_INET
+				    && prefix.u.prefix4.s_addr = 0)
+					memset(prefix, 0, sizeof(struct prefix));
+				else
+					bpem->match_bitmask |= bitmask;
+			}
 			offset += ret;
 			break;
 		case FLOWSPEC_IP_PROTOCOL:
