@@ -448,8 +448,8 @@ int bgp_flowspec_match_rules_fill(uint8_t *nlri_content, int len,
 					 __func__, error);
 			else {
 				/* if src or dst address is 0.0.0.0, ignore that rule */
-				if (prefix.family == AF_INET
-				    && prefix.u.prefix4.s_addr = 0)
+				if (prefix->family == AF_INET
+				    && prefix->u.prefix4.s_addr == 0)
 					memset(prefix, 0, sizeof(struct prefix));
 				else
 					bpem->match_bitmask |= bitmask;
