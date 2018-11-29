@@ -91,6 +91,9 @@ struct bgp_pbr_entry_action {
 
 /* BGP Policy Route structure */
 struct bgp_pbr_entry_main {
+#define BGP_PBR_UNDEFINED	0
+#define BGP_PBR_IPSET		1
+#define BGP_PBR_IPRULE		2
 	uint8_t type;
 
 	/*
@@ -102,6 +105,7 @@ struct bgp_pbr_entry_main {
 
 #define PREFIX_SRC_PRESENT (1 << 0)
 #define PREFIX_DST_PRESENT (1 << 1)
+	uint8_t match_bitmask_iprule;
 	uint8_t match_bitmask;
 
 	uint8_t match_src_port_num;
