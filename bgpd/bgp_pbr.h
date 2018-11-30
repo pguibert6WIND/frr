@@ -172,6 +172,7 @@ struct bgp_pbr_rule {
 	uint32_t priority;
 	bool installed;
 	bool install_in_progress;
+	void *bgp_info;
 };
 
 struct bgp_pbr_match {

@@ -169,6 +169,8 @@ static struct bgp_info_extra *bgp_info_extra_new(void)
 	new = XCALLOC(MTYPE_BGP_ROUTE_EXTRA, sizeof(struct bgp_info_extra));
 	new->label[0] = MPLS_INVALID_LABEL;
 	new->num_labels = 0;
+	new->bgp_fs_pbr = list_new();
+	new->bgp_fs_iprule = list_new();
 	return new;
 }
 
@@ -183,7 +185,11 @@ static void bgp_info_extra_free(struct bgp_info_extra **extra)
 		if ((*extra)->bgp_fs_pbr)
 			list_delete_all_node((*extra)->bgp_fs_pbr);
 
+		if ((*extra)->bgp_fs_iprule)
+			list_delete_all_node((*extra)->bgp_fs_iprule);
+
 		(*extra)->bgp_fs_pbr = NULL;
+		(*extra)->bgp_fs_iprule = NULL;
 
 		XFREE(MTYPE_BGP_ROUTE_EXTRA, *extra);
 

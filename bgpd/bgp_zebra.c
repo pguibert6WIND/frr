@@ -2012,9 +2012,16 @@ static int rule_notify_owner(int command, struct zclient *zclient,
 			bgp_pbra->installed = true;
 			bgp_pbra->install_in_progress = false;
 		} else {
+			struct bgp_info *bgp_info;
+			struct bgp_info_extra *extra;
+
 			bgp_pbr->installed = true;
 			bgp_pbr->install_in_progress = false;
 			bgp_pbr->action->refcnt++;
+			/* link bgp_info to bgp_pbr */
+			bgp_info = (struct bgp_info *)bgp_pbr->bgp_info;
+			extra = bgp_info_extra_get(bgp_info);
+			listnode_add(extra->bgp_fs_iprule, bgp_pbr);
 		}
 		if (BGP_DEBUG(zebra, ZEBRA))
 			zlog_debug("%s: Received RULE_INSTALLED",
@@ -2122,8 +2129,6 @@ static int ipset_entry_notify_owner(int command, struct zclient *zclient,
 			/* link bgp_info to bpme */
 			bgp_info = (struct bgp_info *)bgp_pbime->bgp_info;
 			extra = bgp_info_extra_get(bgp_info);
-			if (extra->bgp_fs_pbr == NULL)
-				extra->bgp_fs_pbr = list_new();
 			listnode_add(extra->bgp_fs_pbr, bgp_pbime);
 		}
 		break;
