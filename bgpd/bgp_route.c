@@ -3187,7 +3187,8 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 		/* Nexthop reachability check - for unicast and
 		 * labeled-unicast.. */
 		if ((afi == AFI_IP || afi == AFI_IP6)
-		    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST)) {
+		    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST
+			|| safi == SAFI_FLOWSPEC)) {
 			if (peer->sort == BGP_PEER_EBGP && peer->ttl == 1
 			    && !CHECK_FLAG(peer->flags,
 					   PEER_FLAG_DISABLE_CONNECTED_CHECK)
@@ -3202,8 +3203,9 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 			if (ri->extra && ri->extra->bgp_orig)
 				bgp_nexthop = ri->extra->bgp_orig;
 
-			if (bgp_find_or_add_nexthop(bgp, bgp_nexthop, afi,
-							ri, NULL, connected)
+			if (bgp_find_or_add_nexthop(bgp, bgp_nexthop,
+						    afi, safi,
+						    ri, NULL, connected)
 			    || CHECK_FLAG(peer->flags, PEER_FLAG_IS_RFAPI_HD))
 				bgp_info_set_flag(rn, ri, BGP_INFO_VALID);
 			else {
@@ -3321,7 +3323,8 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 	}
 	/* Nexthop reachability check. */
 	if ((afi == AFI_IP || afi == AFI_IP6)
-	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST)) {
+	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST
+		|| safi == SAFI_FLOWSPEC)) {
 		if (peer->sort == BGP_PEER_EBGP && peer->ttl == 1
 		    && !CHECK_FLAG(peer->flags,
 				   PEER_FLAG_DISABLE_CONNECTED_CHECK)
@@ -3330,7 +3333,8 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 		else
 			connected = 0;
 
-		if (bgp_find_or_add_nexthop(bgp, bgp, afi, new, NULL, connected)
+		if (bgp_find_or_add_nexthop(bgp, bgp, afi, safi,
+					    new, NULL, connected)
 		    || CHECK_FLAG(peer->flags, PEER_FLAG_IS_RFAPI_HD))
 			bgp_info_set_flag(rn, new, BGP_INFO_VALID);
 		else {
@@ -4422,7 +4426,7 @@ void bgp_static_update(struct bgp *bgp, struct prefix *p,
 					bgp_nexthop = ri->extra->bgp_orig;
 
 				if (bgp_find_or_add_nexthop(bgp, bgp_nexthop,
-					    afi, ri, NULL, 0))
+					    afi, safi, ri, NULL, 0))
 					bgp_info_set_flag(rn, ri,
 							  BGP_INFO_VALID);
 				else {
@@ -4473,7 +4477,8 @@ void bgp_static_update(struct bgp *bgp, struct prefix *p,
 	/* Nexthop reachability check. */
 	if (bgp_flag_check(bgp, BGP_FLAG_IMPORT_CHECK)
 	    && (safi == SAFI_UNICAST || safi == SAFI_LABELED_UNICAST)) {
-		if (bgp_find_or_add_nexthop(bgp, bgp, afi, new, NULL, 0))
+		if (bgp_find_or_add_nexthop(bgp, bgp, afi,
+					    safi, new, NULL, 0))
 			bgp_info_set_flag(rn, new, BGP_INFO_VALID);
 		else {
 			if (BGP_DEBUG(nht, NHT)) {

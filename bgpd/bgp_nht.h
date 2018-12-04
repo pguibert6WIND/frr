@@ -42,12 +42,14 @@ extern int bgp_find_nexthop(struct bgp_info *p, int connected);
  *   bgp_route - BGP instance of route
  *   bgp_nexthop - BGP instance of nexthop
  *   a - afi: AFI_IP or AF_IP6
+ *   s - safi
  *   p - path for which the nexthop object is being looked up
  *   peer - The BGP peer associated with this NHT
  *   connected - True if NH MUST be a connected route
  */
 extern int bgp_find_or_add_nexthop(struct bgp *bgp_route,
-			struct bgp *bgp_nexthop, afi_t a, struct bgp_info *p,
+			struct bgp *bgp_nexthop, afi_t a,
+			safi_t safi, struct bgp_info *p,
 			struct peer *peer, int connected);
 
 /**

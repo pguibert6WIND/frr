@@ -141,7 +141,7 @@ void bgp_unlink_nexthop_by_peer(struct peer *peer)
  * we need both the bgp_route and bgp_nexthop pointers.
  */
 int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
-			    afi_t afi, struct bgp_info *ri,
+			    afi_t afi, safi_t safi, struct bgp_info *ri,
 			    struct peer *peer, int connected)
 {
 	struct bgp_node *rn;
@@ -164,7 +164,9 @@ int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
 
 		/* This will return TRUE if the global IPv6 NH is a link local
 		 * addr */
-		if (make_prefix(afi, ri, &p) < 0)
+		if (safi != SAFI_FLOWSPEC && make_prefix(afi, ri, &p) < 0)
+			return 1;
+		if (safi == SAFI_FLOWSPEC)
 			return 1;
 	} else if (peer) {
 		/* Don't register link local NH */

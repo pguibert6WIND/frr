@@ -558,7 +558,7 @@ leak_update(
 			 */
 			nh_valid = bgp_find_or_add_nexthop(
 						bgp, bgp_nexthop,
-						afi, bi, NULL, 0);
+						afi, safi, bi, NULL, 0);
 
 		if (debug)
 			zlog_debug("%s: nexthop is %svalid (in vrf %s)",
@@ -619,7 +619,7 @@ leak_update(
 		 * 'connected' parameter?
 		 */
 		nh_valid = bgp_find_or_add_nexthop(bgp, bgp_nexthop,
-						afi, new, NULL, 0);
+					   afi, safi, new, NULL, 0);
 
 	if (debug)
 		zlog_debug("%s: nexthop is %svalid (in vrf %s)",

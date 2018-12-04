@@ -1395,7 +1395,8 @@ int bgp_start(struct peer *peer)
 		connected = 0;
 
 	if (!bgp_find_or_add_nexthop(peer->bgp, peer->bgp,
-				     family2afi(peer->su.sa.sa_family), NULL,
+				     family2afi(peer->su.sa.sa_family),
+				     SAFI_UNICAST, NULL,
 				     peer, connected)) {
 #if defined(HAVE_CUMULUS)
 		if (bgp_debug_neighbor_events(peer))
