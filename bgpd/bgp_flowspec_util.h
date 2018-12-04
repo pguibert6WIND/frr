@@ -54,4 +54,9 @@ extern bool bgp_flowspec_contains_prefix(struct prefix *pfs,
 					 struct prefix *input,
 					 int prefix_check);
 
+struct bgp_info;
+extern void bgp_flowspec_make_clean_list(struct list *plist);
+extern int bgp_flowspec_get_first_nh(struct bgp *bgp, struct bgp_info *ri,
+				     struct prefix *nh);
+
 #endif /* _FRR_BGP_FLOWSPEC_UTIL_H */

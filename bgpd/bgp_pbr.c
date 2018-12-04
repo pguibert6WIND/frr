@@ -684,9 +684,9 @@ static int bgp_pbr_validate_policy_route(struct bgp_pbr_entry_main *api)
 }
 
 /* return -1 if build or validation failed */
-static int bgp_pbr_build_and_validate_entry(struct prefix *p,
-					    struct bgp_info *info,
-					    struct bgp_pbr_entry_main *api)
+int bgp_pbr_build_and_validate_entry(struct prefix *p,
+				     struct bgp_info *info,
+				     struct bgp_pbr_entry_main *api)
 {
 	int ret;
 	int i, action_count = 0;

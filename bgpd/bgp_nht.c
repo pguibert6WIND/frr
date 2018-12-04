@@ -41,6 +41,7 @@
 #include "bgpd/bgp_nht.h"
 #include "bgpd/bgp_fsm.h"
 #include "bgpd/bgp_zebra.h"
+#include "bgpd/bgp_flowspec_util.h"
 
 extern struct zclient *zclient;
 
@@ -166,7 +167,8 @@ int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
 		 * addr */
 		if (safi != SAFI_FLOWSPEC && make_prefix(afi, ri, &p) < 0)
 			return 1;
-		if (safi == SAFI_FLOWSPEC)
+		if (safi == SAFI_FLOWSPEC &&
+		    bgp_flowspec_get_first_nh(bgp_route, ri, &p))
 			return 1;
 	} else if (peer) {
 		/* Don't register link local NH */

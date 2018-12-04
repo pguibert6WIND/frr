@@ -19,13 +19,18 @@
  */
 
 #include "zebra.h"
-
+#include "nexthop.h"
 #include "prefix.h"
 
+#include "bgpd.h"
+#include "bgp_route.h"
 #include "bgp_table.h"
 #include "bgp_flowspec_util.h"
 #include "bgp_flowspec_private.h"
 #include "bgp_pbr.h"
+#include "bgp_pbr.h"
+
+DEFINE_MTYPE_STATIC(BGPD, FS_NEXTHOP_LIST, "FS List info")
 
 static void hex2bin(uint8_t *hex, int *bin)
 {
@@ -584,4 +589,38 @@ int bgp_flowspec_match_rules_fill(uint8_t *nlri_content, int len,
 	else
 		bpem->type = BGP_PBR_UNDEFINED;
 	return error;
+}
+
+void bgp_flowspec_make_clean_list(struct list *plist) {
+	struct listnode *node, *next;
+	struct in_addr *nh;
+
+	for (ALL_LIST_ELEMENTS(plist, node, next, nh)) {
+		XFREE(MTYPE_FS_NEXTHOP_LIST, nh);
+		listnode_delete(plist, nh);
+	}
+}
+
+/* return 1 if FS entry invalid or no NH IP */
+int bgp_flowspec_get_first_nh(struct bgp *bgp, struct bgp_info *ri,
+			      struct prefix *p)
+{
+	struct bgp_pbr_entry_main api;
+	int i;
+	struct bgp_node *rn = ri->net;
+	struct bgp_pbr_entry_action *api_action;
+
+	memset(&api, 0, sizeof(struct bgp_pbr_entry_main));
+	if (bgp_pbr_build_and_validate_entry(&rn->p, ri, &api) < 0)
+		return 1;
+	for (i = 0; i < api.action_num; i++) {
+		api_action = &api.actions[i];
+		if (api_action->action != ACTION_REDIRECT_IP)
+			continue;
+		p->family = AF_INET;
+		p->prefixlen = IPV4_MAX_BITLEN;
+		p->u.prefix4 = api_action->u.zr.redirect_ip_v4;
+		return 0;
+	}
+	return 1;
 }
