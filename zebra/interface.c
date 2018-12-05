@@ -1109,29 +1109,6 @@ static const char *zebra_ziftype_2str(zebra_iftype_t zif_type)
 	}
 }
 
-/* get interface tunnel that matches nexthop interface
- * TODO : actually, it returns the first gre interface available
- *        it does not check against IP address
- */
-struct interface *if_lookup_tunnel_interface(struct nexthop *nh, vrf_id_t vrf_id)
-{
-	struct vrf *vrf = vrf_lookup_by_id(vrf_id);
-	struct interface *ifp;
-
-	if (!vrf)
-		return NULL;
-	if (nh->type == NEXTHOP_TYPE_IPV4 ||
-	    nh->type == NEXTHOP_TYPE_IPV4_IFINDEX) {
-		FOR_ALL_INTERFACES (vrf, ifp) {
-			if (!if_is_running(ifp))
-				continue;
-			if (ifp->ll_type == ZEBRA_LLT_IPGRE)
-				return ifp;
-		}
-	}
-	return NULL;
-}
-
 /* Interface's information print out to vty interface. */
 static void if_dump_vty(struct vty *vty, struct interface *ifp)
 {
