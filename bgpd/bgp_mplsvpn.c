@@ -1702,13 +1702,9 @@ int bgp_vpn_leak_mpls_callback(mpls_label_t label,
 		goto error_disallocate_label;
 	/* need an underlay other than MPLS
 	 * trick to associate output to gre interface
-	 * available only for IPv4
 	 */
-	if (label_out == MPLS_LABEL_IMPLICIT_NULL &&
-	    bnc->ifindex_tunnel) {
+	if (label_out == MPLS_LABEL_IMPLICIT_NULL)
 		ifindex_tunnel = bnc->ifindex_tunnel;
-		nhop.u.prefix4.s_addr = 0;
-	}
 	memcpy(&blm->nhop, &nhop, sizeof(struct prefix));
 	blm->label_out = label_out;
 	bgp_zebra_send_mpls_label(ZEBRA_MPLS_LABELS_ADD,

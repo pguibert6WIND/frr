@@ -2258,7 +2258,6 @@ static void zread_mpls_labels(ZAPI_HANDLER_ARGS)
 	struct prefix prefix;
 	enum nexthop_types_t gtype;
 	union g_addr gate;
-	union g_addr *p_gate = &gate;
 	ifindex_t ifindex;
 	mpls_label_t in_label, out_label;
 	uint8_t distance;
@@ -2321,13 +2320,9 @@ static void zread_mpls_labels(ZAPI_HANDLER_ARGS)
 
 	if (!mpls_enabled)
 		return;
-	if (gtype == NEXTHOP_TYPE_IPV4_IFINDEX &&
-	    gate.ipv4.s_addr == 0) {
-		gtype = NEXTHOP_TYPE_IFINDEX;
-		p_gate = NULL;
-	}
+
 	if (hdr->command == ZEBRA_MPLS_LABELS_ADD) {
-		mpls_lsp_install(zvrf, type, in_label, out_label, gtype, p_gate,
+		mpls_lsp_install(zvrf, type, in_label, out_label, gtype, &gate,
 				 ifindex);
 		if (prefix.prefixlen)
 			mpls_ftn_update(1, zvrf, type, &prefix, gtype, &gate, ifindex,
