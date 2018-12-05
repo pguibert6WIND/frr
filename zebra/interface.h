@@ -192,7 +192,6 @@ typedef enum {
 	ZEBRA_IF_VLAN,      /* VLAN sub-interface */
 	ZEBRA_IF_MACVLAN,   /* MAC VLAN interface*/
 	ZEBRA_IF_VETH,      /* VETH interface*/
-	ZEBRA_IF_GRE,      /* GRE interface*/
 } zebra_iftype_t;
 
 /* Zebra "slave" interface type */
@@ -316,9 +315,6 @@ static inline void zebra_if_set_ziftype(struct interface *ifp,
 
 #define IS_ZEBRA_IF_VETH(ifp)                                               \
 	(((struct zebra_if *)(ifp->info))->zif_type == ZEBRA_IF_VETH)
-
-#define IS_ZEBRA_IF_GRE(ifp)                                               \
-	(((struct zebra_if *)(ifp->info))->zif_type == ZEBRA_IF_GRE)
 
 #define IS_ZEBRA_IF_BRIDGE_SLAVE(ifp)					\
 	(((struct zebra_if *)(ifp->info))->zif_slave_type                      \

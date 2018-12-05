@@ -1099,10 +1099,6 @@ static const char *zebra_ziftype_2str(zebra_iftype_t zif_type)
 		return "VETH";
 		break;
 
-	case ZEBRA_IF_GRE:
-		return "GRE";
-		break;
-
 	default:
 		return "Unknown";
 		break;
