@@ -8020,5 +8020,4 @@ void bgp_terminate(void)
 	if (bm->t_rmap_update)
 		BGP_TIMER_OFF(bm->t_rmap_update);
 
-	bgp_lp_finish();
 }
