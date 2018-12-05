@@ -1190,7 +1190,7 @@ static int update_ipv6nh_for_route_install(int nh_othervrf,
 
 void
 bgp_zebra_send_mpls_label(int cmd, mpls_label_t in_label, mpls_label_t out_label,
-			  struct prefix *gateway, ifindex_t ifindex)
+			  struct prefix *gateway)
 {
 	struct stream		*s;
 	struct in_addr ipv4_in;
@@ -1224,7 +1224,7 @@ bgp_zebra_send_mpls_label(int cmd, mpls_label_t in_label, mpls_label_t out_label
 	default:
 		return;
 	}
-	stream_putl(s, ifindex);
+	stream_putl(s, 0);
 	stream_putc(s, 0);
 	stream_putl(s, in_label);
 	stream_putl(s, out_label);

@@ -38,8 +38,7 @@ extern void bgp_config_write_redistribute(struct vty *, struct bgp *, afi_t,
 					  safi_t);
 extern void bgp_zebra_send_mpls_label(int cmd, mpls_label_t in_label,
 				      mpls_label_t out_label,
-				      struct prefix *gateway,
-				      ifindex_t ifindex);
+				      struct prefix *gateway);
 extern void bgp_zebra_announce(struct bgp_node *, struct prefix *,
 			       struct bgp_info *, struct bgp *, afi_t, safi_t);
 extern void bgp_zebra_announce_table(struct bgp *, afi_t, safi_t);
