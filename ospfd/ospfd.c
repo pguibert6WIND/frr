@@ -86,7 +86,7 @@ static void ospf_finish_final(struct ospf *);
 
 void ospf_router_id_update(struct ospf *ospf)
 {
-	struct vrf *vrf = vrf_lookup_by_id(ospf->vrf_id);
+	struct vrf *vrf = vrf_lookup_by_name(ospf->name);
 	struct in_addr router_id, router_id_old;
 	struct ospf_interface *oi;
 	struct interface *ifp;
@@ -244,6 +244,7 @@ static struct ospf *ospf_new(unsigned short instance, const char *name)
 				__PRETTY_FUNCTION__, name, new->vrf_id);
 	} else {
 		new->vrf_id = VRF_DEFAULT;
+		new->name = XSTRDUP(MTYPE_OSPF_TOP, VRF_DEFAULT_NAME);
 		vrf = vrf_lookup_by_id(VRF_DEFAULT);
 	}
 
@@ -423,7 +424,7 @@ struct ospf *ospf_get_instance(unsigned short instance)
 		ospf_add(ospf);
 
 		if (ospf->router_id_static.s_addr == 0) {
-			if (vrf_lookup_by_id(ospf->vrf_id))
+			if (vrf_lookup_by_name(ospf->name))
 				ospf_router_id_update(ospf);
 			else {
 				if (IS_DEBUG_OSPF_EVENT)
@@ -595,7 +596,7 @@ void ospf_finish(struct ospf *ospf)
 /* Final cleanup of ospf instance */
 static void ospf_finish_final(struct ospf *ospf)
 {
-	struct vrf *vrf = vrf_lookup_by_id(ospf->vrf_id);
+	struct vrf *vrf = vrf_lookup_by_name(ospf->name);
 	struct route_node *rn;
 	struct ospf_nbr_nbma *nbr_nbma;
 	struct ospf_lsa *lsa;
@@ -1300,7 +1301,7 @@ static void ospf_network_run_interface(struct ospf *ospf, struct interface *ifp,
 
 static void ospf_network_run(struct prefix *p, struct ospf_area *area)
 {
-	struct vrf *vrf = vrf_lookup_by_id(area->ospf->vrf_id);
+	struct vrf *vrf = vrf_lookup_by_name(area->ospf->name);
 	struct interface *ifp;
 
 	/* Schedule Router ID Update. */
