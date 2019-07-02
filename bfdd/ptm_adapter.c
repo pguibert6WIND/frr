@@ -328,14 +328,31 @@ static int _ptm_msg_read(struct stream *msg, int command, vrf_id_t vrf_id,
 		STREAM_GETL(msg, bpc->bpc_recvinterval);
 		bpc->bpc_has_recvinterval =
 			(bpc->bpc_recvinterval != BPC_DEF_RECEIVEINTERVAL);
+		if (!bpc->bpc_has_recvinterval &&
+		    bglobal.def.timers.required_min_rx !=
+		    BPC_DEF_RECEIVEINTERVAL * 1000) {
+			bpc->bpc_has_recvinterval = true;
+			bpc->bpc_recvinterval = bglobal.def.timers.required_min_rx / 1000;
+		}
 
 		STREAM_GETL(msg, bpc->bpc_txinterval);
 		bpc->bpc_has_txinterval =
 			(bpc->bpc_txinterval != BPC_DEF_TRANSMITINTERVAL);
+		if (!bpc->bpc_has_txinterval &&
+		    bglobal.def.timers.desired_min_tx !=
+		    BPC_DEF_TRANSMITINTERVAL * 1000) {
+			bpc->bpc_has_txinterval = true;
+			bpc->bpc_txinterval = bglobal.def.timers.desired_min_tx / 1000;
+		}
 
 		STREAM_GETC(msg, bpc->bpc_detectmultiplier);
 		bpc->bpc_has_detectmultiplier =
 			(bpc->bpc_detectmultiplier != BPC_DEF_DETECTMULTIPLIER);
+		if (!bpc->bpc_has_detectmultiplier &&
+		    bglobal.def.detect_mult != BPC_DEF_DETECTMULTIPLIER) {
+			bpc->bpc_has_detectmultiplier = true;
+			bpc->bpc_detectmultiplier = bglobal.def.detect_mult;
+		}
 	}
 
 	/* Read (single|multi)hop and its options. */
