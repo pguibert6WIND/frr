@@ -51,6 +51,11 @@ struct bfd_timers {
 	uint32_t required_min_echo;
 };
 
+struct bfd_def {
+	struct bfd_timers timers;
+	uint8_t detect_mult;
+};
+
 struct bfd_discrs {
 	uint32_t my_discr;
 	uint32_t remote_discr;
@@ -401,6 +406,8 @@ struct bfd_global {
 	struct obslist bg_obslist;
 
 	struct zebra_privs_t bfdd_privs;
+
+	struct bfd_def def;
 };
 extern struct bfd_global bglobal;
 extern struct bfd_diag_str_list diag_list[];
@@ -607,6 +614,14 @@ void bfd_cli_show_multi_hop_peer(struct vty *vty,
 				 struct lyd_node *dnode,
 				 bool show_defaults);
 void bfd_cli_show_peer_end(struct vty *vty, struct lyd_node *dnode);
+void bfd_cli_show_global_mult(struct vty *vty, struct lyd_node *dnode,
+		       bool show_defaults);
+void bfd_cli_show_global_tx(struct vty *vty, struct lyd_node *dnode,
+		     bool show_defaults);
+void bfd_cli_show_global_rx(struct vty *vty, struct lyd_node *dnode,
+		     bool show_defaults);
+void bfd_cli_show_global_echo_interval(struct vty *vty, struct lyd_node *dnode,
+				bool show_defaults);
 void bfd_cli_show_mult(struct vty *vty, struct lyd_node *dnode,
 		       bool show_defaults);
 void bfd_cli_show_tx(struct vty *vty, struct lyd_node *dnode,

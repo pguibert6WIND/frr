@@ -20,6 +20,7 @@
 
 #include <zebra.h>
 
+#include "lib/bfd.h"
 #include "filter.h"
 
 #include "bfd.h"
@@ -173,6 +174,11 @@ static void bg_init(void)
 
 	memcpy(&bglobal.bfdd_privs, &bfdd_privs,
 	       sizeof(bfdd_privs));
+
+	bglobal.def.timers.desired_min_tx = BFD_DEF_MIN_TX * 1000;
+	bglobal.def.timers.required_min_rx = BFD_DEF_MIN_RX * 1000;
+	bglobal.def.timers.required_min_echo = BFD_DEF_REQ_MIN_ECHO;
+	bglobal.def.detect_mult = BFD_DEF_DETECT_MULT;
 }
 
 int main(int argc, char *argv[])

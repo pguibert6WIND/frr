@@ -175,7 +175,27 @@ static int bfdd_bfd_create(enum nb_event event,
 			   union nb_resource *resource
 			   __attribute__((__unused__)))
 {
-	/* NOTHING */
+	struct bfd_global *bg;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		break;
+
+	case NB_EV_PREPARE:
+		resource->ptr = &bglobal;
+		break;
+
+	case NB_EV_APPLY:
+		bg = resource->ptr;
+
+		nb_running_set_entry(dnode, bg);
+		break;
+
+	case NB_EV_ABORT:
+		/* Nothing to do */
+		break;
+	}
+
 	return NB_OK;
 }
 
@@ -275,6 +295,150 @@ static int bfdd_bfd_sessions_single_hop_source_addr_destroy(
 	enum nb_event event __attribute__((__unused__)),
 	const struct lyd_node *dnode __attribute__((__unused__)))
 {
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-bfdd:bfdd/bfd/detection-multiplier
+ */
+static int bfdd_bfd_detection_multiplier_modify(
+	enum nb_event event, const struct lyd_node *dnode,
+	union nb_resource *resource __attribute__((__unused__)))
+{
+	uint8_t detection_multiplier = yang_dnode_get_uint8(dnode, NULL);
+	struct bfd_global *bg;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		break;
+
+	case NB_EV_PREPARE:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bg = nb_running_get_entry(dnode, NULL, true);
+		bg->def.detect_mult = detection_multiplier;
+		break;
+
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-bfdd:bfdd/bfd/desired-transmission-interval
+ */
+static int bfdd_bfd_desired_transmission_interval_modify(
+	enum nb_event event, const struct lyd_node *dnode,
+	union nb_resource *resource __attribute__((__unused__)))
+{
+	uint32_t tx_interval = yang_dnode_get_uint32(dnode, NULL);
+	struct bfd_global *bg;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		if (tx_interval < 10000 || tx_interval > 60000000)
+			return NB_ERR_VALIDATION;
+		break;
+
+	case NB_EV_PREPARE:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bg = nb_running_get_entry(dnode, NULL, true);
+		if (tx_interval == bg->def.timers.desired_min_tx)
+			return NB_OK;
+
+		bg->def.timers.desired_min_tx = tx_interval;
+		/* XXX todo: update already created sessions */
+		break;
+
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-bfdd:bfdd/bfd/required-receive-interval
+ */
+static int bfdd_bfd_required_receive_interval_modify(
+	enum nb_event event, const struct lyd_node *dnode,
+	union nb_resource *resource __attribute__((__unused__)))
+{
+	uint32_t rx_interval = yang_dnode_get_uint32(dnode, NULL);
+	struct bfd_global *bg;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		if (rx_interval < 10000 || rx_interval > 60000000)
+			return NB_ERR_VALIDATION;
+		break;
+
+	case NB_EV_PREPARE:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bg = nb_running_get_entry(dnode, NULL, true);
+		if (rx_interval == bg->def.timers.required_min_rx)
+			return NB_OK;
+
+		bg->def.timers.required_min_rx = rx_interval;
+		/* XXX todo: update already created sessions */
+		break;
+
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-bfdd:bfdd/bfd/desired-echo-transmission-interval
+ */
+static int
+bfdd_bfd_desired_echo_transmission_interval_modify(
+	enum nb_event event, const struct lyd_node *dnode,
+	union nb_resource *resource __attribute__((__unused__)))
+{
+	uint32_t echo_interval = yang_dnode_get_uint32(dnode, NULL);
+	struct bfd_global *bg;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		if (echo_interval < 10000 || echo_interval > 60000000)
+			return NB_ERR_VALIDATION;
+		break;
+
+	case NB_EV_PREPARE:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bg = nb_running_get_entry(dnode, NULL, true);
+		if (echo_interval == bg->def.timers.required_min_echo)
+			return NB_OK;
+
+		bg->def.timers.required_min_echo = echo_interval;
+		/* XXX todo: update already created sessions */
+		break;
+
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	}
+
 	return NB_OK;
 }
 
@@ -870,6 +1034,34 @@ const struct frr_yang_module_info frr_bfdd_info = {
 				.destroy = bfdd_bfd_destroy,
 				.cli_show = bfd_cli_show_header,
 				.cli_show_end = bfd_cli_show_header_end,
+			}
+		},
+		{
+			.xpath = "/frr-bfdd:bfdd/bfd/detection-multiplier",
+			.cbs = {
+				.modify = bfdd_bfd_detection_multiplier_modify,
+				.cli_show = bfd_cli_show_global_mult,
+			}
+		},
+		{
+			.xpath = "/frr-bfdd:bfdd/bfd/desired-transmission-interval",
+			.cbs = {
+				.modify = bfdd_bfd_desired_transmission_interval_modify,
+				.cli_show = bfd_cli_show_global_tx,
+			}
+		},
+		{
+			.xpath = "/frr-bfdd:bfdd/bfd/required-receive-interval",
+			.cbs = {
+				.modify = bfdd_bfd_required_receive_interval_modify,
+				.cli_show = bfd_cli_show_global_rx,
+			}
+		},
+		{
+			.xpath = "/frr-bfdd:bfdd/bfd/desired-echo-transmission-interval",
+			.cbs = {
+				.modify = bfdd_bfd_desired_echo_transmission_interval_modify,
+				.cli_show = bfd_cli_show_global_echo_interval,
 			}
 		},
 		{
