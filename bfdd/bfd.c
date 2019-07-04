@@ -67,15 +67,17 @@ void gen_bfd_key(struct bfd_key *key, struct sockaddr_any *peer,
 		key->family = AF_INET;
 		memcpy(&key->peer, &peer->sa_sin.sin_addr,
 		       sizeof(peer->sa_sin.sin_addr));
-		memcpy(&key->local, &local->sa_sin.sin_addr,
-		       sizeof(local->sa_sin.sin_addr));
+		if (mhop)
+			memcpy(&key->local, &local->sa_sin.sin_addr,
+			       sizeof(local->sa_sin.sin_addr));
 		break;
 	case AF_INET6:
 		key->family = AF_INET6;
 		memcpy(&key->peer, &peer->sa_sin6.sin6_addr,
 		       sizeof(peer->sa_sin6.sin6_addr));
-		memcpy(&key->local, &local->sa_sin6.sin6_addr,
-		       sizeof(local->sa_sin6.sin6_addr));
+		if (mhop)
+			memcpy(&key->local, &local->sa_sin6.sin6_addr,
+			       sizeof(local->sa_sin6.sin6_addr));
 		break;
 	}
 
@@ -542,6 +544,16 @@ static void _bfd_session_update(struct bfd_session *bs,
 	}
 
 skip_echo:
+	/* in the single hop case, the key had not been updated
+	 */
+	if (!bs->key.mhop) {
+		if (bpc->bpc_local.sa_sin.sin_family == AF_INET)
+			memcpy(&bs->key.local, &bpc->bpc_local.sa_sin.sin_addr,
+			       sizeof(struct in_addr));
+		else if (bpc->bpc_local.sa_sin6.sin6_family == AF_INET6)
+			memcpy(&bs->key.local, &bpc->bpc_local.sa_sin6.sin6_addr,
+			       sizeof(struct in_addr));
+	}
 	if (bpc->bpc_has_txinterval)
 		bs->timers.desired_min_tx = bpc->bpc_txinterval * 1000;
 
@@ -1311,15 +1323,25 @@ static bool bfd_id_hash_cmp(const void *n1, const void *n2)
 static unsigned int bfd_key_hash_do(const void *p)
 {
 	const struct bfd_session *bs = p;
+	struct bfd_key key;
 
-	return jhash(&bs->key, sizeof(bs->key), 0);
+	if (bs->key.mhop)
+		return jhash(&bs->key, sizeof(bs->key), 0);
+	memset(&key, 0, sizeof(struct bfd_key));
+	memcpy(&key, &bs->key, sizeof(struct bfd_key) - sizeof(struct in6_addr));
+	return jhash(&key, sizeof(key), 0);
 }
 
 static bool bfd_key_hash_cmp(const void *n1, const void *n2)
 {
 	const struct bfd_session *bs1 = n1, *bs2 = n2;
 
-	return memcmp(&bs1->key, &bs2->key, sizeof(bs1->key)) == 0;
+	if (bs1->key.mhop != bs2->key.mhop)
+		return false;
+	if (bs1->key.mhop)
+		return memcmp(&bs1->key, &bs2->key, sizeof(bs1->key)) == 0;
+	/* do not compare local address for single hop */
+	return memcmp(&bs1->key, &bs2->key, sizeof(bs1->key) - sizeof(struct in6_addr)) == 0;
 }
 
 

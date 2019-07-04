@@ -181,9 +181,10 @@ struct bfd_key {
 	uint16_t family;
 	uint8_t mhop;
 	struct in6_addr peer;
-	struct in6_addr local;
 	char ifname[MAXNAMELEN];
 	char vrfname[MAXNAMELEN];
+	/* that part of the key will only be used for multihop */
+	struct in6_addr local;
 };
 
 struct bfd_session_stats {

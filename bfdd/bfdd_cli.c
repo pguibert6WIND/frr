@@ -114,9 +114,12 @@ DEFPY_NOSH(
 	if (multihop)
 		snprintf(source_str, sizeof(source_str), "[source-addr='%s']",
 			 local_address_str);
-	else
+	else {
+		if (local_address_str)
+			vty_out(vty, "%% local-addres %s ignored in single hop mode\n",
+				local_address_str);
 		source_str[0] = 0;
-
+	}
 	slen = snprintf(xpath, sizeof(xpath),
 			"/frr-bfdd:bfdd/bfd/sessions/%s%s[dest-addr='%s']",
 			multihop ? "multi-hop" : "single-hop", source_str,
