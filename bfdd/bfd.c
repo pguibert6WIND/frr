@@ -1215,6 +1215,25 @@ const char *bs_to_string(const struct bfd_session *bs)
 	return buf;
 }
 
+void bs_observer_update_local(struct bfd_session *bs)
+{
+	struct bfd_session_observer *bso;
+
+	TAILQ_FOREACH(bso, &bglobal.bg_obslist, bso_entry) {
+		if (bso->bso_bs != bs)
+			continue;
+
+		break;
+	}
+	if (bs->sock == -1) {
+		bso->bso_isaddress = true;
+		bso->bso_addr.family = bs->key.family;
+		memcpy(&bso->bso_addr.u.prefix, &bs->key.local,
+		       sizeof(bs->key.local));
+	}
+	bfd_session_enable(bs);
+}
+
 int bs_observer_add(struct bfd_session *bs)
 {
 	struct bfd_session_observer *bso;

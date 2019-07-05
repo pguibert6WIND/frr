@@ -306,6 +306,7 @@ static int bfdd_bfd_sessions_single_hop_source_addr_modify(
 		else if (lsa.sa_sin.sin_family == AF_INET6)
 			memcpy(&bs->key.local, &lsa.sa_sin6.sin6_addr,
 			       sizeof(struct in6_addr));
+		bs_observer_update_local(bs);
 		break;
 	}
 	return NB_OK;
