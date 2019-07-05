@@ -115,9 +115,11 @@ DEFPY_NOSH(
 		snprintf(source_str, sizeof(source_str), "[source-addr='%s']",
 			 local_address_str);
 	else {
-		if (local_address_str)
-			vty_out(vty, "%% local-addres %s ignored in single hop mode\n",
+		if (local_address_str) {
+			vty_out(vty, "%% local-address %s ignored in the session key\n",
 				local_address_str);
+			vty_out(vty, "%% uses local-address, under bfd peer node\n");
+		}
 		source_str[0] = 0;
 	}
 	slen = snprintf(xpath, sizeof(xpath),
@@ -204,13 +206,13 @@ static void _bfd_cli_show_peer(struct vty *vty, struct lyd_node *dnode,
 	vty_out(vty, " peer %s",
 		yang_dnode_get_string(dnode, "./dest-addr"));
 
-	if (mhop)
+	if (mhop) {
 		vty_out(vty, " multihop");
 
-	if (yang_dnode_exists(dnode, "./source-addr"))
-		vty_out(vty, " local-address %s",
-			yang_dnode_get_string(dnode, "./source-addr"));
-
+		if (yang_dnode_exists(dnode, "./source-addr"))
+			vty_out(vty, " local-address %s",
+				yang_dnode_get_string(dnode, "./source-addr"));
+	}
 	if (strcmp(vrf, VRF_DEFAULT_NAME))
 		vty_out(vty, " vrf %s", vrf);
 
@@ -259,6 +261,38 @@ void bfd_cli_show_shutdown(struct vty *vty, struct lyd_node *dnode,
 	else
 		vty_out(vty, "  %sshutdown\n",
 			yang_dnode_get_bool(dnode, NULL) ? "" : "no ");
+}
+
+DEFPY(
+	bfd_peer_local_address, bfd_peer_local_address_cmd,
+	"[no] local-address <A.B.C.D|X:X::X:X>$local",
+	NO_STR
+	LOCAL_STR
+	LOCAL_IPV4_STR
+	LOCAL_IPV6_STR)
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./source-addr", NB_OP_DELETE,
+				      NULL);
+	else
+		nb_cli_enqueue_change(vty, "./source-addr", NB_OP_MODIFY,
+				      local_str);
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void bfdd_bfd_sessions_single_hop_source_addr_show(struct vty *vty,
+						   struct lyd_node *dnode,
+						   bool show_defaults)
+{
+	const char *source_addr;
+
+	if (show_defaults)
+		return;
+	source_addr = yang_dnode_get_string(dnode, NULL);
+	if (!source_addr)
+		return;
+	vty_out(vty, "  local-address %s\n",
+		source_addr);
 }
 
 DEFPY(
@@ -406,4 +440,5 @@ bfdd_cli_init(void)
 	install_element(BFD_PEER_NODE, &bfd_peer_tx_cmd);
 	install_element(BFD_PEER_NODE, &bfd_peer_echo_cmd);
 	install_element(BFD_PEER_NODE, &bfd_peer_echo_interval_cmd);
+	install_element(BFD_PEER_NODE, &bfd_peer_local_address_cmd);
 }

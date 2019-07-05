@@ -268,6 +268,46 @@ static int bfdd_bfd_sessions_single_hop_source_addr_modify(
 	const struct lyd_node *dnode __attribute__((__unused__)),
 	union nb_resource *resource __attribute__((__unused__)))
 {
+	struct bfd_session *bs;
+	struct sockaddr_any lsa;
+	const char *src_addr;
+	int ret;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		bs = nb_running_get_entry(dnode, NULL, true);
+		if (bs == NULL || bs->key.mhop)
+			return NB_ERR_VALIDATION;
+		/* check local address */
+		memset(&lsa, 0, sizeof(lsa));
+		src_addr = yang_dnode_get_string(dnode, NULL);
+		ret = strtosa(src_addr, &lsa);
+		if (ret == -1)
+			return NB_ERR_VALIDATION;
+		if (bs->key.family != lsa.sa_sin.sin_family)
+			return NB_ERR_VALIDATION;
+		return NB_OK;
+
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bs = nb_running_get_entry(dnode, NULL, true);
+		if (bs == NULL || bs->key.mhop)
+			return NB_ERR_VALIDATION;
+		memset(&lsa, 0, sizeof(lsa));
+		src_addr = yang_dnode_get_string(dnode, NULL);
+		strtosa(src_addr, &lsa);
+		if (lsa.sa_sin.sin_family == AF_INET)
+			memcpy(&bs->key.local, &lsa.sa_sin.sin_addr,
+			       sizeof(struct in_addr));
+		else if (lsa.sa_sin.sin_family == AF_INET6)
+			memcpy(&bs->key.local, &lsa.sa_sin6.sin6_addr,
+			       sizeof(struct in6_addr));
+		break;
+	}
 	return NB_OK;
 }
 
@@ -275,6 +315,29 @@ static int bfdd_bfd_sessions_single_hop_source_addr_destroy(
 	enum nb_event event __attribute__((__unused__)),
 	const struct lyd_node *dnode __attribute__((__unused__)))
 {
+	struct bfd_session *bs;
+	struct bfd_key bk;
+
+	switch (event) {
+	case NB_EV_VALIDATE:
+		bfd_session_get_key(false, dnode, &bk);
+		/* check vty command comes from singlehop */
+		bs = bfd_key_lookup(bk, false);
+		if (bs == NULL)
+			return NB_ERR_VALIDATION;
+		return NB_OK;
+
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+
+	case NB_EV_APPLY:
+		bs = nb_running_get_entry(dnode, NULL, true);
+
+		memset(&bs->key.local, 0, sizeof(struct in6_addr));
+		break;
+	}
 	return NB_OK;
 }
 
@@ -889,6 +952,7 @@ const struct frr_yang_module_info frr_bfdd_info = {
 			.cbs = {
 				.modify = bfdd_bfd_sessions_single_hop_source_addr_modify,
 				.destroy = bfdd_bfd_sessions_single_hop_source_addr_destroy,
+				.cli_show = bfdd_bfd_sessions_single_hop_source_addr_show,
 			}
 		},
 		{

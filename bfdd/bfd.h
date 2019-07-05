@@ -614,6 +614,9 @@ void bfd_cli_show_tx(struct vty *vty, struct lyd_node *dnode,
 		     bool show_defaults);
 void bfd_cli_show_rx(struct vty *vty, struct lyd_node *dnode,
 		     bool show_defaults);
+void bfdd_bfd_sessions_single_hop_source_addr_show(struct vty *vty,
+						   struct lyd_node *dnode,
+						   bool show_defaults);
 void bfd_cli_show_shutdown(struct vty *vty, struct lyd_node *dnode,
 			   bool show_defaults);
 void bfd_cli_show_echo(struct vty *vty, struct lyd_node *dnode,
