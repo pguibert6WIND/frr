@@ -55,6 +55,19 @@ struct other_route_table {
 	struct route_table *table;
 };
 
+struct zebra_vrf_reach {
+	vrf_id_t vrf_id_target;
+	ifindex_t iface_idx;
+
+#define ZEBRA_VRF_REACH_OK  1
+#define ZEBRA_VRF_REACH_NOK 2
+	uint8_t flags;
+
+	struct route_node *node;
+
+	struct list *client_list;
+};
+
 /* Routing table instance.  */
 struct zebra_vrf {
 	/* Back pointer */
@@ -80,6 +93,8 @@ struct zebra_vrf {
 
 	/* Import check table (used mostly by BGP */
 	struct route_table *import_check_table[AFI_MAX];
+
+	struct route_table *vrf_reach_table;
 
 	struct otable_head other_tables;
 

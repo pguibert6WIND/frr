@@ -2513,6 +2513,8 @@ void (*zserv_handlers[])(ZAPI_HANDLER_ARGS) = {
 	[ZEBRA_IPTABLE_ADD] = zread_iptable,
 	[ZEBRA_IPTABLE_DELETE] = zread_iptable,
 	[ZEBRA_VXLAN_FLOOD_CONTROL] = zebra_vxlan_flood_control,
+	[ZEBRA_VRF_REACHABLE_REGISTER] = zebra_vrf_reachable_register,
+	[ZEBRA_VRF_REACHABLE_UNREGISTER] = zebra_vrf_reachable_unregister,
 };
 
 #if defined(HANDLE_ZAPI_FUZZING)

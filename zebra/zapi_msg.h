@@ -91,6 +91,9 @@ extern void zserv_nexthop_num_warn(const char *caller, const struct prefix *p,
 
 extern void zsend_capabilities_all_clients(void);
 
+extern void zebra_vrf_reachable_register(ZAPI_HANDLER_ARGS);
+extern void zebra_vrf_reachable_unregister(ZAPI_HANDLER_ARGS);
+
 #ifdef __cplusplus
 }
 #endif

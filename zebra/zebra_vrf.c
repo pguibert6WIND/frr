@@ -47,9 +47,13 @@ static void zebra_vrf_table_create(struct zebra_vrf *zvrf, afi_t afi,
 				   safi_t safi);
 static void zebra_rnhtable_node_cleanup(struct route_table *table,
 					struct route_node *node);
+static void zebra_vrf_reach_node_cleanup(struct route_table *table,
+					 struct route_node *node);
+static void zebra_vrf_reach_free(struct zebra_vrf_reach *zvrf_reach);
 
 DEFINE_MTYPE_STATIC(ZEBRA, ZEBRA_VRF, "ZEBRA VRF")
 DEFINE_MTYPE_STATIC(ZEBRA, OTHER_TABLE, "Other Table")
+DEFINE_MTYPE_STATIC(ZEBRA, VRF_REACH, "cross VRF reachability context")
 
 /* VRF information update. */
 static void zebra_vrf_add_update(struct zebra_vrf *zvrf)
@@ -143,6 +147,10 @@ static int zebra_vrf_enable(struct vrf *vrf)
 		table->cleanup = zebra_rnhtable_node_cleanup;
 		zvrf->import_check_table[afi] = table;
 	}
+
+	table = route_table_init();
+	table->cleanup = zebra_vrf_reach_node_cleanup;
+	zvrf->vrf_reach_table = table;
 
 	/* Kick off any VxLAN-EVPN processing. */
 	zebra_vxlan_vrf_enable(zvrf);
@@ -403,6 +411,28 @@ static void zebra_rnhtable_node_cleanup(struct route_table *table,
 		zebra_free_rnh(node->info);
 }
 
+static void zebra_vrf_reach_node_cleanup(struct route_table *table,
+					 struct route_node *node)
+{
+	if (node->info)
+		zebra_vrf_reach_free(node->info);
+}
+
+static void zebra_vrf_reach_free(struct zebra_vrf_reach *zvrfr)
+{
+	list_delete(&zvrfr->client_list);
+	XFREE(MTYPE_VRF_REACH, zvrfr);
+}
+
+static inline struct route_table *get_vrf_reach_table(vrf_id_t vrfid)
+{
+	struct zebra_vrf *zvrf;
+
+	zvrf = zebra_vrf_lookup_by_id(vrfid);
+
+	return zvrf->vrf_reach_table;
+}
+
 /*
  * Create a routing table for the specific AFI/SAFI in the given VRF.
  */
@@ -516,4 +546,191 @@ void zebra_vrf_init(void)
 		 zebra_vrf_delete, zebra_vrf_update);
 
 	vrf_cmd_init(vrf_config_write, &zserv_privs);
+}
+
+static void zebra_vrf_reachable_evaluate_ctx(struct zebra_vrf *zvrf,
+					     struct zebra_vrf_reach *zvrfr)
+{
+	int ret;
+	ifindex_t idx = IFINDEX_INTERNAL;
+
+	if (!zvrf)
+		return;
+	if (zvrfr) {
+		ret = vrf_route_leak_possible(zvrf->vrf->vrf_id,
+					      zvrfr->vrf_id_target,
+					      &idx);
+		zvrfr->iface_idx = idx;
+		if (ret == ROUTE_LEAK_VRF_NOT_POSSIBLE ||
+		    ret == ROUTE_LEAK_VRF_NETNS_MAYBE)
+			zvrfr->flags = ZEBRA_VRF_REACH_NOK;
+		else
+			zvrfr->flags = ZEBRA_VRF_REACH_OK;
+	}
+}
+
+static struct zebra_vrf_reach *zebra_vrf_reachable_lookup_ctx(struct route_table *table,
+							      vrf_id_t target)
+{
+	struct prefix p;
+	struct route_node *rn;
+
+	memset(&p, 0, sizeof(struct prefix));
+	p.family = AF_INET;
+	p.prefixlen = 32;
+	p.u.prefix4.s_addr = target;
+
+	/* Lookup (or add) route node.*/
+	rn = route_node_lookup(table, &p);
+	if (!rn)
+		return NULL;
+
+	route_unlock_node(rn);
+	return (rn->info);
+}
+
+static struct zebra_vrf_reach *zebra_vrf_reachable_add_ctx(struct route_table *table,
+							   vrf_id_t target)
+{
+	struct prefix p;
+	struct zebra_vrf_reach *zvrfr;
+	struct route_node *rn;
+
+	memset(&p, 0, sizeof(struct prefix));
+	p.family = AF_INET;
+	p.prefixlen = 32;
+	p.u.prefix4.s_addr = target;
+
+	/* Lookup (or add) route node.*/
+	rn = route_node_get(table, &p);
+
+	if (!rn->info) {
+		zvrfr = XCALLOC(MTYPE_VRF_REACH, sizeof(struct zebra_vrf_reach));
+		zvrfr->iface_idx = IFINDEX_INTERNAL;
+		zvrfr->vrf_id_target = target;
+		zvrfr->client_list = list_new();
+		zvrfr->node = rn;
+		rn->info = zvrfr;
+	} else
+		zvrfr = rn->info;
+
+	route_unlock_node(rn);
+
+	return zvrfr;
+}
+
+static int send_client_reachable(struct zebra_vrf_reach *zvrfr,
+				 struct zserv *client,
+				 vrf_id_t vrf_id)
+{
+	struct stream *s;
+	int cmd = ZEBRA_NEXTHOP_UPDATE;
+
+	/* Get output stream. */
+	s = stream_new(ZEBRA_MAX_PACKET_SIZ);
+
+	zclient_create_header(s, cmd, vrf_id);
+
+	stream_putl(s, zvrfr->vrf_id_target);
+	if (zvrfr->flags & ZEBRA_VRF_REACH_OK)
+		stream_putc(s, 1);
+	else
+		stream_putc(s, 0);
+	stream_putl(s, zvrfr->iface_idx);
+
+	stream_putw_at(s, 0, stream_get_endp(s));
+
+	client->last_write_cmd = cmd;
+
+	return zserv_send_message(client, s);
+}
+
+static void zebra_vrf_reachable_add_client(struct zebra_vrf_reach *zvrfr,
+					   struct zserv *client,
+					   vrf_id_t vrf_id)
+{
+	if (!listnode_lookup(zvrfr->client_list, client))
+		listnode_add(zvrfr->client_list, client);
+
+	/*
+	 * We always need to respond with known information,
+	 * currently multiple daemons expect this behavior
+	 */
+	send_client_reachable(zvrfr, client, vrf_id);
+}
+
+static void zebra_vrf_reachable_delete(struct zebra_vrf_reach *zvrfr)
+{
+	struct route_node *rn;
+
+	if (!list_isempty(zvrfr->client_list))
+		return;
+
+	if (!(rn = zvrfr->node))
+		return;
+
+	zebra_vrf_reach_free(zvrfr);
+	rn->info = NULL;
+	route_unlock_node(rn);
+
+}
+
+static void zebra_vrf_reachable_remove_client(struct zebra_vrf_reach *zvrfr,
+					      struct zserv *client)
+{
+	listnode_delete(zvrfr->client_list, client);
+	zebra_vrf_reachable_delete(zvrfr);
+}
+
+void zebra_vrf_reachable_register(ZAPI_HANDLER_ARGS)
+{
+	vrf_id_t vrf_id;
+	struct route_table *table;
+	struct zebra_vrf_reach *zvrfr;
+	struct stream *s;
+
+	s = msg;
+	STREAM_GETL(s, vrf_id);
+
+	table = get_vrf_reach_table(zvrf->vrf->vrf_id);
+	if (!table) {
+		flog_warn(EC_ZEBRA_VRF_REACH_NO_TABLE,
+			  "%u: Add VRF Reach entry failed - table not found",
+			  zvrf->vrf->vrf_id);
+		return;
+	}
+	zvrfr = zebra_vrf_reachable_add_ctx(table, vrf_id);
+	if (!zvrfr)
+		return;
+
+	zebra_vrf_reachable_evaluate_ctx(zvrf, zvrfr);
+	zebra_vrf_reachable_add_client(zvrfr, client, zvrf_id(zvrf));
+
+ stream_failure:
+	return;
+}
+
+/* Nexthop register */
+void zebra_vrf_reachable_unregister(ZAPI_HANDLER_ARGS)
+{
+	struct stream *s;
+	struct zebra_vrf_reach *zvrfr;
+	vrf_id_t vrf_id;
+	struct route_table *table;
+
+	s = msg;
+	STREAM_GETL(s, vrf_id);
+
+	table = get_vrf_reach_table(zvrf->vrf->vrf_id);
+	if (!table) {
+		flog_warn(EC_ZEBRA_VRF_REACH_NO_TABLE,
+			  "%u: Add VRF Reach entry failed - table not found",
+			  zvrf->vrf->vrf_id);
+		return;
+	}
+	zvrfr = zebra_vrf_reachable_lookup_ctx(table, vrf_id);
+	if (zvrfr)
+		zebra_vrf_reachable_remove_client(zvrfr, client);
+stream_failure:
+	return;
 }
