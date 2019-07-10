@@ -402,6 +402,18 @@ bgp_node_get_bgp_nexthop_info(struct bgp_node *node)
 	return node->info;
 }
 
+static inline struct zapi_vrf_reach *
+bgp_node_get_bgp_vrf_reach_info(struct bgp_node *node)
+{
+	return node->info;
+}
+
+static inline void bgp_node_set_bgp_vrf_reach_info(struct bgp_node *node,
+					     struct zapi_vrf_reach *zvr)
+{
+	node->info = zvr;
+}
+
 static inline void bgp_node_set_bgp_nexthop_info(struct bgp_node *node,
 					     struct bgp_nexthop_cache *bnc)
 {

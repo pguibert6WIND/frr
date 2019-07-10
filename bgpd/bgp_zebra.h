@@ -103,4 +103,19 @@ extern void bgp_send_pbr_iptable(struct bgp_pbr_action *pba,
 extern void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 				afi_t afi, uint32_t table_id, bool announce);
 
+#define BGP_VRF_REACH_OK           ZAPI_VRF_REACH_OK
+#define BGP_VRF_REACH_NOK          ZAPI_VRF_REACH_NOK
+#define BGP_VRF_REACH_REGISTERED   (1 << 2)
+#define BGP_VRF_REACH_UNREGISTERED (1 << 3)
+
+extern void bgp_vrf_reach_finish(struct bgp *bgp);
+
+extern void bgp_vrf_reach_init(struct bgp *bgp);
+
+extern struct zapi_vrf_reach *bgp_vrf_reach_lookup(struct bgp *orig,
+						   struct bgp *target);
+
+extern struct zapi_vrf_reach *bgp_vrf_reach_add_ctx(struct bgp *orig,
+						    struct bgp *target);
+
 #endif /* _QUAGGA_BGP_ZEBRA_H */

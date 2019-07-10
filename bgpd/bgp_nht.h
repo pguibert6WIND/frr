@@ -97,4 +97,8 @@ extern void bgp_nht_register_nexthops(struct bgp *bgp);
  */
 extern void bgp_nht_register_enhe_capability_interfaces(struct peer *peer);
 
+extern void bgp_nht_update_vrf_reachability(struct bgp *bgp,
+					    struct bgp *bgp_target,
+					    struct zapi_vrf_reach *ctx);
+
 #endif /* _BGP_NHT_H */

@@ -492,6 +492,24 @@ void bgp_parse_nexthop_update(int command, vrf_id_t vrf_id)
 		bnc_nexthop_free(bnc);
 		bnc->nexthop = NULL;
 	}
+	if (bnc->flags & BGP_NEXTHOP_VALID &&
+	    bnc->bgp->vrf_id != bgp->vrf_id) {
+		if (vrf_is_backend_netns()) {
+			struct zapi_vrf_reach *zvr =
+				bgp_vrf_reach_lookup(bgp, bnc->bgp);
+
+			if (zvr && (zvr->status & ZAPI_VRF_REACH_NOK))
+				bnc->flags &= ~BGP_NEXTHOP_VALID;
+			else if (!zvr) {
+				bgp_vrf_reach_add_ctx(bgp, bnc->bgp);
+				bnc->flags &= ~BGP_NEXTHOP_VALID;
+			} else {
+				bnc->flags |= BGP_NEXTHOP_VRF_REACHABLE;
+				bnc->cross_vrf_gw_ifindex = zvr->iface_idx;
+			}
+		} else
+			bnc->flags |= BGP_NEXTHOP_VRF_REACHABLE;
+	}
 
 	evaluate_paths(bnc);
 }
@@ -893,5 +911,41 @@ void bgp_nht_register_enhe_capability_interfaces(struct peer *peer)
 						nhop->vrf_id,
 						ifp, true,
 						BGP_UNNUM_DEFAULT_RA_INTERVAL);
+	}
+}
+
+void bgp_nht_update_vrf_reachability(struct bgp *bgp,
+				     struct bgp *bgp_target,
+				     struct zapi_vrf_reach *ctx)
+{
+	struct bgp_node *rn;
+	struct bgp_nexthop_cache *bnc;
+	afi_t afi;
+
+	for (afi = AFI_IP; afi < AFI_MAX; afi++) {
+		if (!bgp->nexthop_cache_table[afi])
+			continue;
+
+		for (rn = bgp_table_top(bgp->nexthop_cache_table[afi]); rn;
+		     rn = bgp_route_next(rn)) {
+			bnc = bgp_node_get_bgp_nexthop_info(rn);
+
+			if (!bnc)
+				continue;
+
+			if (bnc->bgp != bgp_target)
+				continue;
+
+			bnc->cross_vrf_gw_ifindex = ctx->iface_idx;
+
+			if (CHECK_FLAG(ctx->status, BGP_VRF_REACH_NOK)) {
+				UNSET_FLAG(bnc->flags, BGP_NEXTHOP_VRF_REACHABLE);
+				UNSET_FLAG(bnc->flags, BGP_NEXTHOP_VALID);
+			} else if (CHECK_FLAG(ctx->status, BGP_VRF_REACH_OK)) {
+				SET_FLAG(bnc->flags, BGP_NEXTHOP_VRF_REACHABLE);
+				SET_FLAG(bnc->flags, BGP_NEXTHOP_VALID);
+			}
+			evaluate_paths(bnc);
+		}
 	}
 }

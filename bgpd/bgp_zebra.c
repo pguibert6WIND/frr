@@ -65,6 +65,8 @@
 /* All information about zebra. */
 struct zclient *zclient = NULL;
 
+DEFINE_MTYPE_STATIC(BGPD, BGP_VRF_REACH_CACHE, "BGP Vrf Reachable Cache Entry");
+
 /* Can we install into zebra? */
 static inline int bgp_install_info_to_zebra(struct bgp *bgp)
 {
@@ -103,6 +105,63 @@ static int bgp_router_id_update(ZAPI_CALLBACK_ARGS)
 static int bgp_read_nexthop_update(ZAPI_CALLBACK_ARGS)
 {
 	bgp_parse_nexthop_update(cmd, vrf_id);
+	return 0;
+}
+
+static int bgp_read_vrf_reachable_update(ZAPI_CALLBACK_ARGS)
+{
+	struct bgp *bgp, *bgp_target;
+	struct zapi_vrf_reach vrfr, *ctx;
+
+	bgp = bgp_lookup_by_vrf_id(vrf_id);
+	if (!bgp) {
+		flog_err(
+			EC_BGP_VRF_REACH_UPD,
+			"parse vrf reach update: instance not found for vrf_id %u",
+			vrf_id);
+		return 0;
+	}
+	if (!zapi_vrf_reach_update_decode(zclient->ibuf, &vrfr)) {
+		if (BGP_DEBUG(nht, NHT))
+			zlog_debug("%s: Failure to decode vrf reach update",
+				   __PRETTY_FUNCTION__);
+		return 0;
+	}
+	bgp_target = bgp_lookup_by_vrf_id(vrfr.vrf_id_target);
+	if (!bgp_target) {
+		flog_err(
+			EC_BGP_VRF_REACH_UPD,
+			"parse vrf reach update: instance not found for target_vrf_id %u",
+			vrf_id);
+		return 0;
+	}
+	ctx = bgp_vrf_reach_lookup(bgp, bgp_target);
+	if (!ctx) {
+		flog_err(
+			EC_BGP_VRF_REACH_UPD,
+			"parse vrf reach update: vrf_reach_ctx not found (%u/%u)",
+			vrf_id, vrfr.vrf_id_target);
+		return 0;
+	}
+	if ((CHECK_FLAG(vrfr.status, ZAPI_VRF_REACH_OK) &&
+	     CHECK_FLAG(ctx->status, BGP_VRF_REACH_NOK))) {
+		/* update notification up */
+		UNSET_FLAG(ctx->status, BGP_VRF_REACH_NOK);
+		SET_FLAG(ctx->status, BGP_VRF_REACH_OK);
+		bgp_nht_update_vrf_reachability(bgp, bgp_target,
+						       ctx);
+		return 0;
+	}
+	if ((CHECK_FLAG(vrfr.status, ZAPI_VRF_REACH_NOK) &&
+	     CHECK_FLAG(ctx->status, BGP_VRF_REACH_OK))) {
+		/* update notification down */
+		UNSET_FLAG(ctx->status, BGP_VRF_REACH_OK);
+		SET_FLAG(ctx->status, BGP_VRF_REACH_NOK);
+		bgp_nht_update_vrf_reachability(bgp, bgp_target,
+						       ctx);
+		return 0;
+	}
+	/* other cases, no change in status, ignore */
 	return 0;
 }
 
@@ -2760,6 +2819,7 @@ void bgp_zebra_init(struct thread_master *master, unsigned short instance)
 	zclient->ipset_notify_owner = ipset_notify_owner;
 	zclient->ipset_entry_notify_owner = ipset_entry_notify_owner;
 	zclient->iptable_notify_owner = iptable_notify_owner;
+	zclient->vrf_reachable_update = bgp_read_vrf_reachable_update;
 	zclient->instance = instance;
 }
 
@@ -3021,3 +3081,155 @@ void bgp_zebra_announce_default(struct bgp *bgp, struct nexthop *nh,
 		return;
 	}
 }
+
+void bgp_vrf_reach_init(struct bgp *bgp)
+{
+		bgp->vrf_reach_table =
+			bgp_table_init(bgp, AFI_IP, SAFI_UNICAST);
+}
+
+static void bgp_vrf_reach_cache_reset(struct bgp_table *table)
+{
+	struct bgp_node *rn;
+	struct zapi_vrf_reach *zvr;
+
+	for (rn = bgp_table_top(table); rn; rn = bgp_route_next(rn)) {
+		zvr = bgp_node_get_bgp_vrf_reach_info(rn);
+		if (!zvr)
+			continue;
+
+		XFREE(MTYPE_BGP_VRF_REACH_CACHE, zvr);
+		bgp_node_set_bgp_vrf_reach_info(rn, NULL);
+		bgp_unlock_node(rn);
+	}
+}
+
+/**
+ * bgp_vrf_reach_register -- Format and send a vrf reach register/Unregister
+ *   command to Zebra.
+ * ARGUMENTS:
+ *   struct bgp * -- the bgp structure
+ *   struct zapi_vrf_rech *ctx -- the zapi_vrf_reach structure
+ *   int command -- command to send to zebra
+ * RETURNS:
+ *   void.
+ */
+static void bgp_vrf_reach_register(struct bgp *bgp,
+				   struct zapi_vrf_reach *ctx,
+				   int command)
+{
+	int ret;
+
+	if (!zclient)
+		return;
+
+	if (!bgp_zebra_num_connects()) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("%s: We have not connected yet, cannot send vrf reach",
+				   __PRETTY_FUNCTION__);
+	}
+
+	if (BGP_DEBUG(zebra, ZEBRA)) {
+		struct vrf *vrf = vrf_lookup_by_id(ctx->vrf_id_target);
+
+		assert(vrf);
+		zlog_debug("%s: sending cmd %s for reaching vrf %s from vrf %s",
+			__func__, zserv_command_string(command),
+			   bgp->name, vrf->name);
+	}
+	if ((command == ZEBRA_VRF_REACHABLE_REGISTER) &&
+	    (CHECK_FLAG(ctx->status, BGP_VRF_REACH_REGISTERED)))
+		return;
+	if ((command == ZEBRA_VRF_REACHABLE_UNREGISTER) &&
+	    (CHECK_FLAG(ctx->status, BGP_VRF_REACH_UNREGISTERED)))
+		return;
+
+	ret = zclient_send_vrf_reach(zclient, command,
+				     ctx->vrf_id_target,
+				     bgp->vrf_id);
+	if (ret < 0)
+		flog_warn(EC_BGP_ZEBRA_SEND,
+			  "sendmsg_vrf_reach: zclient_send_message() failed");
+
+	if (command == ZEBRA_VRF_REACHABLE_REGISTER)
+		SET_FLAG(ctx->status, BGP_VRF_REACH_REGISTERED);
+	else if (command == ZEBRA_VRF_REACHABLE_UNREGISTER)
+		UNSET_FLAG(ctx->status, BGP_VRF_REACH_UNREGISTERED);
+	return;
+}
+
+void bgp_vrf_reach_finish(struct bgp *bgp)
+{
+	/* Only the current one needs to be reset. */
+	bgp_vrf_reach_cache_reset(bgp->vrf_reach_table);
+	bgp_table_unlock(bgp->vrf_reach_table);
+	bgp->vrf_reach_table = NULL;
+}
+
+struct zapi_vrf_reach *bgp_vrf_reach_lookup(struct bgp *orig, struct bgp *target)
+{
+	struct prefix p;
+	struct bgp_node *rn;
+	struct bgp_table *table;
+
+	if (!target || !orig)
+		return NULL;
+	table = orig->vrf_reach_table;
+	if (!table)
+		return NULL;
+
+	memset(&p, 0, sizeof(struct prefix));
+	p.family = AF_INET;
+	p.prefixlen = 32;
+	p.u.prefix4.s_addr = target->vrf_id;
+
+	/* Lookup (or add) route node.*/
+	rn = bgp_node_lookup(table, &p);
+	if (!rn)
+		return NULL;
+
+	bgp_unlock_node(rn);
+	return (rn->info);
+}
+
+struct zapi_vrf_reach *bgp_vrf_reach_add_ctx(struct bgp *orig, struct bgp *target)
+{
+	struct zapi_vrf_reach *ctx;
+	struct bgp_node *rn;
+	struct bgp_table *table;
+	struct prefix p;
+
+	ctx = bgp_vrf_reach_lookup(orig, target);
+	if (ctx)
+		return ctx;
+	if (!orig || !target)
+		return NULL;
+
+	table = orig->vrf_reach_table;
+	if (!table)
+		return NULL;
+
+	memset(&p, 0, sizeof(struct prefix));
+	p.family = AF_INET;
+	p.prefixlen = 32;
+	p.u.prefix4.s_addr = target->vrf_id;
+
+	/* Lookup (or add) route node.*/
+	rn = bgp_node_get(table, &p);
+	if (!rn)
+		return NULL;
+
+	if (rn->info)
+		return (rn->info);
+
+	ctx = XCALLOC(MTYPE_BGP_VRF_REACH_CACHE, sizeof(struct zapi_vrf_reach));
+	if (!ctx)
+		return NULL;
+
+	ctx->vrf_id_target = target->vrf_id;
+	SET_FLAG(ctx->status, BGP_VRF_REACH_NOK);
+	ctx->iface_idx = IFINDEX_INTERNAL;
+	bgp_vrf_reach_register(orig, ctx, ZEBRA_VRF_REACHABLE_REGISTER);
+	return ctx;
+}
+

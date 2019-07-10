@@ -391,6 +391,8 @@ struct bgp {
 
 	struct bgp_table *connected_table[AFI_MAX];
 
+	struct bgp_table *vrf_reach_table;
+
 	struct hash *address_hash;
 
 	/* DB for all local tunnel-ips - used mainly for martian checks
