@@ -176,6 +176,9 @@ typedef enum {
 	ZEBRA_VXLAN_FLOOD_CONTROL,
 	ZEBRA_VXLAN_SG_ADD,
 	ZEBRA_VXLAN_SG_DEL,
+	ZEBRA_VRF_REACHABLE_REGISTER,
+	ZEBRA_VRF_REACHABLE_UNREGISTER,
+	ZEBRA_VRF_REACHABLE_UPDATE,
 } zebra_message_types_t;
 
 struct redist_proto {
@@ -274,6 +277,7 @@ struct zclient {
 	int (*iptable_notify_owner)(ZAPI_CALLBACK_ARGS);
 	int (*vxlan_sg_add)(ZAPI_CALLBACK_ARGS);
 	int (*vxlan_sg_del)(ZAPI_CALLBACK_ARGS);
+	int (*vrf_reachable_update)(ZAPI_CALLBACK_ARGS);
 };
 
 /* Zebra API message flag. */
@@ -318,6 +322,15 @@ struct zapi_nexthop {
 
 	struct ethaddr rmac;
 };
+
+struct zapi_vrf_reach {
+	vrf_id_t vrf_id_target;
+#define ZAPI_VRF_REACH_OK  (1 << 0)
+#define ZAPI_VRF_REACH_NOK (1 << 1)
+	uint8_t status;
+	ifindex_t iface_idx;
+};
+
 
 /*
  * Some of these data structures do not map easily to
@@ -634,6 +647,9 @@ extern int zclient_route_send(uint8_t, struct zclient *, struct zapi_route *);
 extern int zclient_send_rnh(struct zclient *zclient, int command,
 			    struct prefix *p, bool exact_match,
 			    vrf_id_t vrf_id);
+extern int zclient_send_vrf_reach(struct zclient *zclient, int command,
+				  vrf_id_t target_vrf_id,
+				  vrf_id_t vrf_id);
 extern int zapi_route_encode(uint8_t, struct stream *, struct zapi_route *);
 extern int zapi_route_decode(struct stream *, struct zapi_route *);
 bool zapi_route_notify_decode(struct stream *s, struct prefix *p,
@@ -660,6 +676,8 @@ bool zapi_iptable_notify_decode(struct stream *s,
 extern struct nexthop *nexthop_from_zapi_nexthop(struct zapi_nexthop *znh);
 extern bool zapi_nexthop_update_decode(struct stream *s,
 				       struct zapi_route *nhr);
+extern bool zapi_vrf_reach_update_decode(struct stream *s,
+					 struct zapi_vrf_reach *vrfr);
 
 static inline void zapi_route_set_blackhole(struct zapi_route *api,
 					    enum blackhole_type bh_type)

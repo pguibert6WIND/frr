@@ -673,6 +673,21 @@ static int zclient_connect(struct thread *t)
 	return zclient_start(zclient);
 }
 
+int zclient_send_vrf_reach(struct zclient *zclient, int command,
+			   vrf_id_t target_vrf_id,
+			   vrf_id_t vrf_id)
+{
+	struct stream *s;
+
+	s = zclient->obuf;
+	stream_reset(s);
+	zclient_create_header(s, command, vrf_id);
+	stream_putl(s, target_vrf_id);
+	stream_putw_at(s, 0, stream_get_endp(s));
+
+	return zclient_send_message(zclient);
+}
+
 int zclient_send_rnh(struct zclient *zclient, int command, struct prefix *p,
 		     bool exact_match, vrf_id_t vrf_id)
 {
@@ -1236,6 +1251,18 @@ struct nexthop *nexthop_from_zapi_nexthop(struct zapi_nexthop *znh)
 	}
 
 	return n;
+}
+
+bool zapi_vrf_reach_update_decode(struct stream *s, struct zapi_vrf_reach *vrfr)
+{
+	memset(vrfr, 0, sizeof(*vrfr));
+	STREAM_GETL(s, vrfr->vrf_id_target);
+	STREAM_GETC(s, vrfr->status);
+	STREAM_GETL(s, vrfr->iface_idx);
+
+	return true;
+stream_failure:
+	return false;
 }
 
 bool zapi_nexthop_update_decode(struct stream *s, struct zapi_route *nhr)
@@ -2733,6 +2760,13 @@ static int zclient_read(struct thread *thread)
 		if (zclient->vxlan_sg_del)
 			(*zclient->vxlan_sg_del)(command, zclient, length,
 						    vrf_id);
+		break;
+	case ZEBRA_VRF_REACHABLE_UPDATE:
+		if (zclient_debug)
+			zlog_debug("zclient rcvd vrf reachable update");
+		if (zclient->vrf_reachable_update)
+			(*zclient->vrf_reachable_update)(command, zclient, length,
+						   vrf_id);
 		break;
 	default:
 		break;
