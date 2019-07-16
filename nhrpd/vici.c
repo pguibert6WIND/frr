@@ -469,16 +469,49 @@ static void vici_register_event(struct vici_conn *vici, const char *name)
 	vici_submit(vici, obuf);
 }
 
+static bool vici_charon_filepath_done;
+
+static char *vici_get_charon_filepath(void)
+{
+	static char buff[1200];
+	FILE *fp;
+	char *ptr = buff, *ptr2;
+	char line[1024];
+
+	if (vici_charon_filepath_done)
+		return ptr;
+	fp = popen("ipsec --piddir", "r");
+	if (!fp) {
+		zlog_err("%% Failed to retrieve charon file path.");
+		return NULL;
+	}
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		ptr2 = strchr(line, '\n');
+		if (ptr2)
+			*ptr2 = '\0';
+		ptr += snprintf(buff, sizeof(buff), "%s/charon.vici", line);
+	}
+	pclose(fp);
+	vici_charon_filepath_done = true;
+	return buff;
+}
+
 static int vici_reconnect(struct thread *t)
 {
 	struct vici_conn *vici = THREAD_ARG(t);
 	int fd;
+	char *file_path;
 
 	vici->t_reconnect = NULL;
 	if (vici->fd >= 0)
 		return 0;
 
 	fd = sock_open_unix(VICI_SOCKET);
+	if (fd < 0) {
+		file_path = vici_get_charon_filepath();
+		if (file_path)
+			fd = sock_open_unix(file_path);
+	}
 	if (fd < 0) {
 		debugf(NHRP_DEBUG_VICI,
 		       "%s: failure connecting VICI socket: %s", __func__,
