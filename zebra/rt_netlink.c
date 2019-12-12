@@ -3316,6 +3316,8 @@ static int netlink_ipneigh_change(struct nlmsghdr *h, int len, ns_id_t ns_id)
 	bool local_inactive;
 	uint32_t ext_flags = 0;
 	bool dp_static = false;
+	int l2_len = 0;
+	int cmd;
 
 	ndm = NLMSG_DATA(h);
 
@@ -3356,6 +3358,42 @@ static int netlink_ipneigh_change(struct nlmsghdr *h, int len, ns_id_t ns_id)
 	/* if kernel marks our rfc5549 neighbor entry invalid, re-install it */
 	if (h->nlmsg_type == RTM_NEWNEIGH && !(ndm->ndm_state & NUD_VALID))
 		netlink_handle_5549(ndm, zif, ifp, &ip, true);
+
+	/* we send information to client:
+	 * - nlmsg_type = RTM_DELNEIGH|NEWNEIGH|GETNEIGH
+	 * - struct ipaddr ( for DEL and GET)
+	 * - struct ethaddr mac; (for NEW)
+	 */
+	if (h->nlmsg_type == RTM_NEWNEIGH)
+		cmd = ZEBRA_NEIGH_ADDED;
+	else if (h->nlmsg_type == RTM_GETNEIGH)
+		cmd = ZEBRA_NEIGH_GET;
+	else if (h->nlmsg_type == RTM_DELNEIGH)
+		cmd = ZEBRA_NEIGH_REMOVED;
+	else {
+		zlog_debug("%s(): unknown nlmsg type %u", __func__,
+			   h->nlmsg_type);
+		return 0;
+	}
+	if (tb[NDA_LLADDR]) {
+		if (RTA_PAYLOAD(tb[NDA_LLADDR]) != ETH_ALEN) {
+			if (IS_ZEBRA_DEBUG_KERNEL)
+				zlog_debug(
+					"%s family %s IF %s(%u) - LLADDR is not MAC, len %lu",
+					nl_msg_type_to_str(h->nlmsg_type),
+					nl_family_to_str(ndm->ndm_family),
+					ifp->name, ndm->ndm_ifindex,
+					(unsigned long)RTA_PAYLOAD(
+						tb[NDA_LLADDR]));
+		}
+		/* copy LLADDR information */
+		l2_len = RTA_PAYLOAD(tb[NDA_LLADDR]);
+		memcpy(&mac, RTA_DATA(tb[NDA_LLADDR]), l2_len);
+	}
+	zsend_neighbor_notify(cmd, ifp, &ip, ndm->ndm_state,
+			      l2_len ? &mac : NULL, l2_len);
+	if (h->nlmsg_type == RTM_GETNEIGH)
+		return 0;
 
 	/* The neighbor is present on an SVI. From this, we locate the
 	 * underlying
@@ -3629,7 +3667,8 @@ int netlink_neigh_change(struct nlmsghdr *h, ns_id_t ns_id)
 	int len;
 	struct ndmsg *ndm;
 
-	if (!(h->nlmsg_type == RTM_NEWNEIGH || h->nlmsg_type == RTM_DELNEIGH))
+	if (!(h->nlmsg_type == RTM_NEWNEIGH || h->nlmsg_type == RTM_DELNEIGH
+	      || h->nlmsg_type == RTM_GETNEIGH))
 		return 0;
 
 	/* Length validity. */

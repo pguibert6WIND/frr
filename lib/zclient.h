@@ -224,6 +224,8 @@ typedef enum {
 	ZEBRA_NEIGH_ADDED,
 	ZEBRA_NEIGH_REMOVED,
 	ZEBRA_NEIGH_GET,
+	ZEBRA_NEIGH_REGISTER,
+	ZEBRA_NEIGH_UNREGISTER,
 } zebra_message_types_t;
 
 enum zebra_error_types {
