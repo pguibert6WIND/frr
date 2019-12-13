@@ -392,6 +392,43 @@ static void nhrp_table_node_cleanup(struct route_table *table,
 	XFREE(MTYPE_NHRP_ROUTE, node->info);
 }
 
+void nhrp_send_zebra_nbr(union sockunion *in,
+			 union sockunion *out,
+			 struct interface *ifp)
+{
+	struct stream *s;
+
+	if (!zclient || zclient->sock < 0) {
+		zlog_err("%s : zclient not ready", __func__);
+		return;
+	}
+	s = zclient->obuf;
+	stream_reset(s);
+	zclient_create_header(s,
+			      out ? ZEBRA_NEIGH_ADD : ZEBRA_NEIGH_DEL,
+			      ifp->vrf_id);
+	stream_putc(s, sockunion_family(in));
+	if (sockunion_family(in) == AF_INET)
+		stream_write(s, (uint8_t *)&in->sin.sin_addr,
+			     family2addrsize(sockunion_family(in)));
+	else
+		stream_write(s, (uint8_t *)&in->sin6.sin6_addr,
+			     family2addrsize(sockunion_family(in)));
+	if (out) {
+		stream_putc(s, sockunion_family(out));
+		if (sockunion_family(out) == AF_INET)
+			stream_write(s, (uint8_t *)&out->sin.sin_addr,
+				     family2addrsize(sockunion_family(out)));
+		else
+			stream_write(s, (uint8_t *)&out->sin6.sin6_addr,
+				     family2addrsize(sockunion_family(out)));
+	}
+	stream_putl(s, ifp->ifindex);
+
+	stream_putw_at(s, 0, stream_get_endp(s));
+	zclient_send_message(zclient);
+}
+
 void nhrp_zebra_terminate(void)
 {
 	nhrp_zebra_register_neigh(VRF_DEFAULT, AFI_IP, false);

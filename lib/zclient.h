@@ -226,6 +226,8 @@ typedef enum {
 	ZEBRA_NEIGH_GET,
 	ZEBRA_NEIGH_REGISTER,
 	ZEBRA_NEIGH_UNREGISTER,
+	ZEBRA_NEIGH_ADD,
+	ZEBRA_NEIGH_DEL,
 } zebra_message_types_t;
 
 enum zebra_error_types {
@@ -799,6 +801,13 @@ enum zebra_neigh_state { ZEBRA_NEIGH_INACTIVE = 0, ZEBRA_NEIGH_ACTIVE = 1 };
 struct zclient_options {
 	bool receive_notify;
 	bool synchronous;
+};
+
+struct zapi_nbr {
+	int cmd;
+	struct prefix pfx_in;
+	struct prefix pfx_out;
+	ifindex_t index;
 };
 
 extern struct zclient_options zclient_options_default;
