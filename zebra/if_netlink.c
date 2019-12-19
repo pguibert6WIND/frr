@@ -29,10 +29,13 @@
  * Reference - https://sourceware.org/ml/libc-alpha/2013-01/msg00599.html
  */
 #define _LINUX_IN6_H
+#define _LINUX_IF_H
+#define _LINUX_IP_H
 
 #include <netinet/if_ether.h>
 #include <linux/if_bridge.h>
 #include <linux/if_link.h>
+#include <linux/if_tunnel.h>
 #include <net/if_arp.h>
 #include <linux/sockios.h>
 #include <linux/ethtool.h>
@@ -290,6 +293,8 @@ static void netlink_determine_zebra_iftype(const char *kind,
 		*zif_type = ZEBRA_IF_BOND;
 	else if (strcmp(kind, "bond_slave") == 0)
 		*zif_type = ZEBRA_IF_BOND_SLAVE;
+	else if (strcmp(kind, "gre") == 0)
+		*zif_type = ZEBRA_IF_GRE;
 }
 
 #define parse_rtattr_nested(tb, max, rta)                                      \
@@ -493,6 +498,51 @@ static int netlink_extract_vlan_info(struct rtattr *link_data,
 	return 0;
 }
 
+static int netlink_extract_gre_info(struct rtattr *link_data,
+				    struct zebra_l2info_gre *gre_info)
+{
+	struct rtattr *attr[IFLA_GRE_MAX + 1];
+	struct in_addr vtep_ip_in_msg;
+	ifindex_t ifindex_link;
+
+	memset(gre_info, 0, sizeof(*gre_info));
+	memset(attr, 0, sizeof(attr));
+	parse_rtattr_nested(attr, IFLA_GRE_MAX, link_data);
+
+	if (!attr[IFLA_GRE_LOCAL]) {
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug(
+				"IFLA_GRE_LOCAL missing from GRE IF message");
+	} else {
+		vtep_ip_in_msg =
+			*(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]);
+		gre_info->vtep_ip = vtep_ip_in_msg;
+	}
+	if (!attr[IFLA_GRE_REMOTE]) {
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug(
+				"IFLA_GRE_REMOTE missing from GRE IF message");
+	} else {
+		vtep_ip_in_msg =
+			*(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]);
+		gre_info->vtep_ip_remote = vtep_ip_in_msg;
+	}
+
+	if (!attr[IFLA_GRE_LINK]) {
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug("IFLA_GRE_LINK missing from GRE IF message");
+	} else {
+		ifindex_link =
+			*(ifindex_t *)RTA_DATA(attr[IFLA_GRE_LINK]);
+		gre_info->ifindex_link = ifindex_link;
+	}
+	if (attr[IFLA_GRE_IKEY])
+		gre_info->ikey = *(uint32_t *)RTA_DATA(attr[IFLA_GRE_IKEY]);
+	if (attr[IFLA_GRE_OKEY])
+		gre_info->okey = *(uint32_t *)RTA_DATA(attr[IFLA_GRE_OKEY]);
+	return 0;
+}
+
 static int netlink_extract_vxlan_info(struct rtattr *link_data,
 				      struct zebra_l2info_vxlan *vxl_info)
 {
@@ -572,6 +622,16 @@ static void netlink_interface_update_l2info(struct interface *ifp,
 		if (link_nsid != NS_UNKNOWN &&
 		    vxlan_info.ifindex_link)
 			zebra_if_update_link(ifp, vxlan_info.ifindex_link,
+					     link_nsid);
+	} else if (IS_ZEBRA_IF_GRE(ifp)) {
+		struct zebra_l2info_gre gre_info;
+
+		netlink_extract_gre_info(link_data, &gre_info);
+		gre_info.link_nsid = link_nsid;
+		zebra_l2_greif_add_update(ifp, &gre_info, add);
+		if (link_nsid != NS_UNKNOWN &&
+		    gre_info.ifindex_link)
+			zebra_if_update_link(ifp, gre_info.ifindex_link,
 					     link_nsid);
 	}
 }
@@ -1661,6 +1721,8 @@ int netlink_link_change(struct nlmsghdr *h, ns_id_t ns_id, int startup)
 			zebra_l2_bridge_del(ifp);
 		else if (IS_ZEBRA_IF_VXLAN(ifp))
 			zebra_l2_vxlanif_del(ifp);
+		else if (IS_ZEBRA_IF_GRE(ifp))
+			zebra_l2_greif_del(ifp);
 
 		if (!IS_ZEBRA_IF_VRF(ifp))
 			if_delete_update(ifp);

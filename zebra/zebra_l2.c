@@ -45,6 +45,7 @@
 #include "zebra/zebra_l2.h"
 #include "zebra/zebra_vxlan.h"
 #include "zebra/zebra_evpn_mh.h"
+#include "zebra/zebra_gre.h"
 
 /* definitions */
 
@@ -291,6 +292,34 @@ void zebra_l2_vlanif_update(struct interface *ifp,
 }
 
 /*
+ * Update L2 info for a GRE interface. This is called upon interface
+ * addition as well as update. Upon add/update, need to inform
+ * clients about GRE information.
+ */
+void zebra_l2_greif_add_update(struct interface *ifp,
+			       struct zebra_l2info_gre *gre_info, int add)
+{
+	struct zebra_if *zif;
+	struct in_addr old_vtep_ip;
+
+	zif = ifp->info;
+	assert(zif);
+
+	if (add) {
+		memcpy(&zif->l2info.gre, gre_info, sizeof(*gre_info));
+		zebra_gre_if_add(ifp);
+		return;
+	}
+
+	old_vtep_ip = zif->l2info.gre.vtep_ip;
+	if (IPV4_ADDR_SAME(&old_vtep_ip, &gre_info->vtep_ip))
+		return;
+
+	zif->l2info.gre.vtep_ip = gre_info->vtep_ip;
+	zebra_gre_if_update(ifp, ZEBRA_GREIF_LOCAL_IP_CHANGE);
+}
+
+/*
  * Update L2 info for a VxLAN interface. This is called upon interface
  * addition as well as update. Upon add, need to invoke the VNI create
  * function. Upon update, the params of interest are the local tunnel
@@ -351,6 +380,14 @@ void zebra_l2_vxlanif_update_access_vlan(struct interface *ifp,
 	zebra_evpn_vl_vxl_deref(old_access_vlan, zif);
 	zebra_evpn_vl_vxl_ref(zif->l2info.vxl.access_vlan, zif);
 	zebra_vxlan_if_update(ifp, ZEBRA_VXLIF_VLAN_CHANGE);
+}
+
+/*
+ * Handle GRE interface delete.
+ */
+void zebra_l2_greif_del(struct interface *ifp)
+{
+	zebra_gre_if_del(ifp);
 }
 
 /*
