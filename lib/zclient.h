@@ -397,6 +397,8 @@ struct zclient {
 				uint16_t length, vrf_id_t vrf_id);
 	void (*neighbor_got)(int command, struct zclient *zclient,
 			    uint16_t length, vrf_id_t vrf_id);
+	int (*gre_update)(int command, struct zclient *zclient,
+			  uint16_t length, vrf_id_t vrf_id);
 };
 
 /* Zebra API message flag. */
@@ -1195,6 +1197,13 @@ struct zapi_client_close_info {
 extern int zapi_client_close_notify_decode(struct stream *s,
 					   struct zapi_client_close_info *info);
 
+extern int tun_send_zebra_gre_request(struct zclient *client,
+				      struct interface *ifp,
+				      uint32_t *gre_ikey,
+				      uint32_t *gre_okey,
+				      unsigned int *link_index,
+				      vrf_id_t *link_vrf_id,
+				      struct in_addr *saddr);
 #ifdef __cplusplus
 }
 #endif

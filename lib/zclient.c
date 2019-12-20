@@ -3931,6 +3931,11 @@ static int zclient_read(struct thread *thread)
 			(*zclient->neighbor_got)(command, zclient, length,
 						 vrf_id);
 		break;
+	case ZEBRA_GRE_UPDATE:
+		if (zclient->gre_update)
+			(*zclient->gre_update)(command, zclient,
+					       length, vrf_id);
+		break;
 	default:
 		break;
 	}
@@ -4195,4 +4200,34 @@ char *zclient_evpn_dump_macip_flags(uint8_t flags, char *buf, size_t len)
 		CHECK_FLAG(flags, ZEBRA_MACIP_TYPE_SYNC_PATH) ? "Sync " : "");
 
 	return buf;
+}
+
+int tun_send_zebra_gre_request(struct zclient *client,
+			       struct interface *ifp,
+			       uint32_t *gre_ikey,
+			       uint32_t *gre_okey,
+			       unsigned int *link_index,
+			       vrf_id_t *link_vrf_id,
+			       struct in_addr *addr)
+{
+	struct stream *s;
+	ifindex_t idx_local;
+	int ret;
+
+	if (!client || client->sock < 0) {
+		zlog_err("%s : zclient not ready", __func__);
+		return -1;
+	}
+	s = client->obuf;
+	stream_reset(s);
+	zclient_create_header(s,
+			      ZEBRA_GRE_GET,
+			      ifp->vrf_id);
+	stream_putl(s, ifp->ifindex);
+	stream_putw_at(s, 0, stream_get_endp(s));
+	zclient_send_message(client);
+	return 0;
+stream_failure:
+	zlog_err("%s(): error reading response ..", __func__);
+	return 0;
 }
