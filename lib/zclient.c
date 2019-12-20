@@ -4211,8 +4211,6 @@ int tun_send_zebra_gre_request(struct zclient *client,
 			       struct in_addr *addr)
 {
 	struct stream *s;
-	ifindex_t idx_local;
-	int ret;
 
 	if (!client || client->sock < 0) {
 		zlog_err("%s : zclient not ready", __func__);
@@ -4226,8 +4224,5 @@ int tun_send_zebra_gre_request(struct zclient *client,
 	stream_putl(s, ifp->ifindex);
 	stream_putw_at(s, 0, stream_get_endp(s));
 	zclient_send_message(client);
-	return 0;
-stream_failure:
-	zlog_err("%s(): error reading response ..", __func__);
 	return 0;
 }

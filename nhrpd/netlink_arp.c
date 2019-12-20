@@ -25,10 +25,10 @@
 #include "netlink.h"
 #include "znl.h"
 
-int netlink_req_fd = -1;
 int netlink_nflog_group;
 static int netlink_log_fd = -1;
 static struct thread *netlink_log_thread;
+
 typedef void (*netlink_dispatch_f)(struct nlmsghdr *msg, struct zbuf *zb);
 
 void netlink_update_binding(struct interface *ifp, union sockunion *proto,
@@ -213,12 +213,4 @@ void nhrp_neighbor_operation(ZAPI_CALLBACK_ARGS)
 	return;
  stream_failure:
 	return;
-}
-
-void netlink_init(void)
-{
-
-	netlink_req_fd = znl_open(NETLINK_ROUTE, 0);
-	if (netlink_req_fd < 0)
-		return;
 }

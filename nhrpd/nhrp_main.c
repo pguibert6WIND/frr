@@ -26,7 +26,6 @@
 #include "filter.h"
 
 #include "nhrpd.h"
-#include "netlink.h"
 #include "nhrp_errors.h"
 
 DEFINE_MGROUP(NHRPD, "NHRP")
@@ -153,7 +152,6 @@ int main(int argc, char **argv)
 	assert(nhrpd_privs.change);
 	nhrpd_privs.change(ZPRIVS_RAISE);
 
-	netlink_init();
 	evmgr_init();
 	nhrp_vc_init();
 	nhrp_packet_init();
