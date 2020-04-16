@@ -2755,8 +2755,8 @@ static inline void zread_iptable(ZAPI_HANDLER_ARGS)
 		zebra_pbr_add_iptable(zpi);
 	else
 		zebra_pbr_del_iptable(zpi);
-	return;
-stream_failure:
+
+ stream_failure:
 	zebra_pbr_iptable_free(zpi, false);
 	zpi = NULL;
 	return;
