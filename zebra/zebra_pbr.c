@@ -336,14 +336,15 @@ bool zebra_pbr_ipset_entry_hash_equal(const void *arg1, const void *arg2)
 	return true;
 }
 
-void zebra_pbr_iptable_free(void *arg)
+void zebra_pbr_iptable_free(void *arg, bool all)
 {
 	struct zebra_pbr_iptable *iptable;
 	struct listnode *node, *nnode;
 	char *name;
 
 	iptable = (struct zebra_pbr_iptable *)arg;
-	hook_call(zebra_pbr_iptable_update, 0, iptable);
+	if (all)
+		hook_call(zebra_pbr_iptable_update, 0, iptable);
 
 	if (iptable->interface_name_list) {
 		for (ALL_LIST_ELEMENTS(iptable->interface_name_list, node,
@@ -529,7 +530,7 @@ static void zebra_pbr_cleanup_iptable(struct hash_bucket *b, void *data)
 
 	if (iptable->sock == *sock) {
 		if (hash_release(zrouter.iptable_hash, iptable))
-			zebra_pbr_iptable_free(iptable);
+			zebra_pbr_iptable_free(iptable, true);
 		else
 			hook_call(zebra_pbr_iptable_update, 0, iptable);
 	}

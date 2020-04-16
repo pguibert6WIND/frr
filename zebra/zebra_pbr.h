@@ -236,7 +236,7 @@ extern uint32_t zebra_pbr_ipset_entry_hash_key(const void *arg);
 extern bool zebra_pbr_ipset_entry_hash_equal(const void *arg1,
 					     const void *arg2);
 
-extern void zebra_pbr_iptable_free(void *arg);
+extern void zebra_pbr_iptable_free(void *arg, bool all);
 extern uint32_t zebra_pbr_iptable_hash_key(const void *arg);
 extern bool zebra_pbr_iptable_hash_equal(const void *arg1, const void *arg2);
 
