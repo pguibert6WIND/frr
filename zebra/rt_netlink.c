@@ -3070,7 +3070,6 @@ netlink_macfdb_update_ctx(struct zebra_dplane_ctx *ctx, uint8_t *data,
 	int cmd;
 	uint8_t flags;
 	uint16_t state;
-	uint8_t nl_pkt[NL_PKT_BUF_SIZE];
 	uint32_t nhg_id;
 	uint32_t update_flags;
 	bool nfy = false;
@@ -3150,7 +3149,7 @@ netlink_macfdb_update_ctx(struct zebra_dplane_ctx *ctx, uint8_t *data,
 			dplane_ctx_neigh_get_ipaddr(ctx), true, AF_BRIDGE, 0,
 			flags, state, nhg_id, nfy, nfy_flags,
 			false /*ext*/, 0 /*ext_flags*/,
-			nl_pkt, sizeof(nl_pkt));
+			data, datalen);
 
 	return total;
 }
