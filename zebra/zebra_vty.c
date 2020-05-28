@@ -1219,11 +1219,11 @@ static void show_nexthop_group_out(struct vty *vty, struct nhg_hash_entry *nhe)
 
 }
 
-static int show_nexthop_group_id_cmd_helper(struct vty *vty, uint32_t id)
+static int show_nexthop_group_id_cmd_helper(struct vty *vty, uint32_t id, vrf_id_t vrf_id)
 {
 	struct nhg_hash_entry *nhe = NULL;
 
-	nhe = zebra_nhg_lookup_id(id);
+	nhe = zebra_nhg_lookup_id(id, vrf_id);
 
 	if (nhe)
 		show_nexthop_group_out(vty, nhe);
@@ -1342,19 +1342,16 @@ DEFPY (show_nexthop_group,
 	struct zebra_vrf *zvrf = NULL;
 	afi_t afi = AFI_UNSPEC;
 
-	if (id)
-		return show_nexthop_group_id_cmd_helper(vty, id);
+	if (!vrf_is_backend_netns() && (vrf_name || vrf_all)) {
+		vty_out(vty,
+			"VRF subcommand does not make any sense in l3mdev based vrf's");
+		return CMD_WARNING;
+	}
 
 	if (v4)
 		afi = AFI_IP;
 	else if (v6)
 		afi = AFI_IP6;
-
-	if (!vrf_is_backend_netns() && (vrf_name || vrf_all)) {
-		vty_out(vty,
-			"VRF subcommand does not make any sense in l3mdev based vrf's\n");
-		return CMD_WARNING;
-	}
 
 	if (vrf_all) {
 		struct vrf *vrf;
@@ -1367,6 +1364,10 @@ DEFPY (show_nexthop_group,
 				continue;
 
 			vty_out(vty, "VRF: %s\n", vrf->name);
+
+			if (id)
+				show_nexthop_group_id_cmd_helper(vty, id, vrf->vrf_id);
+
 			show_nexthop_group_cmd_helper(vty, zvrf, afi);
 		}
 
@@ -1383,6 +1384,8 @@ DEFPY (show_nexthop_group,
 			vrf_name);
 		return CMD_WARNING;
 	}
+	if (id)
+		show_nexthop_group_id_cmd_helper(vty, id, zvrf->vrf->vrf_id);
 
 	show_nexthop_group_cmd_helper(vty, zvrf, afi);
 

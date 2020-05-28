@@ -60,7 +60,7 @@ static struct nhg_hash_entry *
 depends_find_add(struct nhg_connected_tree_head *head, struct nexthop *nh,
 		 afi_t afi);
 static struct nhg_hash_entry *
-depends_find_id_add(struct nhg_connected_tree_head *head, uint32_t id);
+depends_find_id_add(struct nhg_connected_tree_head *head, uint32_t id, vrf_id_t vrf_id);
 static void depends_decrement_free(struct nhg_connected_tree_head *head);
 
 static struct nhg_backup_info *
@@ -267,11 +267,13 @@ static void zebra_nhg_depends_release(struct nhg_hash_entry *nhe)
 }
 
 
-struct nhg_hash_entry *zebra_nhg_lookup_id(uint32_t id)
+struct nhg_hash_entry *zebra_nhg_lookup_id(uint32_t id, vrf_id_t vrf_id)
 {
 	struct nhg_hash_entry lookup = {};
 
 	lookup.id = id;
+	lookup.vrf_id = vrf_id;
+
 	return hash_lookup(zrouter.nhgs_id, &lookup);
 }
 
@@ -451,8 +453,11 @@ uint32_t zebra_nhg_hash_key(const void *arg)
 uint32_t zebra_nhg_id_key(const void *arg)
 {
 	const struct nhg_hash_entry *nhe = arg;
+	uint32_t key = jhash_1word(nhe->id, 0x63ab42de);
 
-	return nhe->id;
+	if (vrf_is_backend_netns())
+	    key = jhash_1word(nhe->vrf_id, key);
+	return key;
 }
 
 /* Helper with common nhg/nhe nexthop comparison logic */
@@ -501,12 +506,18 @@ bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
 	const struct nhg_hash_entry *nhe2 = arg2;
 	struct nexthop *nexthop1;
 	struct nexthop *nexthop2;
+	int backend_netns = vrf_is_backend_netns();
+
+	if (backend_netns &&
+	    nhe1->vrf_id != nhe2->vrf_id)
+		return false;
 
 	/* No matter what if they equal IDs, assume equal */
 	if (nhe1->id && nhe2->id && (nhe1->id == nhe2->id))
 		return true;
 
-	if (nhe1->vrf_id != nhe2->vrf_id)
+	if (!backend_netns &&
+	    nhe1->vrf_id != nhe2->vrf_id)
 		return false;
 
 	if (nhe1->afi != nhe2->afi)
@@ -564,13 +575,19 @@ bool zebra_nhg_hash_id_equal(const void *arg1, const void *arg2)
 {
 	const struct nhg_hash_entry *nhe1 = arg1;
 	const struct nhg_hash_entry *nhe2 = arg2;
+	int backend_netns = vrf_is_backend_netns();
+
+	if (backend_netns &&
+	    nhe1->vrf_id != nhe2->vrf_id)
+		return false;
 
 	return nhe1->id == nhe2->id;
 }
 
 static int zebra_nhg_process_grp(struct nexthop_group *nhg,
 				 struct nhg_connected_tree_head *depends,
-				 struct nh_grp *grp, uint8_t count)
+				 struct nh_grp *grp, uint8_t count,
+				 vrf_id_t vrf_id)
 {
 	nhg_connected_tree_init(depends);
 
@@ -581,7 +598,7 @@ static int zebra_nhg_process_grp(struct nexthop_group *nhg,
 		 * how to adapt this to our code in
 		 * the future.
 		 */
-		depend = depends_find_id_add(depends, grp[i].id);
+		depend = depends_find_id_add(depends, grp[i].id, vrf_id);
 
 		if (!depend) {
 			flog_err(
@@ -648,7 +665,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 			   nhg_depends);
 
 	if (lookup->id)
-		(*nhe) = zebra_nhg_lookup_id(lookup->id);
+		(*nhe) = zebra_nhg_lookup_id(lookup->id, lookup->vrf_id);
 	else
 		(*nhe) = hash_lookup(zrouter.nhgs, lookup);
 
@@ -1088,7 +1105,7 @@ static int nhg_ctx_process_new(struct nhg_ctx *ctx)
 	int type = nhg_ctx_get_type(ctx);
 	afi_t afi = nhg_ctx_get_afi(ctx);
 
-	lookup = zebra_nhg_lookup_id(id);
+	lookup = zebra_nhg_lookup_id(id, vrf_id);
 
 	if (IS_ZEBRA_DEBUG_NHG_DETAIL)
 		zlog_debug("%s: id %u, count %d, lookup => %p",
@@ -1105,7 +1122,7 @@ static int nhg_ctx_process_new(struct nhg_ctx *ctx)
 	if (nhg_ctx_get_count(ctx)) {
 		nhg = nexthop_group_new();
 		if (zebra_nhg_process_grp(nhg, &nhg_depends,
-					  nhg_ctx_get_grp(ctx), count)) {
+					  nhg_ctx_get_grp(ctx), count, vrf_id)) {
 			depends_decrement_free(&nhg_depends);
 			nexthop_group_delete(&nhg);
 			return -ENOENT;
@@ -1183,8 +1200,9 @@ static int nhg_ctx_process_del(struct nhg_ctx *ctx)
 {
 	struct nhg_hash_entry *nhe = NULL;
 	uint32_t id = nhg_ctx_get_id(ctx);
+	vrf_id_t vrf_id = nhg_ctx_get_vrf_id(ctx);
 
-	nhe = zebra_nhg_lookup_id(id);
+	nhe = zebra_nhg_lookup_id(id, vrf_id);
 
 	if (!nhe) {
 		flog_warn(
@@ -1421,11 +1439,11 @@ depends_find_add(struct nhg_connected_tree_head *head, struct nexthop *nh,
 }
 
 static struct nhg_hash_entry *
-depends_find_id_add(struct nhg_connected_tree_head *head, uint32_t id)
+depends_find_id_add(struct nhg_connected_tree_head *head, uint32_t id, vrf_id_t vrf_id)
 {
 	struct nhg_hash_entry *depend = NULL;
 
-	depend = zebra_nhg_lookup_id(id);
+	depend = zebra_nhg_lookup_id(id, vrf_id);
 
 	if (depend)
 		depends_add(head, depend);
@@ -2495,11 +2513,13 @@ void zebra_nhg_dplane_result(struct zebra_dplane_ctx *ctx)
 	enum zebra_dplane_result status;
 	uint32_t id = 0;
 	struct nhg_hash_entry *nhe = NULL;
+	vrf_id_t vrf_id;
 
 	op = dplane_ctx_get_op(ctx);
 	status = dplane_ctx_get_status(ctx);
 
 	id = dplane_ctx_get_nhe_id(ctx);
+	vrf_id = dplane_ctx_get_vrf(ctx);
 
 	if (IS_ZEBRA_DEBUG_DPLANE_DETAIL || IS_ZEBRA_DEBUG_NHG_DETAIL)
 		zlog_debug(
@@ -2517,7 +2537,7 @@ void zebra_nhg_dplane_result(struct zebra_dplane_ctx *ctx)
 		break;
 	case DPLANE_OP_NH_INSTALL:
 	case DPLANE_OP_NH_UPDATE:
-		nhe = zebra_nhg_lookup_id(id);
+		nhe = zebra_nhg_lookup_id(id, vrf_id);
 
 		if (!nhe) {
 			flog_err(

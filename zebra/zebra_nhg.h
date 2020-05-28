@@ -218,7 +218,7 @@ zebra_nhg_dependents_count(const struct nhg_hash_entry *nhe);
 extern bool zebra_nhg_dependents_is_empty(const struct nhg_hash_entry *nhe);
 
 /* Lookup ID, doesn't create */
-extern struct nhg_hash_entry *zebra_nhg_lookup_id(uint32_t id);
+extern struct nhg_hash_entry *zebra_nhg_lookup_id(uint32_t id, vrf_id_t vrf_id);
 
 /* Hash functions */
 extern uint32_t zebra_nhg_hash_key(const void *arg);

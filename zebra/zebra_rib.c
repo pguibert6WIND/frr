@@ -2683,7 +2683,7 @@ int rib_add_multipath_nhe(afi_t afi, safi_t safi, struct prefix *p,
 		return -1;
 
 	if (re_nhe->id > 0) {
-		nhe = zebra_nhg_lookup_id(re_nhe->id);
+		nhe = zebra_nhg_lookup_id(re_nhe->id, re_nhe->vrf_id);
 
 		if (!nhe) {
 			flog_err(
