@@ -60,6 +60,8 @@ struct zebra_ns {
 
 	/* Back pointer */
 	struct ns *ns;
+	/* id counter to keep in sync with kernel */
+	uint32_t nhg_id_counter;
 };
 
 struct zebra_ns *zebra_ns_lookup(ns_id_t ns_id);

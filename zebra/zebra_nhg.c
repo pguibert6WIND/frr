@@ -46,9 +46,6 @@ DEFINE_MTYPE_STATIC(ZEBRA, NHG, "Nexthop Group Entry");
 DEFINE_MTYPE_STATIC(ZEBRA, NHG_CONNECTED, "Nexthop Group Connected");
 DEFINE_MTYPE_STATIC(ZEBRA, NHG_CTX, "Nexthop Group Context");
 
-/* id counter to keep in sync with kernel */
-uint32_t id_counter;
-
 /*  */
 static bool g_nexthops_enabled = true;
 
@@ -1290,16 +1287,25 @@ int zebra_nhg_kernel_find(uint32_t id, struct nexthop *nh, struct nh_grp *grp,
 			  int startup)
 {
 	struct nhg_ctx *ctx = NULL;
+	struct zebra_vrf *zvrf;
 
+	zvrf = zebra_vrf_lookup_by_id(vrf_id);
+	if (zvrf || !zvrf->zns)
+		return -1;
+
+<<<<<<< HEAD
 	if (IS_ZEBRA_DEBUG_NHG_DETAIL)
 		zlog_debug("%s: nh %pNHv, id %u, count %d",
 			   __func__, nh, id, (int)count);
 
 	if (id > id_counter)
+=======
+	if (id > zvrf->zns->nhg_id_counter)
+>>>>>>> f99979f4be64... zebra: instantiate a global nhg counter per namespace context
 		/* Increase our counter so we don't try to create
 		 * an ID that already exists
 		 */
-		id_counter = id;
+		zvrf->zns->nhg_id_counter = id;
 
 	ctx = nhg_ctx_init(id, nh, grp, vrf_id, afi, type, count);
 	nhg_ctx_set_op(ctx, NHG_CTX_OP_NEW);
