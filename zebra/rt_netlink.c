@@ -105,8 +105,7 @@ static bool is_route_v4_over_v6(unsigned char rtm_family,
 /* Helper to control use of kernel-level nexthop ids */
 static bool kernel_nexthops_supported(void)
 {
-	return (supports_nh && !vrf_is_backend_netns()
-		&& zebra_nhg_kernel_nexthops_enabled());
+	return (supports_nh && zebra_nhg_kernel_nexthops_enabled());
 }
 
 /*
