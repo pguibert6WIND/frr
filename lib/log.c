@@ -574,6 +574,8 @@ int proto_redistnum(int afi, const char *s)
 			return ZEBRA_ROUTE_SHARP;
 		else if (strmatch(s, "openfabric"))
 			return ZEBRA_ROUTE_OPENFABRIC;
+		else if (strmatch(s, "table-direct"))
+			return ZEBRA_ROUTE_TABLE_DIRECT;
 	}
 	if (afi == AFI_IP6) {
 		if (strmatch(s, "kernel"))
@@ -604,6 +606,8 @@ int proto_redistnum(int afi, const char *s)
 			return ZEBRA_ROUTE_SHARP;
 		else if (strmatch(s, "openfabric"))
 			return ZEBRA_ROUTE_OPENFABRIC;
+		else if (strmatch(s, "table-direct"))
+			return ZEBRA_ROUTE_TABLE_DIRECT;
 	}
 	return -1;
 }
