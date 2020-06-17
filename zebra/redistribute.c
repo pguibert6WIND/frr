@@ -77,9 +77,8 @@ static void zebra_redistribute_default(struct zserv *client, vrf_id_t vrf_id)
 
 		RNODE_FOREACH_RE (rn, newre) {
 			if (CHECK_FLAG(newre->flags, ZEBRA_FLAG_SELECTED))
-				zsend_redistribute_route(
-					ZEBRA_REDISTRIBUTE_ROUTE_ADD, client,
-					rn, newre);
+				zsend_redistribute_route(ZEBRA_REDISTRIBUTE_ROUTE_ADD,
+							 client, rn, newre, 0);
 		}
 
 		route_unlock_node(rn);
@@ -94,8 +93,16 @@ static void zebra_redistribute(struct zserv *client, int type,
 	struct route_entry *newre;
 	struct route_table *table;
 	struct route_node *rn;
+	unsigned short tableno = 0;
 
-	table = zebra_vrf_table(afi, SAFI_UNICAST, vrf_id);
+	if (type != ZEBRA_ROUTE_TABLE_DIRECT)
+		table = zebra_vrf_table(afi, SAFI_UNICAST, vrf_id);
+	else {
+		table = zebra_router_find_table(zebra_vrf_lookup_by_id(vrf_id),
+						instance, afi, SAFI_UNICAST);
+		type = ZEBRA_ROUTE_ALL;
+		tableno = instance;
+	}
 	if (!table)
 		return;
 
@@ -117,15 +124,16 @@ static void zebra_redistribute(struct zserv *client, int type,
 
 			if (!CHECK_FLAG(newre->flags, ZEBRA_FLAG_SELECTED))
 				continue;
-			if ((type != ZEBRA_ROUTE_ALL
-			     && (newre->type != type
-				 || newre->instance != instance)))
-				continue;
-			if (!zebra_check_addr(&rn->p))
+
+			if (type != ZEBRA_ROUTE_ALL &&
+			    (newre->type != type ||
+			     (newre->instance != instance)))
 				continue;
 
+			if (!zebra_check_addr(&rn->p))
+				continue;
 			zsend_redistribute_route(ZEBRA_REDISTRIBUTE_ROUTE_ADD,
-						 client, rn, newre);
+						 client, rn, newre, tableno);
 		}
 }
 
@@ -146,8 +154,18 @@ static bool zebra_redistribute_check(const struct route_node *rn,
 
 	afi = family2afi(rn->p.family);
 	zvrf = zebra_vrf_lookup_by_id(re->vrf_id);
-	if (re->vrf_id == VRF_DEFAULT && zvrf->table_id != re->table)
-		return false;
+	if (re->vrf_id == VRF_DEFAULT && zvrf->table_id != re->table) {
+		/* If table then check for route
+		 * redistribution for table-direct
+		 */
+		if (re->table &&
+		    redist_check_instance(&client->mi_redist
+						   [afi][ZEBRA_ROUTE_TABLE_DIRECT],
+					  re->table))
+			return true;
+		else
+			return false;
+	}
 
 	/* If default route and redistributed */
 	if (is_default_prefix(&rn->p) &&
@@ -165,6 +183,16 @@ static bool zebra_redistribute_check(const struct route_node *rn,
 	if (re->instance) {
 		if (redist_check_instance(&client->mi_redist[afi][re->type],
 					  re->instance))
+			return true;
+		else
+			return false;
+	}
+
+
+	if (re->table) {
+		if (redist_check_instance(&client->mi_redist
+						   [afi][ZEBRA_ROUTE_TABLE_DIRECT],
+					  re->table))
 			return true;
 		else
 			return false;
@@ -211,10 +239,11 @@ void redistribute_update(const struct route_node *rn,
 					re->distance, re->metric);
 			}
 			zsend_redistribute_route(ZEBRA_REDISTRIBUTE_ROUTE_ADD,
-						 client, rn, re);
+						 client, rn, re, re->table);
 		} else if (zebra_redistribute_check(rn, prev_re, client))
 			zsend_redistribute_route(ZEBRA_REDISTRIBUTE_ROUTE_DEL,
-						 client, rn, prev_re);
+						 client, rn, prev_re,
+						 prev_re->table);
 	}
 }
 
@@ -287,7 +316,8 @@ void redistribute_delete(const struct route_node *rn,
 		/* Send a delete for the 'old' re to any subscribed client. */
 		if (zebra_redistribute_check(rn, old_re, client))
 			zsend_redistribute_route(ZEBRA_REDISTRIBUTE_ROUTE_DEL,
-						 client, rn, old_re);
+						 client, rn, old_re,
+						 old_re->table);
 	}
 }
 
