@@ -154,27 +154,59 @@ static uint16_t parse_type_spec(int idx_lsa, int argc, struct cmd_token **argv)
 	return type;
 }
 
-DEFUN (show_ipv6_ospf6_database,
-       show_ipv6_ospf6_database_cmd,
-       "show ipv6 ospf6 database [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+static int show_ospf6_database_type_id_router_common(struct vty *vty,
+						     uint16_t type, int level,
+						     uint32_t *id,
+						     uint32_t *adv_router,
+						     struct ospf6 *ospf6)
 {
-	int idx_level = 4;
-	int level;
 	struct listnode *i, *j;
-	struct ospf6 *ospf6;
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
 
+	switch (OSPF6_LSA_SCOPE(type)) {
+	case OSPF6_SCOPE_AREA:
+		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
+			ospf6_lsdb_show(vty, level, &type, id, adv_router,
+					oa->lsdb);
+		}
+		break;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	case OSPF6_SCOPE_LINKLOCAL:
+		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
+				vty_out(vty, IF_LSDB_TITLE_FORMAT,
+					oi->interface->name, oa->name);
+				ospf6_lsdb_show(vty, level, &type, id,
+						adv_router, oi->lsdb);
+			}
+		}
+		break;
+
+	case OSPF6_SCOPE_AS:
+		vty_out(vty, AS_LSDB_TITLE_FORMAT);
+		ospf6_lsdb_show(vty, level, &type, id, adv_router, ospf6->lsdb);
+		break;
+
+	default:
+		assert(0);
+		break;
+	}
+
+	vty_out(vty, "\n");
+
+	return CMD_SUCCESS;
+}
+
+static int show_ospf6_database(struct vty *vty, int argc,
+			       struct cmd_token **argv, int idx_level,
+			       struct ospf6 *ospf6)
+{
+	int level;
+	struct listnode *i, *j;
+	struct ospf6_area *oa;
+	struct ospf6_interface *oi;
 
 	level = parse_show_level(idx_level, argc, argv);
 
@@ -195,45 +227,53 @@ DEFUN (show_ipv6_ospf6_database,
 	ospf6_lsdb_show(vty, level, NULL, NULL, NULL, ospf6->lsdb);
 
 	vty_out(vty, "\n");
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type,
-       show_ipv6_ospf6_database_type_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n"
-      )
+DEFUN(show_ipv6_ospf6_database, show_ipv6_ospf6_database_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
-	int idx_lsa = 4;
-	int idx_level = 5;
-	int level;
-	struct listnode *i, *j;
+	int idx_level = 4;
+	struct listnode *node;
 	struct ospf6 *ospf6;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0)
+		idx_level += 2;
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database(vty, argc, argv, idx_level, ospf6);
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_database(vty, argc, argv, idx_level, ospf6);
+
+	return CMD_SUCCESS;
+}
+
+static int show_ospf6_database_type(struct vty *vty, uint16_t type, int level,
+				    struct ospf6 *ospf6)
+{
+	struct listnode *i, *j;
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
-	uint16_t type = 0;
-
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
-
-	type = parse_type_spec(idx_lsa, argc, argv);
-	level = parse_show_level(idx_level, argc, argv);
 
 	switch (OSPF6_LSA_SCOPE(type)) {
 	case OSPF6_SCOPE_AREA:
@@ -266,40 +306,71 @@ DEFUN (show_ipv6_ospf6_database_type,
 	}
 
 	vty_out(vty, "\n");
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_id,
-       show_ipv6_ospf6_database_id_cmd,
-       "show ipv6 ospf6 database <*|linkstate-id> A.B.C.D [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Any Link state Type\n"
-       "Search by Link state ID\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_type, show_ipv6_ospf6_database_type_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
-	int idx_ipv4 = 5;
-	int idx_level = 6;
+	int idx_lsa = 4;
+	int idx_level = 5;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
+	uint16_t type = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_level += 2;
+	}
+
+	type = parse_type_spec(idx_lsa, argc, argv);
+	level = parse_show_level(idx_level, argc, argv);
+
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_type(vty, type, level, ospf6);
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_database_type(vty, type, level, ospf6);
+
+	return CMD_SUCCESS;
+}
+
+static int show_ospf6_database_id_common(struct vty *vty, int level,
+					 uint32_t id, struct ospf6 *ospf6)
+{
+	struct listnode *i, *j;
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
-	uint32_t id = 0;
-
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
-
-	if (argv[idx_ipv4]->type == IPV4_TKN)
-		inet_pton(AF_INET, argv[idx_ipv4]->arg, &id);
-
-	level = parse_show_level(idx_level, argc, argv);
 
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
 		vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
@@ -318,84 +389,135 @@ DEFUN (show_ipv6_ospf6_database_id,
 	ospf6_lsdb_show(vty, level, NULL, &id, NULL, ospf6->lsdb);
 
 	vty_out(vty, "\n");
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_router,
-       show_ipv6_ospf6_database_router_cmd,
-       "show ipv6 ospf6 database <*|adv-router> * A.B.C.D <detail|dump|internal>",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Any Link state Type\n"
-       "Search by Advertising Router\n"
-       "Any Link state ID\n"
-       "Specify Advertising Router as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_id, show_ipv6_ospf6_database_id_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <*|linkstate-id> A.B.C.D [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Any Link state Type\n"
+      "Search by Link state ID\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
-	int idx_ipv4 = 6;
-	int idx_level = 7;
+	int idx_ipv4 = 5;
+	int idx_level = 6;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
+	uint32_t id = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (argv[idx_ipv4]->type == IPV4_TKN)
+		inet_pton(AF_INET, argv[idx_ipv4]->arg, &id);
+
+	level = parse_show_level(idx_level, argc, argv);
+
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_id_common(vty, level, id, ospf6);
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_database_id_common(vty, level, id, ospf6);
+	return CMD_SUCCESS;
+}
+
+static void ipv6_ospf6_database_router_common(struct vty *vty, int level,
+						uint32_t adv_router, struct ospf6 *ospf6)
+{
+	struct listnode *i, *j;
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
-	uint32_t adv_router = 0;
-
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
-	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
-	level = parse_show_level(idx_level, argc, argv);
 
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
 		vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
 		ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, oa->lsdb);
 	}
-
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
 		for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-			vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name,
-				oa->name);
-			ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router,
-					oi->lsdb);
+			vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name, oa->name);
+			ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, oi->lsdb);
 		}
 	}
-
 	vty_out(vty, AS_LSDB_TITLE_FORMAT);
 	ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, ospf6->lsdb);
 
 	vty_out(vty, "\n");
+
+}
+
+DEFUN(show_ipv6_ospf6_database_router, show_ipv6_ospf6_database_router_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <*|adv-router> * A.B.C.D <detail|dump|internal>",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Any Link state Type\n"
+      "Search by Advertising Router\n"
+      "Any Link state ID\n"
+      "Specify Advertising Router as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
+{
+	int idx_ipv4 = 6;
+	int idx_level = 7;
+	int level;
+	struct listnode *node;
+	struct ospf6 *ospf6;
+	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_ipv4 += 2;
+		idx_level += 2;
+	}
+
+	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
+	level = parse_show_level(idx_level, argc, argv);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			ipv6_ospf6_database_router_common(vty, level, adv_router, ospf6);
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+	ipv6_ospf6_database_router_common(vty, level, adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN_HIDDEN (show_ipv6_ospf6_database_aggr_router,
-       show_ipv6_ospf6_database_aggr_router_cmd,
-       "show ipv6 ospf6 database aggr adv-router A.B.C.D",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Aggregated Router LSA\n"
-       "Search by Advertising Router\n"
-       "Specify Advertising Router as IPv4 address notation\n")
+static int ipv6_ospf6_database_aggr_router_common(struct vty *vty,
+						uint32_t adv_router, struct ospf6 *ospf6)
 {
 	int level = OSPF6_LSDB_SHOW_LEVEL_DETAIL;
 	uint16_t type = htons(OSPF6_LSTYPE_ROUTER);
-	int idx_ipv4 = 6;
 	struct listnode *i;
-	struct ospf6 *ospf6;
 	struct ospf6_area *oa;
 	struct ospf6_lsdb *lsdb;
-	uint32_t adv_router = 0;
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
-
-	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
 
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
 		if (adv_router == ospf6->router_id)
@@ -403,173 +525,216 @@ DEFUN_HIDDEN (show_ipv6_ospf6_database_aggr_router,
 		else
 			lsdb = oa->lsdb;
 		if (ospf6_create_single_router_lsa(oa, lsdb, adv_router)
-		    == NULL) {
+				== NULL) {
 			vty_out(vty, "Adv router is not found in LSDB.");
 			return CMD_SUCCESS;
 		}
 		ospf6_lsdb_show(vty, level, &type, NULL, NULL,
-				oa->temp_router_lsa_lsdb);
+			oa->temp_router_lsa_lsdb);
 		/* Remove the temp cache */
 		ospf6_remove_temp_router_lsa(oa);
 	}
 
 	vty_out(vty, "\n");
+	return CMD_SUCCESS;
+
+}
+
+DEFUN_HIDDEN(
+	show_ipv6_ospf6_database_aggr_router,
+	show_ipv6_ospf6_database_aggr_router_cmd,
+	"show ipv6 ospf6 [vrf <NAME|all>] database aggr adv-router A.B.C.D",
+	SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+	"All VRFs\n"
+	"Display Link state database\n"
+	"Aggregated Router LSA\n"
+	"Search by Advertising Router\n"
+	"Specify Advertising Router as IPv4 address notation\n")
+{
+	int idx_ipv4 = 6;
+	struct listnode *node;
+	struct ospf6 *ospf6;
+	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0)
+		idx_ipv4 += 2;
+
+	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
+
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			ipv6_ospf6_database_aggr_router_common(vty, adv_router, ospf6);
+		}
+		return CMD_SUCCESS;
+	}
+
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
 
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type_id,
-       show_ipv6_ospf6_database_type_id_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> linkstate-id A.B.C.D [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Search by Link state ID\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n"
-      )
+DEFUN(show_ipv6_ospf6_database_type_id, show_ipv6_ospf6_database_type_id_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> linkstate-id A.B.C.D [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Search by Link state ID\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_ipv4 = 6;
 	int idx_level = 7;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t id = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_ipv4 += 2;
+		idx_level += 2;
+	}
 
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, &id, NULL, oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, &id, NULL, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, &id, NULL,
-						oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, &id, NULL, ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_database_type_id_router_common(vty, type, level, &id, NULL,
+						  ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type_router,
-       show_ipv6_ospf6_database_type_router_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> <*|adv-router> A.B.C.D [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Any Link state ID\n"
-       "Search by Advertising Router\n"
-       "Specify Advertising Router as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n"
-      )
+DEFUN(show_ipv6_ospf6_database_type_router,
+      show_ipv6_ospf6_database_type_router_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> <*|adv-router> A.B.C.D [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Any Link state ID\n"
+      "Search by Advertising Router\n"
+      "Specify Advertising Router as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_ipv4 = 6;
 	int idx_level = 7;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_ipv4 += 2;
+		idx_level += 2;
+	}
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
-
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, NULL, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, NULL, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, NULL,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, NULL, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	show_ospf6_database_type_id_router_common(vty, type, level, NULL,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
+static void ipv6_ospf6_database_id_router_common(struct vty *vty,
+      uint32_t id, uint32_t adv_router, int level, struct ospf6 *ospf6)
+{
+	struct listnode *i, *j;
+	struct ospf6_area *oa;
+	struct ospf6_interface *oi;
+
+  for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+    vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
+    ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, oa->lsdb);
+  }
+
+  for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+    for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
+      vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name, oa->name);
+      ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, oi->lsdb);
+    }
+  }
+
+  vty_out(vty, AS_LSDB_TITLE_FORMAT);
+  ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, ospf6->lsdb);
+
+  vty_out(vty, "\n");
+
+}
 
 DEFUN (show_ipv6_ospf6_database_id_router,
        show_ipv6_ospf6_database_id_router_cmd,
@@ -590,170 +755,164 @@ DEFUN (show_ipv6_ospf6_database_id_router,
 	int idx_adv_rtr = 6;
 	int idx_level = 7;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_ls_id += 2;
+		idx_adv_rtr += 2;
+		idx_level += 2;
+	}
+
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-		ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+      ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
+    }
+		return CMD_SUCCESS;
 	}
-
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-			vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name,
-				oa->name);
-			ospf6_lsdb_show(vty, level, NULL, &id, &adv_router,
-					oi->lsdb);
-		}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
+  ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
 
-	vty_out(vty, AS_LSDB_TITLE_FORMAT);
-	ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, ospf6->lsdb);
-
-	vty_out(vty, "\n");
 	return CMD_SUCCESS;
 }
 
 
-DEFUN (show_ipv6_ospf6_database_adv_router_linkstate_id,
-       show_ipv6_ospf6_database_adv_router_linkstate_id_cmd,
-       "show ipv6 ospf6 database adv-router A.B.C.D linkstate-id A.B.C.D [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Search by Advertising Router\n"
-       "Specify Advertising Router as IPv4 address notation\n"
-       "Search by Link state ID\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_adv_router_linkstate_id,
+      show_ipv6_ospf6_database_adv_router_linkstate_id_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database adv-router A.B.C.D linkstate-id A.B.C.D [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Search by Advertising Router\n"
+      "Specify Advertising Router as IPv4 address notation\n"
+      "Search by Link state ID\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_adv_rtr = 5;
 	int idx_ls_id = 7;
 	int idx_level = 8;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-		ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, oa->lsdb);
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_adv_rtr += 2;
+		idx_ls_id += 2;
+		idx_level += 2;
 	}
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-			vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name,
-				oa->name);
-			ospf6_lsdb_show(vty, level, NULL, &id, &adv_router,
-					oi->lsdb);
-		}
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+      ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
+    }
+		return CMD_SUCCESS;
 	}
 
-	vty_out(vty, AS_LSDB_TITLE_FORMAT);
-	ospf6_lsdb_show(vty, level, NULL, &id, &adv_router, ospf6->lsdb);
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+  ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
 
-	vty_out(vty, "\n");
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type_id_router,
-       show_ipv6_ospf6_database_type_id_router_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> A.B.C.D A.B.C.D [<dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Specify Advertising Router as IPv4 address notation\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_type_id_router,
+      show_ipv6_ospf6_database_type_id_router_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> A.B.C.D A.B.C.D [<dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Specify Advertising Router as IPv4 address notation\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_ls_id = 5;
 	int idx_adv_rtr = 6;
 	int idx_level = 7;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_ls_id += 2;
+		idx_adv_rtr += 2;
+		idx_level += 2;
+	}
 
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
 
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, &id, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, &id,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_database_type_id_router_common(vty, type, level, &id,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
@@ -786,351 +945,329 @@ DEFUN (show_ipv6_ospf6_database_type_adv_router_linkstate_id,
 	int idx_ls_id = 8;
 	int idx_level = 9;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_adv_rtr += 2;
+		idx_ls_id += 2;
+		idx_level += 2;
+	}
 
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, &id, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, &id,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	show_ospf6_database_type_id_router_common(vty, type, level, &id,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_self_originated,
-       show_ipv6_ospf6_database_self_originated_cmd,
-       "show ipv6 ospf6 database self-originated [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Self-originated LSAs\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+static void ipv6_ospf6_database_self_originated_common(struct vty *vty,
+            int level, struct ospf6 *ospf6)
 {
-	int idx_level = 5;
-	int level;
 	struct listnode *i, *j;
-	struct ospf6 *ospf6;
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
 	uint32_t adv_router = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+  adv_router = ospf6->router_id;
+  for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+    vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
+    ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, oa->lsdb);
+  }
+
+  for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
+    for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
+      vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name, oa->name);
+      ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, oi->lsdb);
+    }
+  }
+
+  vty_out(vty, AS_LSDB_TITLE_FORMAT);
+  ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, ospf6->lsdb);
+
+  vty_out(vty, "\n");
+}
+
+DEFUN(show_ipv6_ospf6_database_self_originated,
+      show_ipv6_ospf6_database_self_originated_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database self-originated [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Self-originated LSAs\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
+{
+	int idx_level = 5;
+	int level;
+	struct listnode *node;
+	struct ospf6 *ospf6;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0)
+		idx_level += 2;
+
 	level = parse_show_level(idx_level, argc, argv);
-	adv_router = ospf6->router_id;
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-		ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+      ipv6_ospf6_database_self_originated_common(vty, level, ospf6);
+    }
+		return CMD_SUCCESS;
 	}
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-		for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-			vty_out(vty, IF_LSDB_TITLE_FORMAT, oi->interface->name,
-				oa->name);
-			ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router,
-					oi->lsdb);
-		}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
+  ipv6_ospf6_database_self_originated_common(vty, level, ospf6);
 
-	vty_out(vty, AS_LSDB_TITLE_FORMAT);
-	ospf6_lsdb_show(vty, level, NULL, NULL, &adv_router, ospf6->lsdb);
-
-	vty_out(vty, "\n");
 	return CMD_SUCCESS;
 }
 
 
-DEFUN (show_ipv6_ospf6_database_type_self_originated,
-       show_ipv6_ospf6_database_type_self_originated_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> self-originated [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Display Self-originated LSAs\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_type_self_originated,
+      show_ipv6_ospf6_database_type_self_originated_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> self-originated [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Display Self-originated LSAs\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_level = 6;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_level += 2;
+	}
+
 	type = parse_type_spec(idx_lsa, argc, argv);
 	level = parse_show_level(idx_level, argc, argv);
 
-	adv_router = ospf6->router_id;
-
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, NULL, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			adv_router = ospf6->router_id;
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, NULL, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, NULL,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, NULL, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	adv_router = ospf6->router_id;
+	show_ospf6_database_type_id_router_common(vty, type, level, NULL,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type_self_originated_linkstate_id,
-       show_ipv6_ospf6_database_type_self_originated_linkstate_id_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> self-originated linkstate-id A.B.C.D [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Display Self-originated LSAs\n"
-       "Search by Link state ID\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_type_self_originated_linkstate_id,
+      show_ipv6_ospf6_database_type_self_originated_linkstate_id_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> self-originated linkstate-id A.B.C.D [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Display Self-originated LSAs\n"
+      "Search by Link state ID\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_ls_id = 7;
 	int idx_level = 8;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 	uint32_t id = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_ls_id += 2;
+		idx_level += 2;
+	}
+
+
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
-	adv_router = ospf6->router_id;
 
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			adv_router = ospf6->router_id;
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, &id, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, &id,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	adv_router = ospf6->router_id;
+	show_ospf6_database_type_id_router_common(vty, type, level, &id,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_database_type_id_self_originated,
-       show_ipv6_ospf6_database_type_id_self_originated_cmd,
-       "show ipv6 ospf6 database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> A.B.C.D self-originated [<detail|dump|internal>]",
-       SHOW_STR
-       IPV6_STR
-       OSPF6_STR
-       "Display Link state database\n"
-       "Display Router LSAs\n"
-       "Display Network LSAs\n"
-       "Display Inter-Area-Prefix LSAs\n"
-       "Display Inter-Area-Router LSAs\n"
-       "Display As-External LSAs\n"
-       "Display Group-Membership LSAs\n"
-       "Display Type-7 LSAs\n"
-       "Display Link LSAs\n"
-       "Display Intra-Area-Prefix LSAs\n"
-       "Specify Link state ID as IPv4 address notation\n"
-       "Display Self-originated LSAs\n"
-       "Display details of LSAs\n"
-       "Dump LSAs\n"
-       "Display LSA's internal information\n")
+DEFUN(show_ipv6_ospf6_database_type_id_self_originated,
+      show_ipv6_ospf6_database_type_id_self_originated_cmd,
+      "show ipv6 ospf6  [vrf <NAME|all>] database <router|network|inter-prefix|inter-router|as-external|group-membership|type-7|link|intra-prefix> A.B.C.D self-originated [<detail|dump|internal>]",
+      SHOW_STR IPV6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display Link state database\n"
+      "Display Router LSAs\n"
+      "Display Network LSAs\n"
+      "Display Inter-Area-Prefix LSAs\n"
+      "Display Inter-Area-Router LSAs\n"
+      "Display As-External LSAs\n"
+      "Display Group-Membership LSAs\n"
+      "Display Type-7 LSAs\n"
+      "Display Link LSAs\n"
+      "Display Intra-Area-Prefix LSAs\n"
+      "Specify Link state ID as IPv4 address notation\n"
+      "Display Self-originated LSAs\n"
+      "Display details of LSAs\n"
+      "Dump LSAs\n"
+      "Display LSA's internal information\n")
 {
 	int idx_lsa = 4;
 	int idx_ls_id = 5;
 	int idx_level = 7;
 	int level;
-	struct listnode *i, *j;
+	struct listnode *node;
 	struct ospf6 *ospf6;
-	struct ospf6_area *oa;
-	struct ospf6_interface *oi;
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 	uint32_t id = 0;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_lsa += 2;
+		idx_ls_id += 2;
+		idx_level += 2;
+	}
+
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
-	adv_router = ospf6->router_id;
 
-	switch (OSPF6_LSA_SCOPE(type)) {
-	case OSPF6_SCOPE_AREA:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			vty_out(vty, AREA_LSDB_TITLE_FORMAT, oa->name);
-			ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-					oa->lsdb);
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			adv_router = ospf6->router_id;
+			show_ospf6_database_type_id_router_common(
+				vty, type, level, &id, &adv_router, ospf6);
 		}
-		break;
-
-	case OSPF6_SCOPE_LINKLOCAL:
-		for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, i, oa)) {
-			for (ALL_LIST_ELEMENTS_RO(oa->if_list, j, oi)) {
-				vty_out(vty, IF_LSDB_TITLE_FORMAT,
-					oi->interface->name, oa->name);
-				ospf6_lsdb_show(vty, level, &type, &id,
-						&adv_router, oi->lsdb);
-			}
-		}
-		break;
-
-	case OSPF6_SCOPE_AS:
-		vty_out(vty, AS_LSDB_TITLE_FORMAT);
-		ospf6_lsdb_show(vty, level, &type, &id, &adv_router,
-				ospf6->lsdb);
-		break;
-
-	default:
-		assert(0);
-		break;
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
 	}
 
-	vty_out(vty, "\n");
+	adv_router = ospf6->router_id;
+	show_ospf6_database_type_id_router_common(vty, type, level, &id,
+						  &adv_router, ospf6);
+
 	return CMD_SUCCESS;
 }
 
-DEFUN (show_ipv6_ospf6_border_routers,
-       show_ipv6_ospf6_border_routers_cmd,
-       "show ipv6 ospf6 border-routers [<A.B.C.D|detail>]",
-       SHOW_STR
-       IP6_STR
-       OSPF6_STR
-       "Display routing table for ABR and ASBR\n"
-       "Router ID\n"
-       "Show detailed output\n")
+static int show_ospf6_border_routers_common(struct vty *vty, int argc,
+					    struct cmd_token **argv,
+					    struct ospf6 *ospf6, int idx_ipv4,
+					    int idx_argc)
 {
-	int idx_ipv4 = 4;
 	uint32_t adv_router;
 	struct ospf6_route *ro;
 	struct prefix prefix;
-	struct ospf6 *ospf6 = NULL;
 
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
-	if (argc == 5) {
+	if (argc == idx_argc) {
 		if (strmatch(argv[idx_ipv4]->text, "detail")) {
 			for (ro = ospf6_route_head(ospf6->brouter_table); ro;
 			     ro = ospf6_route_next(ro))
@@ -1143,7 +1280,7 @@ DEFUN (show_ipv6_ospf6_border_routers,
 			if (!ro) {
 				vty_out(vty,
 					"No Route found for Router ID: %s\n",
-					argv[4]->arg);
+					argv[idx_ipv4]->arg);
 				return CMD_SUCCESS;
 			}
 
@@ -1161,54 +1298,141 @@ DEFUN (show_ipv6_ospf6_border_routers,
 	return CMD_SUCCESS;
 }
 
+DEFUN(show_ipv6_ospf6_border_routers, show_ipv6_ospf6_border_routers_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] border-routers [<A.B.C.D|detail>]",
+      SHOW_STR IP6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display routing table for ABR and ASBR\n"
+      "Router ID\n"
+      "Show detailed output\n")
+{
+	int idx_ipv4 = 4;
+	struct ospf6 *ospf6 = NULL;
+	struct listnode *node;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+	int idx_argc = 5;
 
-DEFUN (show_ipv6_ospf6_linkstate,
-       show_ipv6_ospf6_linkstate_cmd,
-       "show ipv6 ospf6 linkstate <router A.B.C.D|network A.B.C.D A.B.C.D>",
-       SHOW_STR
-       IP6_STR
-       OSPF6_STR
-       "Display linkstate routing table\n"
-       "Display Router Entry\n"
-       "Specify Router ID as IPv4 address notation\n"
-       "Display Network Entry\n"
-       "Specify Router ID as IPv4 address notation\n"
-       "Specify Link state ID as IPv4 address notation\n")
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0) {
+		idx_argc += 2;
+		idx_ipv4 += 2;
+	}
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			show_ospf6_border_routers_common(vty, argc, argv, ospf6,
+							 idx_ipv4, idx_argc);
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
+	show_ospf6_border_routers_common(vty, argc, argv, ospf6, idx_ipv4,
+					 idx_argc);
+
+	return CMD_SUCCESS;
+}
+
+
+DEFUN(show_ipv6_ospf6_linkstate, show_ipv6_ospf6_linkstate_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] linkstate <router A.B.C.D|network A.B.C.D A.B.C.D>",
+      SHOW_STR IP6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display linkstate routing table\n"
+      "Display Router Entry\n"
+      "Specify Router ID as IPv4 address notation\n"
+      "Display Network Entry\n"
+      "Specify Router ID as IPv4 address notation\n"
+      "Specify Link state ID as IPv4 address notation\n")
 {
 	int idx_ipv4 = 5;
-	struct listnode *node;
+	struct listnode *node, *nnode;
 	struct ospf6_area *oa;
 	struct ospf6 *ospf6 = NULL;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0)
+		idx_ipv4 += 2;
+
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6)) {
+			for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
+				vty_out(vty,
+					"\n        SPF Result in Area %s\n\n",
+					oa->name);
+				ospf6_linkstate_table_show(vty, idx_ipv4, argc,
+							   argv, oa->spf_table);
+			}
+			vty_out(vty, "\n");
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
 		vty_out(vty, "\n        SPF Result in Area %s\n\n", oa->name);
 		ospf6_linkstate_table_show(vty, idx_ipv4, argc, argv,
 					   oa->spf_table);
 	}
-
 	vty_out(vty, "\n");
+
 	return CMD_SUCCESS;
 }
 
 
-DEFUN (show_ipv6_ospf6_linkstate_detail,
-       show_ipv6_ospf6_linkstate_detail_cmd,
-       "show ipv6 ospf6 linkstate detail",
-       SHOW_STR
-       IP6_STR
-       OSPF6_STR
-       "Display linkstate routing table\n"
-       "Display detailed information\n")
+DEFUN(show_ipv6_ospf6_linkstate_detail, show_ipv6_ospf6_linkstate_detail_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] linkstate detail",
+      SHOW_STR IP6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "Display linkstate routing table\n"
+      "Display detailed information\n")
 {
 	int idx_detail = 4;
 	struct listnode *node;
 	struct ospf6_area *oa;
 	struct ospf6 *ospf6 = NULL;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
+	if (idx_vrf > 0)
+		idx_detail += 2;
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
+				vty_out(vty,
+					"\n        SPF Result in Area %s\n\n",
+					oa->name);
+				ospf6_linkstate_table_show(vty, idx_detail,
+							   argc, argv,
+							   oa->spf_table);
+			}
+			vty_out(vty, "\n");
+		}
+		return CMD_SUCCESS;
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
 
 	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
 		vty_out(vty, "\n        SPF Result in Area %s\n\n", oa->name);
@@ -1217,6 +1441,7 @@ DEFUN (show_ipv6_ospf6_linkstate_detail,
 	}
 
 	vty_out(vty, "\n");
+
 	return CMD_SUCCESS;
 }
 

@@ -39,6 +39,7 @@
 #include "ospf6_message.h"
 
 #include "ospf6_top.h"
+#include "ospf6d.h"
 #include "ospf6_area.h"
 #include "ospf6_interface.h"
 #include "ospf6_neighbor.h"
@@ -1324,7 +1325,11 @@ DEFUN (ospf6_redistribute,
 	struct ospf6_redist *red;
 
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
+
 	char *proto = argv[argc - 1]->text;
 	type = proto_redistnum(AFI_IP6, proto);
 	if (type < 0)
@@ -1354,7 +1359,10 @@ DEFUN (ospf6_redistribute_routemap,
 	struct ospf6_redist *red;
 
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
 
 	char *proto = argv[idx_protocol]->text;
 	type = proto_redistnum(AFI_IP6, proto);
@@ -1386,8 +1394,10 @@ DEFUN (no_ospf6_redistribute,
 	struct ospf6_redist *red;
 
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
-
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	if (ospf6 == NULL) {
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+	}
 
 	char *proto = argv[idx_protocol]->text;
 	type = proto_redistnum(AFI_IP6, proto);
@@ -1987,29 +1997,58 @@ static void ospf6_asbr_external_route_show(struct vty *vty,
 			forwarding);
 }
 
-DEFUN (show_ipv6_ospf6_redistribute,
-       show_ipv6_ospf6_redistribute_cmd,
-       "show ipv6 ospf6 redistribute [json]",
-       SHOW_STR
-       IP6_STR
-       OSPF6_STR
-       "redistributing External information\n"
-       JSON_STR)
+DEFUN(show_ipv6_ospf6_redistribute, show_ipv6_ospf6_redistribute_cmd,
+      "show ipv6 ospf6 [vrf <NAME|all>] redistribute [json]",
+      SHOW_STR IP6_STR OSPF6_STR VRF_CMD_HELP_STR
+      "All VRFs\n"
+      "redistributing External information\n" JSON_STR)
 {
 	struct ospf6_route *route;
 	struct ospf6 *ospf6 = NULL;
 	json_object *json = NULL;
 	bool uj = use_json(argc, argv);
+	struct listnode *node;
+	const char *vrf_name = VRF_DEFAULT_NAME;
+	bool all_vrf = false;
+	int idx_vrf = 0;
+
 	json_object *json_array_routes = NULL;
 	json_object *json_array_redistribute = NULL;
 
-	ospf6 = ospf6_lookup_by_vrf_name(VRF_DEFAULT_NAME);
-	OSPF6_CMD_CHECK_RUNNING(ospf6);
+	OSPF6_CMD_CHECK_RUNNING();
+	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 
 	if (uj) {
 		json = json_object_new_object();
 		json_array_routes = json_object_new_array();
 		json_array_redistribute = json_object_new_array();
+	}
+
+	if (all_vrf) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+			ospf6_redistribute_show_config(
+				vty, ospf6, json_array_redistribute, json, uj);
+
+			for (route = ospf6_route_head(ospf6->external_table);
+			     route; route = ospf6_route_next(route)) {
+				ospf6_asbr_external_route_show(
+					vty, route, json_array_routes, uj);
+			}
+
+			if (uj) {
+				json_object_object_add(json, "routes",
+						       json_array_routes);
+				vty_out(vty, "%s\n",
+					json_object_to_json_string_ext(
+						json, JSON_C_TO_STRING_PRETTY));
+				json_object_free(json);
+			}
+		}
+	}
+	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
+  if (ospf6 == NULL) {
+		vty_out(vty, "%% OSPF6 instance not found\n");
+		return CMD_SUCCESS;
 	}
 	ospf6_redistribute_show_config(vty, ospf6, json_array_redistribute,
 				       json, uj);
@@ -2027,6 +2066,7 @@ DEFUN (show_ipv6_ospf6_redistribute,
 				json, JSON_C_TO_STRING_PRETTY));
 		json_object_free(json);
 	}
+
 	return CMD_SUCCESS;
 }
 
