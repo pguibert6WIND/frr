@@ -1238,9 +1238,9 @@ DEFUN(show_ipv6_ospf6_interface, show_ipv6_ospf6_interface_ifname_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 	show_ospf6_interface_common(vty, ospf6->vrf_id, argc, argv, idx_ifname,
 				    intf_idx, json_idx);
 
@@ -1582,14 +1582,14 @@ DEFUN(show_ipv6_ospf6_interface_prefix, show_ipv6_ospf6_interface_prefix_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 	vrf = vrf_lookup_by_id(ospf6->vrf_id);
 	FOR_ALL_INTERFACES (vrf, ifp) {
 		oi = (struct ospf6_interface *)ifp->info;
-		if (oi == NULL)
-			continue;
+    if (oi == NULL)
+      continue;
 		ospf6_route_table_show(vty, idx_prefix, argc, argv,
 				       oi->route_connected);
 	}

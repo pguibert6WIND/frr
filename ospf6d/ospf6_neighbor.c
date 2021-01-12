@@ -1060,9 +1060,9 @@ DEFUN(show_ipv6_ospf6_neighbor, show_ipv6_ospf6_neighbor_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 	ospf6_neighbor_show_detail_common(vty, argc, argv, ospf6, idx_type,
 					  detail_idx, json_idx);
 
@@ -1138,9 +1138,9 @@ DEFUN(show_ipv6_ospf6_neighbor_one, show_ipv6_ospf6_neighbor_one_cmd,
 
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 	ospf6_neighbor_show_common(vty, argc, argv, ospf6, idx_ipv4);
 
 	return CMD_SUCCESS;

@@ -1325,7 +1325,7 @@ DEFUN (ospf6_redistribute,
 	struct ospf6_redist *red;
 
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
-	if (ospf6 == NULL) {
+  if (ospf6 == NULL) {
     vty_out(vty, "%% OSPF6 instance not found\n");
     return CMD_SUCCESS;
 	}
@@ -1394,7 +1394,7 @@ DEFUN (no_ospf6_redistribute,
 	struct ospf6_redist *red;
 
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
-	if (ospf6 == NULL) {
+  if (ospf6 == NULL) {
     vty_out(vty, "%% OSPF6 instance not found\n");
     return CMD_SUCCESS;
 	}
@@ -2047,7 +2047,7 @@ DEFUN(show_ipv6_ospf6_redistribute, show_ipv6_ospf6_redistribute_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
+    vty_out(vty, "%% OSPF6 instance not found\n");
 		return CMD_SUCCESS;
 	}
 	ospf6_redistribute_show_config(vty, ospf6, json_array_redistribute,

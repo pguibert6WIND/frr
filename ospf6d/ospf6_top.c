@@ -192,7 +192,7 @@ static int ospf6_vrf_enable(struct vrf *vrf)
 			   __func__, vrf->name, ospf6->vrf_id, old_vrf_id);
 
 		if (old_vrf_id != ospf6->vrf_id) {
-			frr_with_privs (&ospf6d_privs) {
+			frr_with_privs(&ospf6d_privs) {
 				/* stop zebra redist to us for old vrf */
 				zclient_send_dereg_requests(zclient,
 							    old_vrf_id);
@@ -327,7 +327,6 @@ static struct ospf6 *ospf6_create(const char *name)
 	if (vrf)
 		ospf6_vrf_link(o, vrf);
 
-	zlog_debug("ospf6_create vrf id = %d", o->vrf_id);
 	ospf6_zebra_vrf_register(o);
 
 	/* initialize */
@@ -539,9 +538,9 @@ DEFUN_NOSH(router_ospf6, router_ospf6_cmd, "router ospf6 [vrf NAME]",
 	const char *vrf_name = VRF_DEFAULT_NAME;
 	int idx_vrf = 0;
 
-	if (argv_find(argv, argc, "vrf", &idx_vrf)) {
-		vrf_name = argv[idx_vrf + 1]->arg;
-	}
+  if (argv_find(argv, argc, "vrf", &idx_vrf)) {
+    vrf_name = argv[idx_vrf + 1]->arg;
+  }
 
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
 	if (ospf6 == NULL)
@@ -561,9 +560,9 @@ DEFUN(no_router_ospf6, no_router_ospf6_cmd, "no router ospf6 [vrf NAME]",
 	const char *vrf_name = VRF_DEFAULT_NAME;
 	int idx_vrf = 0;
 
-	if (argv_find(argv, argc, "vrf", &idx_vrf)) {
-		vrf_name = argv[idx_vrf + 1]->arg;
-	}
+  if (argv_find(argv, argc, "vrf", &idx_vrf)) {
+    vrf_name = argv[idx_vrf + 1]->arg;
+  }
 
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
 	if (ospf6 == NULL)
@@ -1283,9 +1282,9 @@ DEFUN(show_ipv6_ospf6, show_ipv6_ospf6_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 
 	if (uj)
 		json = json_object_new_object();
@@ -1330,9 +1329,9 @@ DEFUN(show_ipv6_ospf6_route, show_ipv6_ospf6_route_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 	ospf6_route_table_show(vty, idx_arg_start, argc, argv,
 			       ospf6->route_table);
 
@@ -1367,9 +1366,9 @@ DEFUN(show_ipv6_ospf6_route_match, show_ipv6_ospf6_route_match_cmd,
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 
 	ospf6_route_table_show(vty, idx_start_arg, argc, argv,
 			       ospf6->route_table);
@@ -1407,9 +1406,9 @@ DEFUN(show_ipv6_ospf6_route_match_detail,
 
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 
 	ospf6_route_table_show(vty, idx_start_arg, argc, argv,
 			       ospf6->route_table);
@@ -1450,9 +1449,9 @@ DEFUN(show_ipv6_ospf6_route_type_detail, show_ipv6_ospf6_route_type_detail_cmd,
 
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
   if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
+    vty_out(vty, "%% OSPF6 instance not found\n");
+    return CMD_SUCCESS;
+  }
 
 	ospf6_route_table_show(vty, idx_start_arg, argc, argv,
 			       ospf6->route_table);

@@ -886,9 +886,9 @@ DEFUN(show_ipv6_ospf6_spf_tree, show_ipv6_ospf6_spf_tree_cmd,
 	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 
 	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6)) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6))
 			ipv6_ospf6_spf_tree_common(vty, ospf6);
-		}
+
 		return CMD_SUCCESS;
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
@@ -958,9 +958,9 @@ DEFUN(show_ipv6_ospf6_area_spf_tree, show_ipv6_ospf6_area_spf_tree_cmd,
 	}
 
 	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
 			show_ospf6_area_spf_tree_common(vty, argv, ospf6, area_id, idx_ipv4);
-		}
+
 		return CMD_SUCCESS;
 	}
 	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
