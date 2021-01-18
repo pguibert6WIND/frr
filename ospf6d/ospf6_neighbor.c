@@ -1050,21 +1050,17 @@ DEFUN(show_ipv6_ospf6_neighbor, show_ipv6_ospf6_neighbor_cmd,
 		detail_idx += 2;
 		json_idx += 2;
 	}
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			ospf6_neighbor_show_detail_common(vty, argc, argv,
-							  ospf6, idx_type,
-							  detail_idx, json_idx);
+				ospf6, idx_type, detail_idx, json_idx);
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
-	ospf6_neighbor_show_detail_common(vty, argc, argv, ospf6, idx_type,
-					  detail_idx, json_idx);
 
 	return CMD_SUCCESS;
 }
@@ -1128,20 +1124,17 @@ DEFUN(show_ipv6_ospf6_neighbor_one, show_ipv6_ospf6_neighbor_one_cmd,
 	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 	if (idx_vrf > 0)
 		idx_ipv4 += 2;
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
-			ospf6_neighbor_show_common(vty, argc, argv, ospf6,
-						   idx_ipv4);
-		}
-		return CMD_SUCCESS;
-	}
 
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
-	ospf6_neighbor_show_common(vty, argc, argv, ospf6, idx_ipv4);
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			ospf6_neighbor_show_common(vty, argc, argv, ospf6, idx_ipv4);
+
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }

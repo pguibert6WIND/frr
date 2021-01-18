@@ -876,7 +876,7 @@ DEFUN(show_ipv6_ospf6_spf_tree, show_ipv6_ospf6_spf_tree_cmd,
       "Shortest Path First calculation\n"
       "Show SPF tree\n")
 {
-	struct listnode *nnode;
+	struct listnode *node;
 	struct ospf6 *ospf6;
 	const char *vrf_name = VRF_DEFAULT_NAME;
 	bool all_vrf = false;
@@ -885,18 +885,15 @@ DEFUN(show_ipv6_ospf6_spf_tree, show_ipv6_ospf6_spf_tree_cmd,
 	OSPF6_CMD_CHECK_RUNNING();
 	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6))
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			ipv6_ospf6_spf_tree_common(vty, ospf6);
-
-		return CMD_SUCCESS;
+			if (!all_vrf)
+				break;
+		}
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
-	ipv6_ospf6_spf_tree_common(vty, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -957,18 +954,15 @@ DEFUN(show_ipv6_ospf6_area_spf_tree, show_ipv6_ospf6_area_spf_tree_cmd,
 		return CMD_SUCCESS;
 	}
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_area_spf_tree_common(vty, argv, ospf6, area_id, idx_ipv4);
-
-		return CMD_SUCCESS;
+			if (!all_vrf)
+				break;
+		}
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
-	show_ospf6_area_spf_tree_common(vty, argv, ospf6, area_id, idx_ipv4);
 
 	return CMD_SUCCESS;
 }
@@ -1049,23 +1043,17 @@ DEFUN(show_ipv6_ospf6_simulate_spf_tree_root,
 		return CMD_SUCCESS;
 	}
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_simulate_spf_tree_commen(
 				vty, argv, ospf6, router_id, area_id, prefix,
 				idx_ipv4, idx_ipv4_2);
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-		vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
-
-	show_ospf6_simulate_spf_tree_commen(vty, argv, ospf6, router_id,
-					    area_id, prefix, idx_ipv4,
-					    idx_ipv4_2);
 
 	return CMD_SUCCESS;
 }

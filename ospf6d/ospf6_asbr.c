@@ -2024,47 +2024,31 @@ DEFUN(show_ipv6_ospf6_redistribute, show_ipv6_ospf6_redistribute_cmd,
 		json_array_redistribute = json_object_new_array();
 	}
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			ospf6_redistribute_show_config(
 				vty, ospf6, json_array_redistribute, json, uj);
 
-			for (route = ospf6_route_head(ospf6->external_table);
-			     route; route = ospf6_route_next(route)) {
-				ospf6_asbr_external_route_show(
-					vty, route, json_array_routes, uj);
-			}
+				for (route = ospf6_route_head(ospf6->external_table);
+						route; route = ospf6_route_next(route)) {
+					ospf6_asbr_external_route_show(
+						vty, route, json_array_routes, uj);
+				}
 
-			if (uj) {
-				json_object_object_add(json, "routes",
-						       json_array_routes);
-				vty_out(vty, "%s\n",
-					json_object_to_json_string_ext(
-						json, JSON_C_TO_STRING_PRETTY));
-				json_object_free(json);
-			}
+				if (uj) {
+					json_object_object_add(json, "routes",
+						json_array_routes);
+					vty_out(vty, "%s\n",
+						json_object_to_json_string_ext(
+							json, JSON_C_TO_STRING_PRETTY));
+					json_object_free(json);
+				}
+
+			if (!all_vrf)
+				break;
 		}
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-		return CMD_SUCCESS;
-	}
-	ospf6_redistribute_show_config(vty, ospf6, json_array_redistribute,
-				       json, uj);
-
-	for (route = ospf6_route_head(ospf6->external_table); route;
-	     route = ospf6_route_next(route)) {
-		ospf6_asbr_external_route_show(vty, route, json_array_routes,
-					       uj);
-	}
-
-	if (uj) {
-		json_object_object_add(json, "routes", json_array_routes);
-		vty_out(vty, "%s\n",
-			json_object_to_json_string_ext(
-				json, JSON_C_TO_STRING_PRETTY));
-		json_object_free(json);
 	}
 
 	return CMD_SUCCESS;

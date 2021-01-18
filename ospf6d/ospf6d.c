@@ -251,18 +251,17 @@ DEFUN(show_ipv6_ospf6_database, show_ipv6_ospf6_database_cmd,
 	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 	if (idx_vrf > 0)
 		idx_level += 2;
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
-			show_ospf6_database(vty, argc, argv, idx_level, ospf6);
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
 
-	show_ospf6_database(vty, argc, argv, idx_level, ospf6);
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			show_ospf6_database(vty, argc, argv, idx_level, ospf6);
+
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -347,18 +346,15 @@ DEFUN(show_ipv6_ospf6_database_type, show_ipv6_ospf6_database_type_cmd,
 	type = parse_type_spec(idx_lsa, argc, argv);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_type(vty, type, level, ospf6);
-		return CMD_SUCCESS;
+			if (!all_vrf)
+				break;
+		}
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
-
-	show_ospf6_database_type(vty, type, level, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -420,18 +416,17 @@ DEFUN(show_ipv6_ospf6_database_id, show_ipv6_ospf6_database_id_cmd,
 
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_id_common(vty, level, id, ospf6);
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
 
-  show_ospf6_database_id_common(vty, level, id, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
+
 	return CMD_SUCCESS;
 }
 
@@ -491,18 +486,17 @@ DEFUN(show_ipv6_ospf6_database_router, show_ipv6_ospf6_database_router_cmd,
 
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			ipv6_ospf6_database_router_common(vty, level, adv_router, ospf6);
+
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
-	ipv6_ospf6_database_router_common(vty, level, adv_router, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -563,17 +557,15 @@ DEFUN_HIDDEN(
 
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			ipv6_ospf6_database_aggr_router_common(vty, adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
 
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
+			if (!all_vrf)
+				break;
+		}
 	}
 
 	return CMD_SUCCESS;
@@ -623,22 +615,17 @@ DEFUN(show_ipv6_ospf6_database_type_id, show_ipv6_ospf6_database_type_id_cmd,
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, &id, NULL, ospf6);
+
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
-
-	show_ospf6_database_type_id_router_common(vty, type, level, &id, NULL,
-						  ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -688,21 +675,18 @@ DEFUN(show_ipv6_ospf6_database_type_router,
 	type = parse_type_spec(idx_lsa, argc, argv);
 	inet_pton(AF_INET, argv[idx_ipv4]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, NULL, &adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	show_ospf6_database_type_id_router_common(vty, type, level, NULL,
-						  &adv_router, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -772,17 +756,16 @@ DEFUN (show_ipv6_ospf6_database_id_router,
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
-      ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
-		return CMD_SUCCESS;
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
+
+			if (!all_vrf)
+				break;
+		}
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
-  ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -827,18 +810,16 @@ DEFUN(show_ipv6_ospf6_database_adv_router_linkstate_id,
 		idx_level += 2;
 	}
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6))
-      ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
-		return CMD_SUCCESS;
-	}
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
 
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-  if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-  }
-  ipv6_ospf6_database_id_router_common(vty, id, adv_router, level, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -891,22 +872,17 @@ DEFUN(show_ipv6_ospf6_database_type_id_router,
 	inet_pton(AF_INET, argv[idx_adv_rtr]->arg, &adv_router);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, &id, &adv_router, ospf6);
+
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
-
-	show_ospf6_database_type_id_router_common(vty, type, level, &id,
-						  &adv_router, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -963,21 +939,17 @@ DEFUN (show_ipv6_ospf6_database_type_adv_router_linkstate_id,
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, &id, &adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	show_ospf6_database_type_id_router_common(vty, type, level, &id,
-						  &adv_router, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -1035,19 +1007,16 @@ DEFUN(show_ipv6_ospf6_database_self_originated,
 
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
-      ipv6_ospf6_database_self_originated_common(vty, level, ospf6);
-    }
-		return CMD_SUCCESS;
-	}
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			ipv6_ospf6_database_self_originated_common(vty, level, ospf6);
 
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
+			if (!all_vrf)
+				break;
+		}
 	}
-  ipv6_ospf6_database_self_originated_common(vty, level, ospf6);
 
 	return CMD_SUCCESS;
 }
@@ -1095,23 +1064,18 @@ DEFUN(show_ipv6_ospf6_database_type_self_originated,
 	type = parse_type_spec(idx_lsa, argc, argv);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			adv_router = ospf6->router_id;
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, NULL, &adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	adv_router = ospf6->router_id;
-	show_ospf6_database_type_id_router_common(vty, type, level, NULL,
-						  &adv_router, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -1164,23 +1128,18 @@ DEFUN(show_ipv6_ospf6_database_type_self_originated_linkstate_id,
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			adv_router = ospf6->router_id;
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, &id, &adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	adv_router = ospf6->router_id;
-	show_ospf6_database_type_id_router_common(vty, type, level, &id,
-						  &adv_router, ospf6);
+			if (!all_vrf)
+			break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -1231,23 +1190,18 @@ DEFUN(show_ipv6_ospf6_database_type_id_self_originated,
 	inet_pton(AF_INET, argv[idx_ls_id]->arg, &id);
 	level = parse_show_level(idx_level, argc, argv);
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			adv_router = ospf6->router_id;
 			show_ospf6_database_type_id_router_common(
 				vty, type, level, &id, &adv_router, ospf6);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	adv_router = ospf6->router_id;
-	show_ospf6_database_type_id_router_common(vty, type, level, &id,
-						  &adv_router, ospf6);
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -1315,21 +1269,18 @@ DEFUN(show_ipv6_ospf6_border_routers, show_ipv6_ospf6_border_routers_cmd,
 		idx_argc += 2;
 		idx_ipv4 += 2;
 	}
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
-			show_ospf6_border_routers_common(vty, argc, argv, ospf6,
-							 idx_ipv4, idx_argc);
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	show_ospf6_border_routers_common(vty, argc, argv, ospf6, idx_ipv4,
-					 idx_argc);
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
+			show_ospf6_border_routers_common(vty, argc, argv, ospf6,
+				idx_ipv4, idx_argc);
+
+			if (!all_vrf)
+				break;
+		}
+	}
 
 	return CMD_SUCCESS;
 }
@@ -1359,31 +1310,23 @@ DEFUN(show_ipv6_ospf6_linkstate, show_ipv6_ospf6_linkstate_cmd,
 	if (idx_vrf > 0)
 		idx_ipv4 += 2;
 
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6)) {
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, nnode, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
 				vty_out(vty,
 					"\n        SPF Result in Area %s\n\n",
 					oa->name);
 				ospf6_linkstate_table_show(vty, idx_ipv4, argc,
-							   argv, oa->spf_table);
+					argv, oa->spf_table);
 			}
 			vty_out(vty, "\n");
-		}
-		return CMD_SUCCESS;
-	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
 
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
-		vty_out(vty, "\n        SPF Result in Area %s\n\n", oa->name);
-		ospf6_linkstate_table_show(vty, idx_ipv4, argc, argv,
-					   oa->spf_table);
+			if (!all_vrf)
+				break;
+		}
 	}
-	vty_out(vty, "\n");
 
 	return CMD_SUCCESS;
 }
@@ -1409,33 +1352,25 @@ DEFUN(show_ipv6_ospf6_linkstate_detail, show_ipv6_ospf6_linkstate_detail_cmd,
 	OSPF6_FIND_VRF_ARGS(argv, argc, idx_vrf, vrf_name, all_vrf);
 	if (idx_vrf > 0)
 		idx_detail += 2;
-	if (all_vrf) {
-		for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+
+	for (ALL_LIST_ELEMENTS_RO(om6->ospf6, node, ospf6)) {
+		if (all_vrf ||
+			((ospf6->name == NULL && vrf_name == NULL)
+			|| (ospf6->name && vrf_name && strcmp(ospf6->name, vrf_name) == 0))) {
 			for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
 				vty_out(vty,
 					"\n        SPF Result in Area %s\n\n",
 					oa->name);
 				ospf6_linkstate_table_show(vty, idx_detail,
-							   argc, argv,
-							   oa->spf_table);
+					argc, argv,
+					oa->spf_table);
 			}
 			vty_out(vty, "\n");
+
+			if (!all_vrf)
+				break;
 		}
-		return CMD_SUCCESS;
 	}
-	ospf6 = ospf6_lookup_by_vrf_name(vrf_name);
-	if (ospf6 == NULL) {
-    vty_out(vty, "%% OSPF6 instance not found\n");
-    return CMD_SUCCESS;
-	}
-
-	for (ALL_LIST_ELEMENTS_RO(ospf6->area_list, node, oa)) {
-		vty_out(vty, "\n        SPF Result in Area %s\n\n", oa->name);
-		ospf6_linkstate_table_show(vty, idx_detail, argc, argv,
-					   oa->spf_table);
-	}
-
-	vty_out(vty, "\n");
 
 	return CMD_SUCCESS;
 }
