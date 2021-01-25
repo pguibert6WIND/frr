@@ -413,6 +413,8 @@ def test_linux_ipv6_kernel_routingTable():
                     "unreachable fe80::/64 "
                 ):
                     continue
+                if 'anycast' in line:
+                    continue
                 filtered_lines.append(line)
             actual = "\n".join(filtered_lines).splitlines(1)
 

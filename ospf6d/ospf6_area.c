@@ -878,7 +878,7 @@ DEFUN(show_ipv6_ospf6_spf_tree, show_ipv6_ospf6_spf_tree_cmd,
 {
 	struct listnode *node;
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -940,7 +940,7 @@ DEFUN(show_ipv6_ospf6_area_spf_tree, show_ipv6_ospf6_area_spf_tree_cmd,
 	uint32_t area_id;
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1025,7 +1025,7 @@ DEFUN(show_ipv6_ospf6_simulate_spf_tree_root,
 	uint32_t router_id;
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 

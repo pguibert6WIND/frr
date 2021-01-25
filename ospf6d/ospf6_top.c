@@ -179,7 +179,10 @@ static int ospf6_vrf_enable(struct vrf *vrf)
 	zlog_debug("%s: VRF %s id %u enabled", __func__, vrf->name,
 		   vrf->vrf_id);
 
-	ospf6 = ospf6_lookup_by_vrf_name(vrf->name);
+	if (vrf->vrf_id == VRF_DEFAULT)
+		ospf6 = ospf6_lookup_by_vrf_id(vrf->vrf_id);
+	else
+		ospf6 = ospf6_lookup_by_vrf_name(vrf->name);
 	if (ospf6) {
 		if (ospf6->name && strmatch(vrf->name, VRF_DEFAULT_NAME)) {
 			XFREE(MTYPE_OSPF6_TOP, ospf6->name);
@@ -316,14 +319,18 @@ static struct ospf6 *ospf6_create(const char *name)
 
 	o = XCALLOC(MTYPE_OSPF6_TOP, sizeof(struct ospf6));
 
-	vrf = vrf_lookup_by_name(name);
+	if (name == NULL)
+		vrf = vrf_lookup_by_id(VRF_DEFAULT);
+	else
+		vrf = vrf_lookup_by_name(name);
 	if (vrf) {
 		o->vrf_id = vrf->vrf_id;
 	} else
 		o->vrf_id = VRF_UNKNOWN;
 
 	/* Freed in ospf6_delete */
-	o->name = XSTRDUP(MTYPE_OSPF6_TOP, name);
+	if (name)
+		o->name = XSTRDUP(MTYPE_OSPF6_TOP, name);
 	if (vrf)
 		ospf6_vrf_link(o, vrf);
 
@@ -535,7 +542,7 @@ DEFUN_NOSH(router_ospf6, router_ospf6_cmd, "router ospf6 [vrf NAME]",
 	   ROUTER_STR OSPF6_STR VRF_CMD_HELP_STR)
 {
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	const char *vrf_name = NULL;
 	int idx_vrf = 0;
 
   if (argv_find(argv, argc, "vrf", &idx_vrf)) {
@@ -557,7 +564,7 @@ DEFUN(no_router_ospf6, no_router_ospf6_cmd, "no router ospf6 [vrf NAME]",
       NO_STR ROUTER_STR OSPF6_STR VRF_CMD_HELP_STR)
 {
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	int idx_vrf = 0;
 
   if (argv_find(argv, argc, "vrf", &idx_vrf)) {
@@ -874,13 +881,17 @@ DEFUN (ospf6_interface_area,
 	struct ospf6_area *oa;
 	struct ospf6_interface *oi;
 	struct interface *ifp;
-	vrf_id_t vrf_id = VRF_DEFAULT;
+	struct vrf *vrf = vrf_lookup_by_id(VRF_DEFAULT);
 
-	if (ospf6->vrf_id != VRF_UNKNOWN)
-		vrf_id = ospf6->vrf_id;
-
+	if (ospf6->name)
+		vrf = vrf_lookup_by_name(ospf6->name);
+	if (!vrf) {
+		vty_out(vty, "%s XXX already attached to Area %s\n",
+			oi->interface->name, oi->area->name);
+		return CMD_SUCCESS;
+	}
 	/* find/create ospf6 interface */
-	ifp = if_get_by_name(argv[idx_ifname]->arg, vrf_id);
+	ifp = if_get_by_name_vrf(argv[idx_ifname]->arg, vrf);
 	oi = (struct ospf6_interface *)ifp->info;
 	if (oi == NULL)
 		oi = ospf6_interface_create(ifp);
@@ -931,13 +942,17 @@ DEFUN (no_ospf6_interface_area,
 	struct ospf6_area *oa;
 	struct interface *ifp;
 	uint32_t area_id;
-	vrf_id_t vrf_id = VRF_DEFAULT;
+	struct vrf *vrf = vrf_lookup_by_id(VRF_DEFAULT);
 
-	if (ospf6->vrf_id != VRF_UNKNOWN)
-		vrf_id = ospf6->vrf_id;
-
+	if (ospf6->name)
+		vrf = vrf_lookup_by_name(ospf6->name);
+	if (!vrf) {
+		vty_out(vty, "%s XXX already attached to Area %s\n",
+			oi->interface->name, oi->area->name);
+		return CMD_SUCCESS;
+	}
 	/* find/create ospf6 interface */
-	ifp = if_get_by_name(argv[idx_ifname]->arg, vrf_id);
+	ifp = if_get_by_name_vrf(argv[idx_ifname]->arg, vrf);
 
 	if (ifp == NULL) {
 		vty_out(vty, "No such interface %s\n", argv[idx_ifname]->arg);
@@ -1260,7 +1275,7 @@ DEFUN(show_ipv6_ospf6, show_ipv6_ospf6_cmd,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1304,7 +1319,7 @@ DEFUN(show_ipv6_ospf6_route, show_ipv6_ospf6_route_cmd,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 	int idx_arg_start = 4;
@@ -1339,7 +1354,7 @@ DEFUN(show_ipv6_ospf6_route_match, show_ipv6_ospf6_route_match_cmd,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 	int idx_start_arg = 4;
@@ -1375,7 +1390,7 @@ DEFUN(show_ipv6_ospf6_route_match_detail,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 	int idx_start_arg = 4;
@@ -1413,7 +1428,7 @@ DEFUN(show_ipv6_ospf6_route_type_detail, show_ipv6_ospf6_route_type_detail_cmd,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 	int idx_start_arg = 4;

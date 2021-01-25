@@ -243,7 +243,7 @@ DEFUN(show_ipv6_ospf6_database, show_ipv6_ospf6_database_cmd,
 	int idx_level = 4;
 	struct listnode *node;
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -332,7 +332,7 @@ DEFUN(show_ipv6_ospf6_database_type, show_ipv6_ospf6_database_type_cmd,
 	struct listnode *node;
 	struct ospf6 *ospf6;
 	uint16_t type = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -405,7 +405,7 @@ DEFUN(show_ipv6_ospf6_database_id, show_ipv6_ospf6_database_id_cmd,
 	struct listnode *node;
 	struct ospf6 *ospf6;
 	uint32_t id = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -473,7 +473,7 @@ DEFUN(show_ipv6_ospf6_database_router, show_ipv6_ospf6_database_router_cmd,
 	struct listnode *node;
 	struct ospf6 *ospf6;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -546,7 +546,7 @@ DEFUN_HIDDEN(
 	struct listnode *node;
 	struct ospf6 *ospf6;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -599,7 +599,7 @@ DEFUN(show_ipv6_ospf6_database_type_id, show_ipv6_ospf6_database_type_id_cmd,
 	struct ospf6 *ospf6;
 	uint16_t type = 0;
 	uint32_t id = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -660,7 +660,7 @@ DEFUN(show_ipv6_ospf6_database_type_router,
 	struct ospf6 *ospf6;
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -740,7 +740,7 @@ DEFUN (show_ipv6_ospf6_database_id_router,
 	struct ospf6 *ospf6;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -793,7 +793,7 @@ DEFUN(show_ipv6_ospf6_database_adv_router_linkstate_id,
 	struct ospf6 *ospf6;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -854,7 +854,7 @@ DEFUN(show_ipv6_ospf6_database_type_id_router,
 	uint16_t type = 0;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -921,7 +921,7 @@ DEFUN (show_ipv6_ospf6_database_type_adv_router_linkstate_id,
 	uint16_t type = 0;
 	uint32_t id = 0;
 	uint32_t adv_router = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -996,7 +996,7 @@ DEFUN(show_ipv6_ospf6_database_self_originated,
 	int level;
 	struct listnode *node;
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1050,7 +1050,7 @@ DEFUN(show_ipv6_ospf6_database_type_self_originated,
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1111,7 +1111,7 @@ DEFUN(show_ipv6_ospf6_database_type_self_originated_linkstate_id,
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 	uint32_t id = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1174,7 +1174,7 @@ DEFUN(show_ipv6_ospf6_database_type_id_self_originated,
 	uint16_t type = 0;
 	uint32_t adv_router = 0;
 	uint32_t id = 0;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1258,7 +1258,7 @@ DEFUN(show_ipv6_ospf6_border_routers, show_ipv6_ospf6_border_routers_cmd,
 	int idx_ipv4 = 4;
 	struct ospf6 *ospf6 = NULL;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 	int idx_argc = 5;
@@ -1301,7 +1301,7 @@ DEFUN(show_ipv6_ospf6_linkstate, show_ipv6_ospf6_linkstate_cmd,
 	struct listnode *node, *nnode;
 	struct ospf6_area *oa;
 	struct ospf6 *ospf6 = NULL;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1343,7 +1343,7 @@ DEFUN(show_ipv6_ospf6_linkstate_detail, show_ipv6_ospf6_linkstate_detail_cmd,
 	struct listnode *node;
 	struct ospf6_area *oa;
 	struct ospf6 *ospf6 = NULL;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 

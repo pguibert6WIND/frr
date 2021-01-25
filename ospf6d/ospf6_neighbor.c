@@ -1039,7 +1039,7 @@ DEFUN(show_ipv6_ospf6_neighbor, show_ipv6_ospf6_neighbor_cmd,
 	int json_idx = 6;
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1116,7 +1116,7 @@ DEFUN(show_ipv6_ospf6_neighbor_one, show_ipv6_ospf6_neighbor_one_cmd,
 	int idx_ipv4 = 4;
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 

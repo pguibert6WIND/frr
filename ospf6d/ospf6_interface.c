@@ -1217,7 +1217,7 @@ DEFUN(show_ipv6_ospf6_interface, show_ipv6_ospf6_interface_ifname_cmd,
 	int json_idx = 6;
 	struct listnode *node;
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1435,7 +1435,7 @@ DEFUN(show_ipv6_ospf6_interface_traffic, show_ipv6_ospf6_interface_traffic_cmd,
 {
 	struct ospf6 *ospf6;
 	struct listnode *node;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1478,7 +1478,7 @@ DEFUN(show_ipv6_ospf6_interface_ifname_prefix,
 	struct ospf6 *ospf6;
 	struct listnode *node;
 	struct interface *ifp;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -1536,7 +1536,7 @@ DEFUN(show_ipv6_ospf6_interface_prefix, show_ipv6_ospf6_interface_prefix_cmd,
 	struct interface *ifp;
 	struct listnode *node;
 	struct ospf6 *ospf6;
-	const char *vrf_name = VRF_DEFAULT_NAME;
+	char *vrf_name = NULL;
 	bool all_vrf = false;
 	int idx_vrf = 0;
 
@@ -2263,9 +2263,10 @@ static int config_write_ospf6_interface(struct vty *vty, struct vrf *vrf)
 		oi = (struct ospf6_interface *)ifp->info;
 		if (oi == NULL)
 			continue;
-
-		vty_frame(vty, "interface %s\n", oi->interface->name);
-
+		if (vrf->vrf_id == VRF_DEFAULT)
+			vty_frame(vty, "interface %s\n", oi->interface->name);
+		else
+			vty_frame(vty, "interface %s vrf %s\n", oi->interface->name, vrf->name);
 		if (ifp->desc)
 			vty_out(vty, " description %s\n", ifp->desc);
 		if (oi->c_ifmtu)
