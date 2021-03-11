@@ -7,22 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-#include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <asm/types.h>
-#include <arpa/inet.h>
+#include "zebra.h"
 #include <linux/if_packet.h>
-#include <linux/if_arp.h>
-#include <linux/limits.h>
 
 #include "nhrp_protocol.h"
 #include "os.h"
@@ -107,7 +93,7 @@ static int linux_configure_arp(const char *iface, int on)
 {
 	struct ifreq ifr;
 
-	strncpy(ifr.ifr_name, iface, IFNAMSIZ - 1);
+	strlcpy(ifr.ifr_name, iface, IFNAMSIZ);
 	if (ioctl(nhrp_socket_fd, SIOCGIFFLAGS, &ifr))
 		return -1;
 
