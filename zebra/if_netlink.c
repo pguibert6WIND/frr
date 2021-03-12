@@ -74,6 +74,7 @@
 #include "zebra/zebra_errors.h"
 #include "zebra/zebra_vxlan.h"
 #include "zebra/zebra_evpn_mh.h"
+#include "zebra/zebra_l2.h"
 
 extern struct zebra_privs_t zserv_privs;
 
@@ -475,6 +476,9 @@ static ssize_t netlink_gre_set_msg_encoder(struct zebra_dplane_ctx *ctx, void *b
 	uint32_t link_idx;
 	unsigned int mtu;
 	struct rtattr *rta_info, *rta_data;
+	struct interface *gre_ifp;
+	struct zebra_if *zif;
+	struct zebra_l2info_gre *gre_info;
 
 	if (buflen < sizeof(*req))
 		return 0;
@@ -486,6 +490,20 @@ static ssize_t netlink_gre_set_msg_encoder(struct zebra_dplane_ctx *ctx, void *b
 
 	memset(&req->ifi, 0, sizeof(struct ifinfomsg));
 	req->ifi.ifi_index = dplane_ctx_get_ifindex(ctx);
+
+	gre_ifp = if_lookup_by_index(req->ifi.ifi_index,
+				     dplane_ctx_get_vrf(ctx));
+	if (!gre_ifp || !IS_ZEBRA_IF_GRE(gre_ifp))
+		return 0;
+
+	zif = (struct zebra_if *)gre_ifp->info;
+	if (!zif)
+		return 0;
+
+	gre_info = &zif->l2info.gre;
+	if (!gre_info)
+		return 0;
+
 	req->ifi.ifi_change = 0xFFFFFFFF;
 	link_idx = dplane_ctx_gre_get_link_ifindex(ctx);
 	mtu = dplane_ctx_gre_get_mtu(ctx);
@@ -496,13 +514,36 @@ static ssize_t netlink_gre_set_msg_encoder(struct zebra_dplane_ctx *ctx, void *b
 	rta_info = nl_attr_nest(&req->n, buflen, IFLA_LINKINFO);
 	if (!rta_info)
 		return 0;
+
 	if (!nl_attr_put(&req->n, buflen, IFLA_INFO_KIND, "gre", 3))
 		return 0;
+
 	rta_data = nl_attr_nest(&req->n, buflen, IFLA_INFO_DATA);
-	if (!rta_info)
+	if (!rta_data)
 		return 0;
+
 	if (!nl_attr_put32(&req->n, buflen, IFLA_GRE_LINK, link_idx))
 		return 0;
+
+	if (gre_info->vtep_ip.s_addr &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_LOCAL,
+			   gre_info->vtep_ip.s_addr))
+		return 0;
+
+	if (gre_info->vtep_ip_remote.s_addr &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_REMOTE,
+			   gre_info->vtep_ip_remote.s_addr))
+		return 0;
+
+	if (gre_info->ikey &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_IKEY,
+			   gre_info->ikey))
+		return 0;
+	if (gre_info->okey &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_IKEY,
+			   gre_info->okey))
+		return 0;
+
 	nl_attr_nest_end(&req->n, rta_data);
 	nl_attr_nest_end(&req->n, rta_info);
 
@@ -585,6 +626,7 @@ static int netlink_extract_gre_info(struct rtattr *link_data,
 	}
 	if (attr[IFLA_GRE_IKEY])
 		gre_info->ikey = *(uint32_t *)RTA_DATA(attr[IFLA_GRE_IKEY]);
+
 	if (attr[IFLA_GRE_OKEY])
 		gre_info->okey = *(uint32_t *)RTA_DATA(attr[IFLA_GRE_OKEY]);
 	return 0;
