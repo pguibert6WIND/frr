@@ -290,8 +290,6 @@ Link Parameters Commands
    Allows nexthop tracking to resolve via the default route. This is useful
    when e.g. you want to allow BGP to peer across the default route.
 
-.. _zebra-vrf:
-
 Administrative Distance
 =======================
 
@@ -347,6 +345,8 @@ we read the metric value as a uint32_t.  The top byte of the value
 is interpreted as the Administrative Distance and the low three bytes
 are read in as the metric.  This special case is to facilitate VRF
 default routes.
+
+.. _zebra-vrf:
 
 Virtual Routing and Forwarding
 ==============================
