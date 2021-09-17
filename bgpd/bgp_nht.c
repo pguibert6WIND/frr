@@ -81,6 +81,11 @@ static int bgp_isvalid_labeled_nexthop(struct bgp_nexthop_cache *bnc)
 			|| bnc->bgp->srv6_enabled)));
 }
 
+static int bgp_isconnected_nexthop(struct bgp_nexthop_cache *bnc)
+{
+	return (bnc && CHECK_FLAG(bnc->flags, BGP_NEXTHOP_CONNECTED));
+}
+
 static void bgp_unlink_nexthop_check(struct bgp_nexthop_cache *bnc)
 {
 	if (LIST_EMPTY(&(bnc->paths)) && !bnc->nht_info) {
@@ -478,6 +483,9 @@ static void bgp_process_nexthop_update(struct bgp_nexthop_cache *bnc,
 					nexthop2str(nexthop, buf, sizeof(buf)),
 					num_labels);
 			}
+			/* At least one nexthop is directly connected */
+			if (nexthop->type == NEXTHOP_TYPE_IFINDEX)
+				bnc->flags |= BGP_NEXTHOP_CONNECTED;
 
 			if (nhlist_tail) {
 				nhlist_tail->next = nexthop;
@@ -1014,8 +1022,11 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 		    && path->extra && path->extra->num_labels
 		    && (path->attr->evpn_overlay.type
 			!= OVERLAY_INDEX_GATEWAY_IP)) {
-			bnc_is_valid_nexthop =
-				bgp_isvalid_labeled_nexthop(bnc) ? true : false;
+			if (bgp_isvalid_labeled_nexthop(bnc)
+			    || bgp_isconnected_nexthop(bnc))
+				bnc_is_valid_nexthop = true;
+			else
+				bnc_is_valid_nexthop = false;
 		} else {
 			if (bgp_update_martian_nexthop(
 				    bnc->bgp, afi, safi, path->type,
