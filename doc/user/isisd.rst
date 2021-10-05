@@ -358,7 +358,6 @@ Known limitations:
  - No support for level redistribution (L1 to L2 or L2 to L1)
  - No support for binding SID
  - No support for SRMS
- - No support for SRLB
  - Only one SRGB and default SPF Algorithm is supported
 
 .. clicmd:: segment-routing on
