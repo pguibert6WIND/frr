@@ -3413,7 +3413,7 @@ void cli_show_isis_flex_algo(struct vty *vty, const struct lyd_node *dnode,
 
 	if (yang_dnode_exists(
 		    dnode, "./affinity-include-alls/affinity-include-all")) {
-		vty_out(vty, "  affinity include-alls");
+		vty_out(vty, "  affinity include-all");
 		yang_dnode_iterate(
 			ag_iter_cb, vty, dnode,
 			"./affinity-include-alls/affinity-include-all");
