@@ -34,17 +34,7 @@ extern "C" {
 #define SR_ALGORITHM_STRICT_SPF	1   /* RFC8665 */
 #define SR_ALGORITHM_UNSET	255 /* FRRouting defined */
 
-inline const char *sr_algorithm_string(uint8_t algo)
-{
-	switch (algo) {
-	case SR_ALGORITHM_SPF:
-		return "SPF";
-	case SR_ALGORITHM_STRICT_SPF:
-		return "Strict SPF";
-	default:
-		return algo >= 128 ? "Flex-Algo" : "Unknown";
-	}
-}
+const char *sr_algorithm_string(uint8_t algo);
 
 #ifdef __cplusplus
 }

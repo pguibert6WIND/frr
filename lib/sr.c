@@ -16,3 +16,16 @@
  * with this program; see the file COPYING; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
+#include "sr.h"
+
+const char *sr_algorithm_string(uint8_t algo)
+{
+	switch (algo) {
+	case SR_ALGORITHM_SPF:
+		return "SPF";
+	case SR_ALGORITHM_STRICT_SPF:
+		return "Strict SPF";
+	default:
+		return algo >= 128 ? "Flex-Algo" : "Unknown";
+	}
+}
