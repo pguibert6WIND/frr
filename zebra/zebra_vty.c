@@ -54,6 +54,7 @@
 #include "zebra/rtadv.h"
 #include "zebra/zebra_neigh.h"
 #include "zebra/zebra_ptm.h"
+#include "zebra/zebra_srte.h"
 
 /* context to manage dumps in multiple tables or vrfs */
 struct route_show_ctx {
@@ -4113,6 +4114,19 @@ DEFPY_HIDDEN(zebra_test_metaq_plug,
 
 	return CMD_SUCCESS;
 }
+DEFUN (show_zebra_srte,
+       show_zebra_srte_cmd,
+       "show zebra sr-te [json]",
+       SHOW_STR
+       ZEBRA_STR
+       "Zebra SR-TE Policies\n"
+       JSON_STR)
+{
+	bool uj = use_json(argc, argv);
+
+	zebra_sr_policy_show(vty, uj);
+	return CMD_SUCCESS;
+}
 
 #ifdef DEV_BUILD
 DEFPY_HIDDEN(zebra_test_dplane_results_plug,
@@ -4409,6 +4423,7 @@ void zebra_vty_init(void)
 #ifdef DEV_BUILD
 	install_element(VIEW_NODE, &zebra_test_dplane_results_plug_cmd);
 #endif
+	install_element(VIEW_NODE, &show_zebra_srte_cmd);
 
 #ifdef HAVE_NETLINK
 	install_element(CONFIG_NODE, &zebra_kernel_netlink_batch_tx_buf_cmd);
