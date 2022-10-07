@@ -454,9 +454,8 @@ void pbr_send_rnh(struct nexthop *nhop, bool reg)
 		break;
 	}
 
-	if (zclient_send_rnh(pbr_zclient, command, &p, SAFI_UNICAST, false, false,
-			     nhop->vrf_id)
-	    == ZCLIENT_SEND_FAILURE) {
+	if (zclient_send_rnh(pbr_zclient, command, &p, SAFI_UNICAST, false, false, nhop->vrf_id,
+			     0) == ZCLIENT_SEND_FAILURE) {
 		zlog_warn("%s: Failure to send nexthop to zebra", __func__);
 	}
 }
