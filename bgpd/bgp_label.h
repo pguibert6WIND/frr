@@ -44,6 +44,8 @@ extern mpls_label_t bgp_adv_label(struct bgp_dest *dest,
 				  struct bgp_path_info *pi, struct peer *to,
 				  afi_t afi, safi_t safi);
 
+struct bgp_nlri;
+struct attr;
 extern int bgp_nlri_parse_label(struct peer *peer, struct attr *attr,
 				struct bgp_nlri *packet);
 

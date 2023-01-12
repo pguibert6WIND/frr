@@ -23,6 +23,8 @@
 
 #include "lib/typesafe.h"
 
+#include "bgpd/bgp_label.h"
+
 PREDECL_DLIST(bgp_adv_fifo);
 
 struct update_subgroup;
@@ -104,6 +106,11 @@ struct bgp_adj_in {
 	/* Received attribute.  */
 	struct attr *attr;
 
+	/* Label information */
+	mpls_label_t label[BGP_MAX_LABELS];
+
+	uint32_t num_labels;
+
 	/* timestamp (monotime) */
 	time_t uptime;
 
@@ -145,7 +152,8 @@ struct bgp_synchronize {
 extern bool bgp_adj_out_lookup(struct peer *peer, struct bgp_dest *dest,
 			       uint32_t addpath_tx_id);
 extern void bgp_adj_in_set(struct bgp_dest *dest, struct peer *peer,
-			   struct attr *attr, uint32_t addpath_id);
+			   struct attr *attr, uint32_t addpath_id,
+			   mpls_label_t *label, uint32_t num_labels);
 extern bool bgp_adj_in_unset(struct bgp_dest *dest, struct peer *peer,
 			     uint32_t addpath_id);
 extern void bgp_adj_in_remove(struct bgp_dest *dest, struct bgp_adj_in *bai);
