@@ -121,6 +121,8 @@
 #include <linux/filter.h>
 #else
 #define RT_TABLE_MAIN		0
+#define RT_TABLE_COMPAT		0
+#define RT_TABLE_LOCAL		0
 #endif /* HAVE_NETLINK */
 
 #include <netdb.h>

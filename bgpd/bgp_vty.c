@@ -16765,10 +16765,11 @@ ALIAS_HIDDEN(
 
 DEFUN (bgp_redistribute_ipv4_ospf,
        bgp_redistribute_ipv4_ospf_cmd,
-       "redistribute <ospf|table> (1-65535)",
+       "redistribute <ospf|table|table-direct> (1-65535)",
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n")
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
@@ -16781,7 +16782,23 @@ DEFUN (bgp_redistribute_ipv4_ospf,
 
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
 	bgp_redist_add(bgp, AFI_IP, protocol, instance);
@@ -16789,18 +16806,20 @@ DEFUN (bgp_redistribute_ipv4_ospf,
 }
 
 ALIAS_HIDDEN(bgp_redistribute_ipv4_ospf, bgp_redistribute_ipv4_ospf_hidden_cmd,
-	     "redistribute <ospf|table> (1-65535)",
+	     "redistribute <ospf|table|table-direct> (1-65535)",
 	     "Redistribute information from another routing protocol\n"
 	     "Open Shortest Path First (OSPFv2)\n"
 	     "Non-main Kernel Routing Table\n"
+	     "Non-main Kernel Routing Table - Direct\n"
 	     "Instance ID/Table ID\n")
 
 DEFUN (bgp_redistribute_ipv4_ospf_rmap,
        bgp_redistribute_ipv4_ospf_rmap_cmd,
-       "redistribute <ospf|table> (1-65535) route-map RMAP_NAME",
+       "redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME",
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n"
        "Route map reference\n"
        "Pointer to route-map entries\n")
@@ -16816,12 +16835,28 @@ DEFUN (bgp_redistribute_ipv4_ospf_rmap,
 	struct route_map *route_map =
 		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
 
+	instance = strtoul(argv[idx_number]->arg, NULL, 10);
+
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
 	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
 	changed =
 		bgp_redistribute_rmap_set(red, argv[idx_word]->arg, route_map);
@@ -16830,20 +16865,22 @@ DEFUN (bgp_redistribute_ipv4_ospf_rmap,
 
 ALIAS_HIDDEN(bgp_redistribute_ipv4_ospf_rmap,
 	     bgp_redistribute_ipv4_ospf_rmap_hidden_cmd,
-	     "redistribute <ospf|table> (1-65535) route-map RMAP_NAME",
+	     "redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME",
 	     "Redistribute information from another routing protocol\n"
 	     "Open Shortest Path First (OSPFv2)\n"
 	     "Non-main Kernel Routing Table\n"
+	     "Non-main Kernel Routing Table - Direct\n"
 	     "Instance ID/Table ID\n"
 	     "Route map reference\n"
 	     "Pointer to route-map entries\n")
 
 DEFUN (bgp_redistribute_ipv4_ospf_metric,
        bgp_redistribute_ipv4_ospf_metric_cmd,
-       "redistribute <ospf|table> (1-65535) metric (0-4294967295)",
+       "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295)",
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n"
        "Metric for redistributed routes\n"
        "Default metric\n")
@@ -16858,12 +16895,28 @@ DEFUN (bgp_redistribute_ipv4_ospf_metric,
 	int protocol;
 	bool changed;
 
+	instance = strtoul(argv[idx_number]->arg, NULL, 10);
+
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
 	metric = strtoul(argv[idx_number_2]->arg, NULL, 10);
 
 	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
@@ -16874,20 +16927,22 @@ DEFUN (bgp_redistribute_ipv4_ospf_metric,
 
 ALIAS_HIDDEN(bgp_redistribute_ipv4_ospf_metric,
 	     bgp_redistribute_ipv4_ospf_metric_hidden_cmd,
-	     "redistribute <ospf|table> (1-65535) metric (0-4294967295)",
+	     "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295)",
 	     "Redistribute information from another routing protocol\n"
 	     "Open Shortest Path First (OSPFv2)\n"
 	     "Non-main Kernel Routing Table\n"
+	     "Non-main Kernel Routing Table - Direct\n"
 	     "Instance ID/Table ID\n"
 	     "Metric for redistributed routes\n"
 	     "Default metric\n")
 
 DEFUN (bgp_redistribute_ipv4_ospf_rmap_metric,
        bgp_redistribute_ipv4_ospf_rmap_metric_cmd,
-       "redistribute <ospf|table> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
+       "redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n"
        "Route map reference\n"
        "Pointer to route-map entries\n"
@@ -16907,12 +16962,28 @@ DEFUN (bgp_redistribute_ipv4_ospf_rmap_metric,
 	struct route_map *route_map =
 		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
 
+	instance = strtoul(argv[idx_number]->arg, NULL, 10);
+
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
 	metric = strtoul(argv[idx_number_2]->arg, NULL, 10);
 
 	red = bgp_redist_add(bgp, AFI_IP, protocol, instance);
@@ -16926,10 +16997,11 @@ DEFUN (bgp_redistribute_ipv4_ospf_rmap_metric,
 ALIAS_HIDDEN(
 	bgp_redistribute_ipv4_ospf_rmap_metric,
 	bgp_redistribute_ipv4_ospf_rmap_metric_hidden_cmd,
-	"redistribute <ospf|table> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
+	"redistribute <ospf|table|table-direct> (1-65535) route-map RMAP_NAME metric (0-4294967295)",
 	"Redistribute information from another routing protocol\n"
 	"Open Shortest Path First (OSPFv2)\n"
 	"Non-main Kernel Routing Table\n"
+        "Non-main Kernel Routing Table - Direct\n"
 	"Instance ID/Table ID\n"
 	"Route map reference\n"
 	"Pointer to route-map entries\n"
@@ -16938,10 +17010,11 @@ ALIAS_HIDDEN(
 
 DEFUN (bgp_redistribute_ipv4_ospf_metric_rmap,
        bgp_redistribute_ipv4_ospf_metric_rmap_cmd,
-       "redistribute <ospf|table> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
+       "redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n"
        "Metric for redistributed routes\n"
        "Default metric\n"
@@ -16961,9 +17034,26 @@ DEFUN (bgp_redistribute_ipv4_ospf_metric_rmap,
 	struct route_map *route_map =
 		route_map_lookup_warn_noexist(vty, argv[idx_word]->arg);
 
+	instance = strtoul(argv[idx_number]->arg, NULL, 10);
+
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
 	instance = strtoul(argv[idx_number]->arg, NULL, 10);
@@ -16980,10 +17070,11 @@ DEFUN (bgp_redistribute_ipv4_ospf_metric_rmap,
 ALIAS_HIDDEN(
 	bgp_redistribute_ipv4_ospf_metric_rmap,
 	bgp_redistribute_ipv4_ospf_metric_rmap_hidden_cmd,
-	"redistribute <ospf|table> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
+	"redistribute <ospf|table|table-direct> (1-65535) metric (0-4294967295) route-map RMAP_NAME",
 	"Redistribute information from another routing protocol\n"
 	"Open Shortest Path First (OSPFv2)\n"
 	"Non-main Kernel Routing Table\n"
+        "Non-main Kernel Routing Table - Direct\n"
 	"Instance ID/Table ID\n"
 	"Metric for redistributed routes\n"
 	"Default metric\n"
@@ -16992,11 +17083,12 @@ ALIAS_HIDDEN(
 
 DEFUN (no_bgp_redistribute_ipv4_ospf,
        no_bgp_redistribute_ipv4_ospf_cmd,
-       "no redistribute <ospf|table> (1-65535) [{metric (0-4294967295)|route-map RMAP_NAME}]",
+       "no redistribute <ospf|table|table-direct> (1-65535) [{metric (0-4294967295)|route-map RMAP_NAME}]",
        NO_STR
        "Redistribute information from another routing protocol\n"
        "Open Shortest Path First (OSPFv2)\n"
        "Non-main Kernel Routing Table\n"
+       "Non-main Kernel Routing Table - Direct\n"
        "Instance ID/Table ID\n"
        "Metric for redistributed routes\n"
        "Default metric\n"
@@ -17009,23 +17101,40 @@ DEFUN (no_bgp_redistribute_ipv4_ospf,
 	unsigned short instance;
 	int protocol;
 
+	instance = strtoul(argv[idx_number]->arg, NULL, 10);
+
 	if (strncmp(argv[idx_ospf_table]->arg, "o", 1) == 0)
 		protocol = ZEBRA_ROUTE_OSPF;
-	else
+	else if (strncmp(argv[idx_ospf_table]->arg, "table-direct",
+			 strlen("table-direct")) == 0) {
+		protocol = ZEBRA_ROUTE_TABLE_DIRECT;
+		if (bgp->vrf_id != VRF_DEFAULT) {
+			vty_out(vty,
+				"%% Only default BGP instance can use 'table-direct'\n");
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+		if (instance == RT_TABLE_COMPAT || instance == RT_TABLE_MAIN ||
+		    instance == RT_TABLE_LOCAL) {
+			vty_out(vty,
+				"%% 'table-direct', can not use %u routing table\n",
+				instance);
+			return CMD_WARNING_CONFIG_FAILED;
+		}
+	} else
 		protocol = ZEBRA_ROUTE_TABLE;
 
-	instance = strtoul(argv[idx_number]->arg, NULL, 10);
 	bgp_redistribute_unset(bgp, AFI_IP, protocol, instance);
 	return CMD_SUCCESS;
 }
 
 ALIAS_HIDDEN(
 	no_bgp_redistribute_ipv4_ospf, no_bgp_redistribute_ipv4_ospf_hidden_cmd,
-	"no redistribute <ospf|table> (1-65535) [{metric (0-4294967295)|route-map RMAP_NAME}]",
+	"no redistribute <ospf|table|table-direct> (1-65535) [{metric (0-4294967295)|route-map RMAP_NAME}]",
 	NO_STR
 	"Redistribute information from another routing protocol\n"
 	"Open Shortest Path First (OSPFv2)\n"
 	"Non-main Kernel Routing Table\n"
+	"Non-main Kernel Routing Table - Direct\n"
 	"Instance ID/Table ID\n"
 	"Metric for redistributed routes\n"
 	"Default metric\n"
