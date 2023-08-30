@@ -545,7 +545,7 @@ void nhg_add(uint32_t id, const struct nexthop_group *nhg,
 	api_nhg.flags = nhg->flags;
 
 	for (ALL_NEXTHOPS_PTR(nhg, nh)) {
-		if (api_nhg.nexthop_num >= MULTIPATH_NUM) {
+		if (api_nhg.nhg_nexthop.nexthop_num >= MULTIPATH_NUM) {
 			zlog_warn(
 				"%s: number of nexthops greater than max multipath size, truncating",
 				__func__);
@@ -558,13 +558,14 @@ void nhg_add(uint32_t id, const struct nexthop_group *nhg,
 		if (nh->ifindex == 0)
 			continue;
 
-		api_nh = &api_nhg.nexthops[api_nhg.nexthop_num];
+		api_nh = &api_nhg.nhg_nexthop
+				  .nexthops[api_nhg.nhg_nexthop.nexthop_num];
 
 		zapi_nexthop_from_nexthop(api_nh, nh);
-		api_nhg.nexthop_num++;
+		api_nhg.nhg_nexthop.nexthop_num++;
 	}
 
-	if (api_nhg.nexthop_num == 0) {
+	if (api_nhg.nhg_nexthop.nexthop_num == 0) {
 		if (sharp_nhgroup_id_is_installed(id)) {
 			zlog_debug("%s: nhg %u: no nexthops, deleting nexthop group", __func__,
 				   id);
@@ -579,7 +580,8 @@ void nhg_add(uint32_t id, const struct nexthop_group *nhg,
 
 	if (backup_nhg) {
 		for (ALL_NEXTHOPS_PTR(backup_nhg, nh)) {
-			if (api_nhg.backup_nexthop_num >= MULTIPATH_NUM) {
+			if (api_nhg.nhg_nexthop.backup_nexthop_num >=
+			    MULTIPATH_NUM) {
 				zlog_warn(
 					"%s: number of backup nexthops greater than max multipath size, truncating",
 					__func__);
@@ -599,11 +601,12 @@ void nhg_add(uint32_t id, const struct nexthop_group *nhg,
 				break;
 			}
 
-			api_nh = &api_nhg.backup_nexthops
-					  [api_nhg.backup_nexthop_num];
+			api_nh =
+				&api_nhg.nhg_nexthop.backup_nexthops
+					 [api_nhg.nhg_nexthop.backup_nexthop_num];
 
 			zapi_backup_nexthop_from_nexthop(api_nh, nh);
-			api_nhg.backup_nexthop_num++;
+			api_nhg.nhg_nexthop.backup_nexthop_num++;
 		}
 	}
 

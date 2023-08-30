@@ -1156,8 +1156,8 @@ static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 		return -1;
 	}
 
-	if (api_nhg->nexthop_num >= MULTIPATH_NUM ||
-	    api_nhg->backup_nexthop_num >= MULTIPATH_NUM) {
+	if (api_nhg->nhg_nexthop.nexthop_num >= MULTIPATH_NUM ||
+	    api_nhg->nhg_nexthop.backup_nexthop_num >= MULTIPATH_NUM) {
 		flog_err(EC_LIB_ZAPI_ENCODE,
 			 "%s: zapi NHG encode with invalid input", __func__);
 		return -1;
@@ -1177,20 +1177,23 @@ static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 
 	if (cmd == ZEBRA_NHG_ADD) {
 		/* Nexthops */
-		zapi_nexthop_group_sort(api_nhg->nexthops,
-					api_nhg->nexthop_num);
+		zapi_nexthop_group_sort(api_nhg->nhg_nexthop.nexthops,
+					api_nhg->nhg_nexthop.nexthop_num);
 
-		stream_putw(s, api_nhg->nexthop_num);
+		stream_putw(s, api_nhg->nhg_nexthop.nexthop_num);
 
-		for (i = 0; i < api_nhg->nexthop_num; i++)
-			zapi_nexthop_encode(s, &api_nhg->nexthops[i], 0, 0);
+		for (i = 0; i < api_nhg->nhg_nexthop.nexthop_num; i++)
+			zapi_nexthop_encode(s, &api_nhg->nhg_nexthop.nexthops[i],
+					    0, 0);
 
 		/* Backup nexthops */
-		stream_putw(s, api_nhg->backup_nexthop_num);
+		stream_putw(s, api_nhg->nhg_nexthop.backup_nexthop_num);
 
-		for (i = 0; i < api_nhg->backup_nexthop_num; i++)
-			zapi_nexthop_encode(s, &api_nhg->backup_nexthops[i], 0,
-					    0);
+		for (i = 0; i < api_nhg->nhg_nexthop.backup_nexthop_num; i++)
+			zapi_nexthop_encode(s,
+					    &api_nhg->nhg_nexthop
+						     .backup_nexthops[i],
+					    0, 0);
 	}
 
 	stream_putw_at(s, 0, stream_get_endp(s));
