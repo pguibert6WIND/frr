@@ -66,6 +66,7 @@ struct sharp_nhg {
 	char name[NHG_NAME_LEN];
 
 	bool installed;
+	bool to_be_removed;
 };
 
 static uint32_t nhg_id;
@@ -134,7 +135,101 @@ static void sharp_nhgroup_modify_cb(const struct nexthop_group_cmd *nhgc)
 	if (nhgc->backup_list_name[0])
 		bnhgc = nhgc_find(nhgc->backup_list_name);
 
-	nhg_add(snhg->id, &nhgc->nhg, (bnhgc ? &bnhgc->nhg : NULL));
+	nhg_add(snhg->id, nhgc, (bnhgc ? &bnhgc->nhg : NULL));
+}
+
+static void
+sharp_nhgroup_dependent_add_nexthop_cb(const struct nexthop_group_cmd *nhgc)
+{
+	struct listnode *node;
+	struct sharp_nhg lookup;
+	char *groupname;
+	struct sharp_nhg *snhg;
+	uint32_t id, nh_num;
+
+	if (!CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP))
+		return;
+
+	strlcpy(lookup.name, nhgc->name, sizeof(nhgc->name));
+	snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+	if (!snhg || !snhg->id)
+		return;
+	id = snhg->id;
+
+	for (ALL_LIST_ELEMENTS_RO(nhgc->nhg_group_list, node, groupname)) {
+		strlcpy(lookup.name, groupname, sizeof(lookup.name));
+		snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+		if (!snhg) {
+			zlog_debug("%s() : nhg %s, group %s not found",
+				   __func__, nhgc->name, groupname);
+			continue;
+		}
+		if (!snhg->id) {
+			zlog_debug("%s() : nhg %s, group %s has no valid id %p",
+				   __func__, nhgc->name, groupname, snhg);
+			continue;
+		}
+		if (!sharp_nhgroup_id_is_installed(snhg->id)) {
+			zlog_debug("%s() : nhg %s, group %s not installed (%u)",
+				   __func__, nhgc->name, groupname, snhg->id);
+			continue;
+		}
+
+		if (sharp_nhgroup_id_is_being_removed(snhg->id))
+			continue;
+
+		/* assumption a dependent next-hop has only 1 next-hop */
+		nh_num++;
+	}
+	if (nh_num)
+		nhg_add(id, nhgc, NULL);
+}
+
+static void
+sharp_nhgroup_dependent_del_nexthop_cb(const struct nexthop_group_cmd *nhgc)
+{
+	struct listnode *node;
+	struct sharp_nhg lookup;
+	char *groupname;
+	struct sharp_nhg *snhg;
+	int nh_num = 0, id = 0;
+
+	if (!CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP))
+		return;
+
+	for (ALL_LIST_ELEMENTS_RO(nhgc->nhg_group_list, node, groupname)) {
+		strlcpy(lookup.name, groupname, sizeof(lookup.name));
+		snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+		if (!snhg) {
+			zlog_debug("%s() : nhg %s, group %s not found",
+				   __func__, nhgc->name, groupname);
+			continue;
+		}
+		if (!snhg->id) {
+			zlog_debug("%s() : nhg %s, group %s has no valid id %p",
+				   __func__, nhgc->name, groupname, snhg);
+			continue;
+		}
+
+		if (sharp_nhgroup_id_is_being_removed(snhg->id))
+			continue;
+
+		/* assumption a dependent next-hop has only 1 next-hop */
+		nh_num++;
+	}
+	strlcpy(lookup.name, nhgc->name, sizeof(lookup.name));
+	snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+	if (snhg)
+		id = snhg->id;
+	if (nh_num) {
+		zlog_debug("%s() : nhg %s, id %u needs update, now has %u groups",
+			   __func__, nhgc->name, id, nh_num);
+		nhg_add(snhg->id, nhgc, NULL);
+	} else if (sharp_nhgroup_id_is_installed(snhg->id)) {
+		zlog_debug("%s() : nhg %s, id %u needs delete, no valid nh_num",
+			   __func__, nhgc->name, id);
+		nhg_del(snhg->id);
+	}
 }
 
 static void sharp_nhgroup_add_nexthop_cb(const struct nexthop_group_cmd *nhgc,
@@ -146,11 +241,28 @@ static void sharp_nhgroup_add_nexthop_cb(const struct nexthop_group_cmd *nhgc,
 
 	strlcpy(lookup.name, nhgc->name, sizeof(lookup.name));
 	snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+	if (!snhg) {
+		zlog_debug("%s() : nexthop %s not found", __func__, snhg->name);
+		return;
+	}
+	if (!snhg->id) {
+		zlog_debug("%s() : nexthop %s has no valid id %p", __func__,
+			   snhg->name, snhg);
+		return;
+	}
+	if (!CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		if (nhgc->backup_list_name[0])
+			bnhgc = nhgc_find(nhgc->backup_list_name);
+		nhg_add(snhg->id, nhgc, (bnhgc ? &bnhgc->nhg : NULL));
+	}
 
-	if (nhgc->backup_list_name[0])
-		bnhgc = nhgc_find(nhgc->backup_list_name);
-
-	nhg_add(snhg->id, &nhgc->nhg, (bnhgc ? &bnhgc->nhg : NULL));
+	/* lookup dependent nexthops */
+	if (nhop) {
+		nexthop_group_dependent_group_match(nhgc->name,
+						    sharp_nhgroup_dependent_add_nexthop_cb);
+		return;
+	}
+	sharp_nhgroup_dependent_add_nexthop_cb(nhgc);
 }
 
 static void sharp_nhgroup_del_nexthop_cb(const struct nexthop_group_cmd *nhgc,
@@ -159,14 +271,53 @@ static void sharp_nhgroup_del_nexthop_cb(const struct nexthop_group_cmd *nhgc,
 	struct sharp_nhg lookup;
 	struct sharp_nhg *snhg;
 	struct nexthop_group_cmd *bnhgc = NULL;
+	struct nexthop *nh = NULL;
+	int nh_num = 0;
 
-	strlcpy(lookup.name, nhgc->name, sizeof(lookup.name));
-	snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+	if (!CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		strlcpy(lookup.name, nhgc->name, sizeof(lookup.name));
+		snhg = sharp_nhg_rb_find(&nhg_head, &lookup);
+		if (nhgc->backup_list_name[0])
+			bnhgc = nhgc_find(nhgc->backup_list_name);
 
-	if (nhgc->backup_list_name[0])
-		bnhgc = nhgc_find(nhgc->backup_list_name);
+		for (ALL_NEXTHOPS_PTR(&nhgc->nhg, nh)) {
+			if (nh_num >= MULTIPATH_NUM) {
+				zlog_warn("%s: number of nexthops greater than max multipath size, truncating",
+					  __func__);
+				break;
+			}
 
-	nhg_add(snhg->id, &nhgc->nhg, (bnhgc ? &bnhgc->nhg : NULL));
+			/* Unresolved nexthops will lead to failure - only send
+			 * nexthops that zebra will consider valid.
+			 */
+			if (nh->ifindex == 0)
+				continue;
+
+			nh_num++;
+		}
+		if (nh_num == 0 && sharp_nhgroup_id_is_installed(snhg->id)) {
+			/* before deleting, notify other users */
+			snhg->to_be_removed = true;
+			nexthop_group_dependent_group_match(
+				nhgc->name,
+				sharp_nhgroup_dependent_del_nexthop_cb);
+			zlog_debug("%s: nhg %s, id %u: no nexthops, deleting nexthop group",
+				   __func__, nhgc->name, snhg->id);
+			nhg_del(snhg->id);
+			snhg->to_be_removed = false;
+			return;
+		}
+
+		nhg_add(snhg->id, nhgc, (bnhgc ? &bnhgc->nhg : NULL));
+	}
+
+	/* lookup dependent nexthops */
+	if (nhop) {
+		nexthop_group_dependent_group_match(nhgc->name,
+						    sharp_nhgroup_dependent_del_nexthop_cb);
+		return;
+	}
+	sharp_nhgroup_dependent_del_nexthop_cb(nhgc);
 }
 
 static void sharp_nhgroup_delete_cb(const char *name)
@@ -196,6 +347,18 @@ uint32_t sharp_nhgroup_get_id(const char *name)
 	return snhg->id;
 }
 
+void sharp_nhgroup_dependent_trigger_add_nexthop(uint32_t id)
+{
+	struct sharp_nhg *snhg;
+
+	snhg = sharp_nhgroup_find_id(id);
+	if (!snhg)
+		return;
+	/* lookup dependent nexthops */
+	nexthop_group_dependent_group_match(snhg->name,
+					    sharp_nhgroup_dependent_add_nexthop_cb);
+}
+
 void sharp_nhgroup_id_set_installed(uint32_t id, bool installed)
 {
 	struct sharp_nhg *snhg;
@@ -220,6 +383,18 @@ bool sharp_nhgroup_id_is_installed(uint32_t id)
 	}
 
 	return snhg->installed;
+}
+
+bool sharp_nhgroup_id_is_being_removed(uint32_t id)
+{
+	struct sharp_nhg *snhg;
+
+	snhg = sharp_nhgroup_find_id(id);
+	if (!snhg) {
+		zlog_debug("%s: nhg %u not found", __func__, id);
+		return false;
+	}
+	return snhg->to_be_removed;
 }
 
 void sharp_nhgroup_init(void)

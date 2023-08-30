@@ -22,6 +22,12 @@ struct nhg_resilience {
 	uint64_t unbalanced_time;
 };
 
+struct nexthop_group_id {
+	uint32_t id_grp;
+	struct nexthop_group_id *next;
+	struct nexthop_group_id *prev;
+};
+
 /*
  * What is a nexthop group?
  *
@@ -31,13 +37,17 @@ struct nhg_resilience {
  * This module provides a proper abstraction to this idea.
  */
 struct nexthop_group {
-	struct nexthop *nexthop;
+	union {
+		struct nexthop *nexthop;
+		struct nexthop_group_id *group;
+	};
 
 	struct nhg_resilience nhgr;
 
 /* nexthop group flags */
 #define NEXTHOP_GROUP_NEXTHOP_BEHAVIOR (1 << 0)
 #define NEXTHOP_GROUP_RESET_NHG	       (1 << 1)
+#define NEXTHOP_GROUP_TYPE_GROUP       (1 << 2)
 	uint8_t flags;
 };
 
@@ -98,6 +108,8 @@ struct nexthop_group_cmd {
 
 	struct list *nhg_list;
 
+	struct list *nhg_group_list;
+
 	QOBJ_FIELDS;
 };
 RB_HEAD(nhgc_entry_head, nexthp_group_cmd);
@@ -121,17 +133,19 @@ DECLARE_QOBJ_TYPE(nexthop_group_cmd);
 void nexthop_group_init(
 	void (*create)(const char *name),
 	void (*modify)(const struct nexthop_group_cmd *nhgc),
-	void (*add_nexthop)(const struct nexthop_group_cmd *nhgc,
-			    const struct nexthop *nhop),
-	void (*del_nexthop)(const struct nexthop_group_cmd *nhgc,
-			    const struct nexthop *nhop),
+	void (*add_nexthop_or_group)(const struct nexthop_group_cmd *nhgc,
+				     const struct nexthop *nhop),
+	void (*del_nexthop_or_group)(const struct nexthop_group_cmd *nhgc,
+				     const struct nexthop *nhop),
 	void (*destroy)(const char *name));
 
 void nexthop_group_enable_vrf(struct vrf *vrf);
 void nexthop_group_disable_vrf(struct vrf *vrf);
 void nexthop_group_interface_state_change(struct interface *ifp,
 					  ifindex_t oldifindex);
-
+void nexthop_group_dependent_group_match(
+	const char *nhgc_name,
+	void (*cb_func)(const struct nexthop_group_cmd *nhgc));
 extern struct nexthop *nexthop_exists(const struct nexthop_group *nhg,
 				      const struct nexthop *nh);
 /* This assumes ordered */
@@ -160,6 +174,10 @@ nexthop_group_active_nexthop_num(const struct nexthop_group *nhg);
 
 extern bool nexthop_group_has_label(const struct nexthop_group *nhg);
 
+extern void nexthop_group_id_add(struct nexthop_group *nhg, uint32_t nhgid);
+extern void nexthop_group_id_add_sorted(struct nexthop_group *nhg,
+					uint32_t nhgid);
+extern void nexthop_group_ids_free(struct nexthop_group_id *nhid);
 #ifdef __cplusplus
 }
 #endif
