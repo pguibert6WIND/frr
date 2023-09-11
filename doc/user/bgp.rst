@@ -1300,9 +1300,13 @@ section for the specific AF to redistribute into. Protocol availability for
 redistribution is determined by BGP AF; for example, you cannot redistribute
 OSPFv3 into ``address-family ipv4 unicast`` as OSPFv3 supports IPv6.
 
-.. clicmd:: redistribute <babel|connected|eigrp|isis|kernel|openfabric|ospf|ospf6|rip|ripng|sharp|static|table> [metric (0-4294967295)] [route-map WORD]
+.. clicmd:: redistribute <babel|connected|eigrp|isis|kernel|openfabric|ospf|ospf6|rip|ripng|sharp|static> [metric (0-4294967295)] [route-map WORD]
 
 Redistribute routes from other protocols into BGP.
+
+.. clicmd:: redistribute <table|table-direct> (1-65535)] [metric (0-4294967295)] [route-map WORD]
+
+Redistribute routes from a routing table number into BGP.
 
 .. clicmd:: redistribute vnc-direct
 
