@@ -779,7 +779,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 			recursive = true;
 		}
 	} else {
-		/* Proto-owned are groups by default */
+		/* Proto-owned are groups by default, unless NEXTHOP_BEHAVIOR group flg is set */
 		/* List of nexthops */
 		for (nh = newnhe->nhg.nexthop; nh; nh = nh->next) {
 			if (IS_ZEBRA_DEBUG_NHG_DETAIL)
@@ -788,6 +788,10 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 					   CHECK_FLAG(nh->flags,
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
+
+			if (CHECK_FLAG(newnhe->nhg.flags,
+				       NEXTHOP_GROUP_NEXTHOP_BEHAVIOR))
+				continue;
 
 			depends_find_add(&newnhe->nhg_depends, nh, afi,
 					 newnhe->type, from_dplane);
@@ -836,6 +840,10 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 					   CHECK_FLAG(nh->flags,
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
+
+			if (CHECK_FLAG(backup_nhe->nhg.flags,
+				       NEXTHOP_GROUP_NEXTHOP_BEHAVIOR))
+				continue;
 
 			depends_find_add(&backup_nhe->nhg_depends, nh, afi,
 					 backup_nhe->type, from_dplane);
@@ -3423,6 +3431,7 @@ struct nhg_hash_entry *zebra_nhg_proto_add(uint32_t id, int type,
 	lookup.nhg.nhgr = nhg->nhgr;
 	lookup.id = id;
 	lookup.type = type;
+	lookup.nhg.flags = nhg->flags;
 
 	old = zebra_nhg_lookup_id(id);
 

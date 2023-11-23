@@ -261,6 +261,7 @@ void nexthop_group_copy(struct nexthop_group *to,
 			const struct nexthop_group *from)
 {
 	to->nhgr = from->nhgr;
+	to->flags = from->flags;
 	/* Copy everything, including recursive info */
 	copy_nexthops(&to->nexthop, from->nexthop, NULL);
 }
@@ -645,6 +646,37 @@ DEFPY(nexthop_group_backup, nexthop_group_backup_cmd,
 	VTY_DECLVAR_CONTEXT(nexthop_group_cmd, nhgc);
 
 	strlcpy(nhgc->backup_list_name, name, sizeof(nhgc->backup_list_name));
+
+	return CMD_SUCCESS;
+}
+
+DEFPY(nexthop_group_use_proto_nhg_dataplane,
+      nexthop_group_use_proto_nhg_dataplane_cmd,
+      "[no] nexthop-behavior",
+      NO_STR
+      "Enable this nexthop as regular next-hop in the dataplane\n")
+{
+	VTY_DECLVAR_CONTEXT(nexthop_group_cmd, nhgc);
+
+	if (!!no == !CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_NEXTHOP_BEHAVIOR))
+		return CMD_SUCCESS;
+
+	/* if already nexthops, forbid */
+	if (listcount(nhgc->nhg_list)) {
+		vty_out(vty,
+			"%% configured next-hops can not be modified with 'nexthop-behavior'\n");
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+
+	if (no)
+		UNSET_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_NEXTHOP_BEHAVIOR);
+	else
+		SET_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_NEXTHOP_BEHAVIOR);
+
+	SET_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_RESET_NHG);
+	if (nhg_hooks.modify)
+		nhg_hooks.modify(nhgc);
+	UNSET_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_RESET_NHG);
 
 	return CMD_SUCCESS;
 }
@@ -1172,6 +1204,9 @@ static int nexthop_group_write(struct vty *vty)
 
 		vty_out(vty, "nexthop-group %s\n", nhgc->name);
 
+		if (CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_NEXTHOP_BEHAVIOR))
+			vty_out(vty, " nexthop-behavior\n");
+
 		if (nhgc->nhg.nhgr.buckets)
 			vty_out(vty,
 				" resilient buckets %u idle-timer %u unbalanced-timer %u\n",
@@ -1371,6 +1406,8 @@ void nexthop_group_init(void (*new)(const char *name),
 	install_default(NH_GROUP_NODE);
 	install_element(NH_GROUP_NODE, &nexthop_group_backup_cmd);
 	install_element(NH_GROUP_NODE, &no_nexthop_group_backup_cmd);
+	install_element(NH_GROUP_NODE,
+			&nexthop_group_use_proto_nhg_dataplane_cmd);
 	install_element(NH_GROUP_NODE, &ecmp_nexthops_cmd);
 
 	install_element(NH_GROUP_NODE, &nexthop_group_resilience_cmd);

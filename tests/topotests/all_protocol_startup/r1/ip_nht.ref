@@ -61,6 +61,10 @@ VRF default:
  resolved via connected
  is directly connected, r1-eth0 (vrf default)
  Client list: static(fd XX)
+192.168.0.200
+ resolved via connected
+ is directly connected, r1-eth0 (vrf default)
+ Client list: pbr(fd XX)
 192.168.7.10
  resolved via connected
  is directly connected, r1-eth7 (vrf default)
