@@ -2317,7 +2317,8 @@ ssize_t netlink_route_multipath_msg_encode(int cmd, struct zebra_dplane_ctx *ctx
 	 * 1. Kernel nexthops don't suport unreachable/prohibit route types.
 	 * 2. Blackhole kernel nexthops are deleted when loopback is down.
 	 */
-	nexthop = dplane_ctx_get_ng(ctx)->nexthop;
+	if (CHECK_FLAG(dplane_ctx_get_ng(ctx)->flags, NEXTHOP_GROUP_TYPE_GROUP))
+		nexthop = dplane_ctx_get_ng(ctx)->nexthop;
 	if (nexthop) {
 		if (CHECK_FLAG(nexthop->flags, NEXTHOP_FLAG_RECURSIVE))
 			nexthop = nexthop->resolved;
@@ -2353,11 +2354,15 @@ ssize_t netlink_route_multipath_msg_encode(int cmd, struct zebra_dplane_ctx *ctx
 			return 0;
 
 		/* Have to determine src still */
-		for (ALL_NEXTHOPS_PTR(dplane_ctx_get_ng(ctx), nexthop)) {
-			if (setsrc)
-				break;
+		if (!CHECK_FLAG(dplane_ctx_get_ng(ctx)->flags,
+				NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (ALL_NEXTHOPS_PTR(dplane_ctx_get_ng(ctx), nexthop)) {
+				if (setsrc)
+					break;
 
-			setsrc = nexthop_set_src(nexthop, p->family, &src);
+				setsrc = nexthop_set_src(nexthop, p->family,
+							 &src);
+			}
 		}
 
 		if (setsrc) {
