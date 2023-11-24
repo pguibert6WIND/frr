@@ -93,6 +93,10 @@ void nexthop_group_add_sorted(struct nexthop_group *nhg,
 	(nhop);								\
 	(nhop) = nexthop_next(nhop)
 
+#define ALL_NEXTGROUP_PTR(head, group)                                         \
+	(group) = ((head)->group);                                             \
+	(group);                                                               \
+	(group) = (group)->next
 
 #define NHGC_NAME_SIZE 80
 
