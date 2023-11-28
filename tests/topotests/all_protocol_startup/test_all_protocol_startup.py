@@ -647,6 +647,29 @@ def test_nexthop_groups():
         valid is not None
     ), "nexthop-group control 'nexthop-behavior' command should not be modified"
 
+    ## multiple nexthop-group dependencies
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group group1" -c "group ecmp1" -c "group ecmp2"'
+    )
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group ecmp1" -c "nexthop-behavior" -c "nexthop 192.168.0.202 r1-eth0"'
+    )
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group ecmp2" -c "nexthop-behavior" -c "nexthop 192.168.0.205 r1-eth0"'
+    )
+    net["r1"].cmd('vtysh -c "sharp install routes 8.8.8.8 nexthop-group group1 1"')
+    verify_route_nexthop_group("8.8.8.8/32", ecmp=2)
+
+    net["r1"].cmd('vtysh -c "c t" -c "nexthop-group group1" -c "no group ecmp2"')
+    verify_route_nexthop_group("8.8.8.8/32", ecmp=1)
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group ecmp3" -c "nexthop-behavior" -c "nexthop 192.168.0.207 r1-eth0"'
+    )
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group group1" -c "group ecmp3" -c "group ecmp2"'
+    )
+    verify_route_nexthop_group("8.8.8.8/32", ecmp=3)
+
     ## Remove all NHG routes
 
     net["r1"].cmd('vtysh -c "sharp remove routes 2.2.2.1 1"')
@@ -659,6 +682,7 @@ def test_nexthop_groups():
     net["r1"].cmd('vtysh -c "sharp remove routes 6.6.6.1 4"')
     net["r1"].cmd('vtysh -c "c t" -c "no ip route 6.6.6.0/24 1.1.1.1"')
     net["r1"].cmd('vtysh -c "sharp remove routes 7.7.7.7 1"')
+    net["r1"].cmd('vtysh -c "sharp remove routes 8.8.8.8 1"')
 
 
 def test_rip_status():
