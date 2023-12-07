@@ -1148,6 +1148,7 @@ stream_failure:
 static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 {
 	int i;
+	uint32_t api_message = 0;
 
 	if (cmd != ZEBRA_NHG_DEL && cmd != ZEBRA_NHG_ADD) {
 		flog_err(EC_LIB_ZAPI_ENCODE,
@@ -1181,6 +1182,8 @@ static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 	stream_putl(s, api_nhg->resilience.unbalanced_timer);
 
 	stream_putc(s, api_nhg->flags);
+	if (CHECK_FLAG(api_nhg->flags, ZAPI_NEXTHOP_GROUP_COLOR))
+		api_message = ZAPI_MESSAGE_SRTE;
 
 	if (cmd == ZEBRA_NHG_ADD &&
 	    !CHECK_FLAG(api_nhg->flags, ZAPI_NEXTHOP_GROUP_TYPE_GROUP)) {
@@ -1192,7 +1195,7 @@ static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 
 		for (i = 0; i < api_nhg->nhg_nexthop.nexthop_num; i++)
 			zapi_nexthop_encode(s, &api_nhg->nhg_nexthop.nexthops[i],
-					    0, 0);
+					    0, api_message);
 
 		/* Backup nexthops */
 		stream_putw(s, api_nhg->nhg_nexthop.backup_nexthop_num);
@@ -1201,7 +1204,7 @@ static int zapi_nhg_encode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 			zapi_nexthop_encode(s,
 					    &api_nhg->nhg_nexthop
 						     .backup_nexthops[i],
-					    0, 0);
+					    0, api_message);
 	} else if (cmd == ZEBRA_NHG_ADD &&
 		   CHECK_FLAG(api_nhg->flags, ZAPI_NEXTHOP_GROUP_TYPE_GROUP)) {
 		stream_putw(s, api_nhg->nhg_grp.nh_grp_count);

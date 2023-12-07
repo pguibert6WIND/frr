@@ -1961,6 +1961,7 @@ static int zapi_nhg_decode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 {
 	uint16_t i;
 	struct zapi_nexthop *znh;
+	uint32_t api_message = 0;
 
 	STREAM_GETW(s, api_nhg->proto);
 	STREAM_GETL(s, api_nhg->id);
@@ -2001,6 +2002,8 @@ static int zapi_nhg_decode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 
 		return 0;
 	}
+	if (CHECK_FLAG(api_nhg->flags, ZAPI_NEXTHOP_GROUP_COLOR))
+		api_message = ZAPI_MESSAGE_SRTE;
 
 	/* Nexthops */
 	STREAM_GETW(s, api_nhg->nhg_nexthop.nexthop_num);
@@ -2018,7 +2021,7 @@ static int zapi_nhg_decode(struct stream *s, int cmd, struct zapi_nhg *api_nhg)
 	for (i = 0; i < api_nhg->nhg_nexthop.nexthop_num; i++) {
 		znh = &((api_nhg->nhg_nexthop.nexthops)[i]);
 
-		if (zapi_nexthop_decode(s, znh, 0, 0) != 0) {
+		if (zapi_nexthop_decode(s, znh, 0, api_message) != 0) {
 			flog_warn(EC_ZEBRA_NEXTHOP_CREATION_FAILED,
 				  "%s: Nexthop creation failed", __func__);
 			return -1;

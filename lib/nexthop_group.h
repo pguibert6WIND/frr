@@ -50,6 +50,7 @@ struct nexthop_group {
 #define NEXTHOP_GROUP_RESET_NHG	       (1 << 1)
 #define NEXTHOP_GROUP_TYPE_GROUP       (1 << 2)
 #define NEXTHOP_GROUP_ALLOW_RECURSION  (1 << 3)
+#define NEXTHOP_GROUP_COLOR	       (1 << 4)
 	uint8_t flags;
 };
 

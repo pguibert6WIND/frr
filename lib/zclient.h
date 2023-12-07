@@ -504,6 +504,7 @@ struct zapi_nhg {
 
 	/* nexthop group flags */
 #define ZAPI_NEXTHOP_GROUP_TYPE_GROUP (1 << 2)
+#define ZAPI_NEXTHOP_GROUP_COLOR      (1 << 4)
 	uint8_t flags;
 };
 
