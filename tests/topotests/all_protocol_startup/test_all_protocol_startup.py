@@ -466,6 +466,49 @@ def verify_nexthop_group(nhg_id, recursive=False, ecmp=0):
         )
 
 
+def verify_nexthop_group_recursive(nhg_id):
+    net = get_topogen().net
+    count = 0
+    valid = None
+    ecmpcount = None
+    depends = None
+    resolved_id = None
+    installed = None
+    found = False
+
+    while not found and count < 10:
+        count += 1
+        # Verify NHG is valid/installed
+        output = net["r1"].cmd('vtysh -c "show nexthop-group rib %d"' % nhg_id)
+        valid = re.search(r"Valid", output)
+        if valid is None:
+            found = False
+            sleep(1)
+            continue
+
+        ecmpcount = re.search(r"Depends:.*\n", output)
+        if ecmpcount is None:
+            found = False
+            sleep(1)
+            continue
+
+        # list of IDs in group
+        depends = re.findall(r"\((\d+)\)", ecmpcount.group(0))
+
+        installed = re.search(r"Installed", output)
+        if installed is None:
+            found = False
+            sleep(1)
+            continue
+        found = True
+
+    assert valid is not None, "Nexthop Group ID=%d not marked Valid" % nhg_id
+    assert ecmpcount is not None, "Nexthop Group ID=%d has no depends" % nhg_id
+    assert len(depends) == 1, (
+        "Nexthop Group ID=%d should only have one recursive depend" % nhg_id
+    )
+
+
 def verify_route_nexthop_group(route_str, recursive=False, ecmp=0):
     # Verify route and that zebra created NHGs for and they are valid/installed
     nhg_id = route_get_nhg_id(route_str)
@@ -669,6 +712,30 @@ def test_nexthop_groups():
         'vtysh -c "c t" -c "nexthop-group group1" -c "group ecmp3" -c "group ecmp2"'
     )
     verify_route_nexthop_group("8.8.8.8/32", ecmp=3)
+
+    ## nexthop-group allow-recursion
+    ## create a static route, and use that static route to resolve the nexthop-group
+    net["r1"].cmd('vtysh -c "c t" -c "zebra nexthop-group keep 10"')
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group allowrecursion" -c "allow-recursion" -c "nexthop 192.0.2.200"'
+    )
+    net["r1"].cmd(
+        'vtysh -c "sharp install routes 9.9.9.9 nexthop-group allowrecursion 1"'
+    )
+    sleep(2)
+    nhg_id = route_get_nhg_id("9.9.9.9/32")
+    verify_nexthop_group_recursive(nhg_id)
+    nhg_id = route_get_nhg_id("9.9.9.9/32")
+    net["r1"].cmd('vtysh -c "sharp remove routes 9.9.9.9 1"')
+    net["r1"].cmd(
+        'vtysh -c "c t" -c "nexthop-group allowrecursion" -c "no allow-recursion"'
+    )
+    output = net["r1"].cmd('vtysh -c "show nexthop-group rib %d"' % nhg_id)
+    found = re.search(r"Time to Deletion", output)
+    assert found is not None, (
+        "Route 9.9.9.9/32 with Nexthop Group ID=%d is not scheduled for removal"
+        % nhg_id
+    )
 
     ## Remove all NHG routes
 
