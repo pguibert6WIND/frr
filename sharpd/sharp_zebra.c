@@ -596,10 +596,11 @@ void nhg_add(uint32_t id, const struct nexthop_group_cmd *nhgc,
 			break;
 		}
 
-		/* Unresolved nexthops will lead to failure - only send
-		 * nexthops that zebra will consider valid.
+		/* Unresolved nexthops will lead to failure, unless
+		 * ALLOW_RECURSION flag is set
 		 */
-		if (nh->ifindex == 0)
+		if (nh->ifindex == 0 &&
+		    !CHECK_FLAG(nhgc->nhg.flags, NEXTHOP_GROUP_ALLOW_RECURSION))
 			continue;
 
 		api_nh = &api_nhg.nhg_nexthop

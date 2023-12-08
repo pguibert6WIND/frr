@@ -287,10 +287,12 @@ static void sharp_nhgroup_del_nexthop_cb(const struct nexthop_group_cmd *nhgc,
 				break;
 			}
 
-			/* Unresolved nexthops will lead to failure - only send
-			 * nexthops that zebra will consider valid.
+			/* Unresolved nexthops will lead to failure, unless
+			 * ALLOW_RECURSION flag is set
 			 */
-			if (nh->ifindex == 0)
+			if (nh->ifindex == 0 &&
+			    !CHECK_FLAG(nhgc->nhg.flags,
+					NEXTHOP_GROUP_ALLOW_RECURSION))
 				continue;
 
 			nh_num++;

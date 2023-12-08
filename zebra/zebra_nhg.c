@@ -2460,8 +2460,10 @@ static int nexthop_active(struct nexthop *nexthop, struct nhg_hash_entry *nhe,
 		 * if specified) - i.e., we cannot have a nexthop NH1 is
 		 * resolved by a route NH1. The exception is if the route is a
 		 * host route.
+		 * This control will not work by using nexthop groups, and will
+		 * have to be handled at protocol level
 		 */
-		if (prefix_same(&rn->p, top))
+		if (top && prefix_same(&rn->p, top))
 			if (((afi == AFI_IP)
 			     && (rn->p.prefixlen != IPV4_MAX_BITLEN))
 			    || ((afi == AFI_IP6)
@@ -2706,10 +2708,8 @@ static unsigned nexthop_active_check(struct route_node *rn,
 		family = AFI_IP6;
 	else
 		family = AF_UNSPEC;
-
 	if (IS_ZEBRA_DEBUG_NHG_DETAIL)
 		zlog_debug("%s: re %p, nexthop %pNHv", __func__, re, nexthop);
-
 	vrf_id = zvrf_id(rib_dest_vrf(rib_dest_from_rnode(rn)));
 
 	/*
@@ -3490,7 +3490,7 @@ struct nhg_hash_entry *zebra_nhg_proto_add(struct nhg_hash_entry *nhe,
 	struct nexthop *newhop;
 	bool replace = false;
 	int ret = 0, type;
-	uint32_t id, session;
+	uint32_t id, session, api_message = 0;
 	uint16_t instance;
 
 	id = nhe->id;
@@ -3550,14 +3550,23 @@ struct nhg_hash_entry *zebra_nhg_proto_add(struct nhg_hash_entry *nhe,
 			return NULL;
 		}
 
-		if (!newhop->ifindex) {
+		if (!newhop->ifindex &&
+		    !CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_ALLOW_RECURSION)) {
 			if (IS_ZEBRA_DEBUG_NHG)
-				zlog_debug(
-					"%s: id %u, nexthop without ifindex is not supported",
-					__func__, id);
+				zlog_debug("%s: id %u, nexthop without ifindex and allow-recursion is not supported",
+					   __func__, id);
 			return NULL;
 		}
-		SET_FLAG(newhop->flags, NEXTHOP_FLAG_ACTIVE);
+
+		/* Check that the route may be recursively resolved */
+		if (CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_ALLOW_RECURSION))
+			api_message = ZEBRA_FLAG_ALLOW_RECURSION;
+
+		if (nexthop_active(newhop, nhe, NULL, 0, api_message, NULL,
+				   newhop->vrf_id))
+			SET_FLAG(newhop->flags, NEXTHOP_FLAG_ACTIVE);
+		else
+			UNSET_FLAG(newhop->flags, NEXTHOP_FLAG_ACTIVE);
 	}
 
 	zebra_nhe_init(&lookup, afi, nhg->nexthop);
