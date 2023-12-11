@@ -127,4 +127,14 @@ extern void bgp_zebra_send_nexthop_label(int cmd, mpls_label_t label,
 extern bool bgp_zebra_request_label_range(uint32_t base, uint32_t chunk_size,
 					  bool label_auto);
 extern void bgp_zebra_release_label_range(uint32_t start, uint32_t end);
+
+extern void bgp_zebra_announce_parse_nexthop(
+	struct bgp_path_info *info, const struct prefix *p, struct bgp *bgp,
+	struct zapi_route *api, unsigned int *valid_nh_count, afi_t afi,
+	safi_t safi, uint32_t *nhg_id, uint32_t *metric, route_tag_t *tag,
+	bool *allow_recursion);
+extern void bgp_debug_zebra_nh(struct zapi_nexthop api_nexthop[], int count);
+extern void bgp_debug_zebra_nh_buffer(struct zapi_nexthop *api_nh,
+				      char *nexthop_buf, size_t len);
+
 #endif /* _QUAGGA_BGP_ZEBRA_H */
