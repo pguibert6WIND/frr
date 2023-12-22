@@ -244,6 +244,7 @@ path_pcep_config_list_path_hops(struct srte_segment_list *segment_list)
 			break;
 		case SRTE_SEGMENT_NAI_TYPE_IPV4_ADJACENCY:
 		case SRTE_SEGMENT_NAI_TYPE_IPV6_ADJACENCY:
+		case SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY:
 			memcpy(&hop->nai.local_addr, &segment->nai_local_addr,
 			       sizeof(struct ipaddr));
 			memcpy(&hop->nai.remote_addr, &segment->nai_remote_addr,
@@ -497,6 +498,7 @@ enum pcep_sr_subobj_nai pcep_nai_type(enum srte_segment_nai_type type)
 	case SRTE_SEGMENT_NAI_TYPE_IPV4_ADJACENCY:
 		return PCEP_SR_SUBOBJ_NAI_IPV4_ADJACENCY;
 	case SRTE_SEGMENT_NAI_TYPE_IPV6_ADJACENCY:
+	case SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY:
 		return PCEP_SR_SUBOBJ_NAI_IPV6_ADJACENCY;
 	case SRTE_SEGMENT_NAI_TYPE_IPV4_UNNUMBERED_ADJACENCY:
 		return PCEP_SR_SUBOBJ_NAI_UNNUMBERED_IPV4_ADJACENCY;

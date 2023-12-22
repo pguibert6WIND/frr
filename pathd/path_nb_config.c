@@ -201,6 +201,7 @@ void pathd_srte_segment_list_segment_nai_apply_finish(
 		break;
 	case SRTE_SEGMENT_NAI_TYPE_IPV4_ADJACENCY:
 	case SRTE_SEGMENT_NAI_TYPE_IPV6_ADJACENCY:
+	case SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY:
 		yang_dnode_get_ip(&remote_addr, args->dnode,
 				  "./remote-address");
 		break;

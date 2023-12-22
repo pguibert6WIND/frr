@@ -359,6 +359,58 @@ static int segment_list_has_src_dst(
 					       : adj_dst_ipv6_str);
 	return CMD_SUCCESS;
 }
+
+
+static int segment_list_has_srv6_src_dst(struct vty *vty, char *xpath,
+					 long index, const char *index_str,
+					 struct in6_addr adj_src_ipv6,
+					 struct in6_addr adj_dst_ipv6,
+					 const char *adj_src_ipv6_str,
+					 const char *adj_dst_ipv6_str)
+{
+	const char *node_src_id;
+	struct ipaddr ip_src = {};
+	struct ipaddr ip_dst = {};
+
+	if (adj_src_ipv6_str == NULL)
+		return CMD_ERR_NO_MATCH;
+	ip_src.ipa_type = IPADDR_V6;
+	ip_src.ip._v6_addr = adj_src_ipv6;
+	ip_dst.ipa_type = IPADDR_V6;
+	ip_dst.ip._v6_addr = adj_dst_ipv6;
+
+
+	if (path_ted_query_type_k(&ip_src, &ip_dst, NULL) < 0) {
+		zlog_warn("%s: [rcv ted] CLI NOT FOUND Continue query_type_k SRC (%pIA) DST (%pIA)!",
+			  __func__, &ip_src, &ip_dst);
+	}
+	/* type */
+	snprintf(xpath, XPATH_MAXLEN, "./segment[index='%s']/nai/type",
+		 index_str);
+	if (adj_src_ipv6_str != NULL) {
+		nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY,
+				      "ipv6_srv6_adjacency");
+		node_src_id = adj_src_ipv6_str;
+	} else {
+		/*
+		 * This is just to make the compiler happy about
+		 * node_src_id not being initialized.  This
+		 * should never happen unless we change the cli
+		 * function.
+		 */
+		assert(!"We must have a adj_src_ipv6_str");
+	}
+
+	/* addresses */
+	snprintf(xpath, XPATH_MAXLEN, "./segment[index='%s']/nai/local-address",
+		 index_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, node_src_id);
+	snprintf(xpath, XPATH_MAXLEN,
+		 "./segment[index='%s']/nai/remote-address", index_str);
+	nb_cli_enqueue_change(vty, xpath, NB_OP_MODIFY, adj_dst_ipv6_str);
+	return CMD_SUCCESS;
+}
+
 int segment_list_has_prefix(
 	struct vty *vty, char *xpath, long index, const char *index_str,
 	const struct prefix_ipv4 *prefix_ipv4, const char *prefix_ipv4_str,
@@ -471,6 +523,8 @@ DEFPY(srte_segment_list_segment, srte_segment_list_segment_cmd,
       "<algorithm$has_algo (0-1)$algo| iface$has_iface_id (0-4294967295)$iface_id>"
       "| adjacency$has_adj "
       "<A.B.C.D$adj_src_ipv4 A.B.C.D$adj_dst_ipv4|X:X::X:X$adj_src_ipv6 X:X::X:X$adj_dst_ipv6>"
+      "| adjacency-srv6$has_adj_srv6 "
+      "<X:X::X:X$adj_srv6_src_ipv6 X:X::X:X$adj_srv6_dst_ipv6>"
       ">]"
       ">",
       "Index\n"
@@ -489,6 +543,9 @@ DEFPY(srte_segment_list_segment, srte_segment_list_segment_cmd,
       "ADJ identifier\n"
       "ADJ IPv4 src identifier\n"
       "ADJ IPv4 dst identifier\n"
+      "ADJ IPv6 src identifier\n"
+      "ADJ IPv6 dst identifier\n"
+      "ADJ SRv6 identifier\n"
       "ADJ IPv6 src identifier\n"
       "ADJ IPv6 dst identifier\n")
 /* clang-format on */
@@ -513,6 +570,15 @@ DEFPY(srte_segment_list_segment, srte_segment_list_segment_cmd,
 					 adj_src_ipv6, adj_dst_ipv6,
 					 adj_src_ipv4_str, adj_dst_ipv4_str,
 					 adj_src_ipv6_str, adj_dst_ipv6_str);
+		if (status != CMD_SUCCESS)
+			return status;
+	} else if (has_adj_srv6 != NULL) {
+		status = segment_list_has_srv6_src_dst(vty, xpath, index,
+						       index_str,
+						       adj_srv6_src_ipv6,
+						       adj_srv6_dst_ipv6,
+						       adj_srv6_src_ipv6_str,
+						       adj_srv6_dst_ipv6_str);
 		if (status != CMD_SUCCESS)
 			return status;
 	} else {
@@ -580,6 +646,14 @@ void cli_show_srte_segment_list_segment(struct vty *vty,
 			yang_dnode_get_ip(&addr_rmt, dnode,
 					  "./nai/remote-address");
 			vty_out(vty, " nai adjacency %pI6", &addr.ipaddr_v6);
+			vty_out(vty, " %pI6", &addr_rmt.ipaddr_v6);
+			break;
+		case SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY:
+			yang_dnode_get_ip(&addr, dnode, "nai/local-address");
+			yang_dnode_get_ip(&addr_rmt, dnode,
+					  "./nai/remote-address");
+			vty_out(vty, " nai adjacency-srv6 %pI6",
+				&addr.ipaddr_v6);
 			vty_out(vty, " %pI6", &addr_rmt.ipaddr_v6);
 			break;
 		default:

@@ -202,6 +202,49 @@ uint32_t path_ted_rcvd_message(struct ls_message *msg)
 	return 0;
 }
 
+int path_ted_query_type_k(struct ipaddr *local, struct ipaddr *remote,
+			  struct in6_addr *sid_srv6)
+{
+	struct ls_edge *edge;
+	struct ls_edge_key key;
+	int ret = -1;
+
+	if (!path_ted_is_initialized())
+		return ret;
+
+	if (!local || !remote)
+		return ret;
+
+	switch (local->ipa_type) {
+	case IPADDR_V6:
+		key.family = AF_INET6;
+		IPV6_ADDR_COPY(&key.k.addr6, &local->ip._v6_addr);
+		edge = ls_find_edge_by_key(ted_state_g.ted, key);
+		if (edge) {
+			if ((0 == memcmp(&edge->attributes->standard.remote6,
+					 &remote->ip._v6_addr,
+					 sizeof(remote->ip._v6_addr)) &&
+			     CHECK_FLAG(edge->attributes->flags,
+					LS_ATTR_ADJ_SRV6SID))) {
+				if (sid_srv6)
+					memcpy(sid_srv6,
+					       &edge->attributes
+							->adj_sid[ADJ_SRV6_PRI_IPV6]
+							.sid,
+					       sizeof(struct in6_addr)); /* from primary */
+				ret = 0;
+				break;
+			}
+		}
+		break;
+	case IPADDR_V4:
+	case IPADDR_NONE:
+		break;
+	}
+
+	return ret;
+}
+
 uint32_t path_ted_query_type_f(struct ipaddr *local, struct ipaddr *remote)
 {
 	uint32_t sid = MPLS_LABEL_NONE;

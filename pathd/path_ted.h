@@ -153,6 +153,17 @@ uint32_t path_ted_query_type_e(struct prefix *prefix, uint32_t iface_id);
  */
 uint32_t path_ted_query_type_f(struct ipaddr *local, struct ipaddr *remote);
 
+/**
+ * Search for sid based in local, remote pair
+ *
+ * @param local		local ip of attribute
+ * @param remote	remote ip of attribute
+ * @param sid_srv6	srv6 sid to return if pointer passed
+ *
+ * @return		0 OK, -1 if NOK
+ */
+int path_ted_query_type_k(struct ipaddr *local, struct ipaddr *remote,
+			  struct in6_addr *sid_srv6);
 
 /**
  * Handle the received opaque msg

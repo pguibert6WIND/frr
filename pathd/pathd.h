@@ -105,7 +105,8 @@ enum srte_segment_nai_type {
 	SRTE_SEGMENT_NAI_TYPE_IPV4_LOCAL_IFACE = 7,
 	SRTE_SEGMENT_NAI_TYPE_IPV6_LOCAL_IFACE = 8,
 	SRTE_SEGMENT_NAI_TYPE_IPV4_ALGORITHM = 9,
-	SRTE_SEGMENT_NAI_TYPE_IPV6_ALGORITHM = 10
+	SRTE_SEGMENT_NAI_TYPE_IPV6_ALGORITHM = 10,
+	SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY = 11
 };
 
 enum objfun_type {
@@ -478,4 +479,17 @@ int32_t srte_ted_do_query_type_e(struct srte_segment_entry *entry,
  */
 int32_t srte_ted_do_query_type_f(struct srte_segment_entry *entry,
 				 struct ipaddr *local, struct ipaddr *remote);
+
+/**
+ * Search for SRv6 sid based in local and remote ip
+ *
+ * @param entry		entry to update
+ * @param local		Local addr for query
+ * @param remote	Local addr for query
+ *
+ * @return		void
+ */
+int32_t srte_ted_do_query_type_k(struct srte_segment_entry *entry,
+				 struct ipaddr *local, struct ipaddr *remote);
+
 #endif /* _FRR_PATHD_H_ */

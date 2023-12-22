@@ -131,6 +131,10 @@ module frr-pathd {
                 value 10;
                 description "IPv6 prefix with optional algorithm";
               }
+              enum ipv6_srv6_adjacency {
+                value 11;
+                description "IPv6 adjacency for SRv6";
+              }
             }
           }
           leaf local-address {
