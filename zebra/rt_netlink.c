@@ -638,7 +638,7 @@ parse_nexthop_unicast(ns_id_t ns_id, struct rtmsg *rtm, struct rtattr **tb,
 	}
 
 	if (seg6l_act != ZEBRA_SEG6_LOCAL_ACTION_UNSPEC)
-		nexthop_add_srv6_seg6local(&nh, seg6l_act, &seg6l_ctx);
+		nexthop_add_srv6_seg6local(&nh, seg6l_act, &seg6l_ctx, NULL, 0);
 
 	if (num_segs)
 		nexthop_add_srv6_seg6(&nh, segs, num_segs, srv6_encap_behavior, &srv6_encap_source);
@@ -756,8 +756,7 @@ static uint16_t parse_multipath_nexthops_unicast(ns_id_t ns_id, struct nexthop_g
 			}
 
 			if (seg6l_act != ZEBRA_SEG6_LOCAL_ACTION_UNSPEC)
-				nexthop_add_srv6_seg6local(nh, seg6l_act,
-							   &seg6l_ctx);
+				nexthop_add_srv6_seg6local(nh, seg6l_act, &seg6l_ctx, NULL, 0);
 
 			if (num_segs)
 				nexthop_add_srv6_seg6(nh, segs, num_segs, srv6_encap_behavior,
