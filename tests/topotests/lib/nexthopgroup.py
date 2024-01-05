@@ -9,14 +9,19 @@ from time import sleep
 from lib.topogen import get_topogen
 
 
-def route_get_nhg_id(route_str, rname):
+def route_get_nhg_id(route_str, rname, vrf_name=None):
     global fatal_error
 
     def get_func(route_str):
         net = get_topogen().net
-        output = net["r1"].cmd(
-            'vtysh -c "show ip route {} nexthop-group"'.format(route_str)
-        )
+        if vrf_name:
+            output = net["r1"].cmd(
+                'vtysh -c "show ip route vrf {} {} nexthop-group"'.format(vrf_name, route_str)
+            )
+        else:
+            output = net["r1"].cmd(
+                'vtysh -c "show ip route {} nexthop-group"'.format(route_str)
+            )
         match = re.search(r"Nexthop Group ID: (\d+)", output)
         if match is not None:
             nhg_id = int(match.group(1))
@@ -24,7 +29,7 @@ def route_get_nhg_id(route_str, rname):
         else:
             return None
 
-    test_func = functools.partial(get_func, route_str)
+    test_func = functools.partial(get_func, route_str, vrf_name)
     _, nhg_id = topotest.run_and_expect_type(test_func, int, count=30, wait=1)
     if nhg_id == None:
         fatal_error = "Nexthop Group ID not found for route {}".format(route_str)
