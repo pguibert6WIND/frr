@@ -1269,8 +1269,9 @@ void bgp_zebra_announce_parse_nexthop(struct bgp_path_info *info,
 	uint32_t ttl = 0;
 	uint32_t bos = 0;
 	uint32_t exp = 0;
-	struct bgp_nhg_cache nhg = { 0 }, *p_nhg;
-	int i = 0;
+	struct bgp_nhg_cache nhg = { 0 }, nhg_parent = { 0 },
+			     *p_nhg[MULTIPATH_NUM], *p_nhg_parent;
+	unsigned int i = 0;
 
 	/* Determine if we're doing weighted ECMP or not */
 	do_wt_ecmp = bgp_path_info_mpath_chkwtd(bgp, info);
@@ -1478,13 +1479,12 @@ void bgp_zebra_announce_parse_nexthop(struct bgp_path_info *info,
 	if (!nhg_id)
 		return;
 	if (!bgp_option_check(BGP_OPT_NHG) ||
-	    info->sub_type == BGP_ROUTE_AGGREGATE || do_wt_ecmp ||
-	    (*valid_nh_count) != 1) {
+	    info->sub_type == BGP_ROUTE_AGGREGATE || do_wt_ecmp) {
 		bgp_nhg_path_unlink(info);
 		return;
 	}
 
-	nhg.nexthop_num = *valid_nh_count;
+	nhg.nexthops.nexthop_num = 1;
 	if (*allow_recursion ||
 	    CHECK_FLAG(api->flags, ZEBRA_FLAG_ALLOW_RECURSION))
 		SET_FLAG(nhg.flags, BGP_NHG_FLAG_ALLOW_RECURSION);
@@ -1493,29 +1493,48 @@ void bgp_zebra_announce_parse_nexthop(struct bgp_path_info *info,
 	if (CHECK_FLAG(api->message, ZAPI_MESSAGE_SRTE))
 		SET_FLAG(nhg.flags, BGP_NHG_FLAG_SRTE_PRESENCE);
 
-	for (i = 0; i < nhg.nexthop_num; i++)
-		memcpy(&nhg.nexthops[i], &api->nexthops[i],
+	SET_FLAG(nhg_parent.flags, BGP_NHG_FLAG_TYPE_GROUP);
+	for (i = 0; i < *valid_nh_count; i++) {
+		memset(&nhg.nexthops.nexthops[0], 0,
 		       sizeof(struct zapi_nexthop));
-	p_nhg = bgp_nhg_cache_find(&nhg_cache_table, &nhg);
-	if (!p_nhg)
-		p_nhg = bgp_nhg_new(nhg.flags, nhg.nexthop_num, nhg.nexthops);
-	if (p_nhg == info->bgp_nhg) {
-		/* no changed */
-		*nhg_id = p_nhg->id;
+		memcpy(&nhg.nexthops.nexthops[0], &api->nexthops[i],
+		       sizeof(struct zapi_nexthop));
+		p_nhg[i] = bgp_nhg_cache_find(&nhg_cache_table, &nhg);
+		if (!p_nhg[i])
+			p_nhg[i] = bgp_nhg_new(nhg.flags, 1,
+					       nhg.nexthops.nexthops, NULL);
+		/* host p_nhg in a nhg group */
+		nhg_parent.groups.group_num++;
+		nhg_parent.groups.groups[i] = p_nhg[i]->id;
+	}
+
+	p_nhg_parent = bgp_nhg_cache_find(&nhg_cache_table, &nhg_parent);
+	if (!p_nhg_parent)
+		p_nhg_parent = bgp_nhg_new(nhg_parent.flags,
+					   nhg_parent.groups.group_num, NULL,
+					   nhg_parent.groups.groups);
+
+	if (p_nhg_parent == info->bgp_nhg) {
+		/* parent did not change, check group depends */
+		bgp_nhg_group_link(p_nhg, nhg_parent.groups.group_num,
+				   p_nhg_parent);
+		*nhg_id = p_nhg_parent->id;
 		zapi_route_set_nhg_id(api, nhg_id);
 		return;
 	}
 	bgp_nhg_path_unlink(info);
 
+	bgp_nhg_group_link(p_nhg, nhg.nexthops.nexthop_num, p_nhg_parent);
+
 	/* updates NHG info list reference */
-	LIST_INSERT_HEAD(&(p_nhg->paths), info, nhg_cache_thread);
-	info->bgp_nhg = p_nhg;
-	p_nhg->path_count++;
-	p_nhg->last_update = monotime(NULL);
+	LIST_INSERT_HEAD(&(p_nhg_parent->paths), info, nhg_cache_thread);
+	info->bgp_nhg = p_nhg_parent;
+	p_nhg_parent->path_count++;
+	p_nhg_parent->last_update = monotime(NULL);
 
 	if (BGP_DEBUG(nexthop_group, NEXTHOP_GROUP))
-		zlog_debug("NHG %u, BGP %s: apply to prefix %pFX", p_nhg->id,
-			   bgp->name_pretty, p);
+		zlog_debug("NHG %u, BGP %s: apply to prefix %pFX",
+			   p_nhg_parent->id, bgp->name_pretty, p);
 
 	*nhg_id = info->bgp_nhg->id;
 	zapi_route_set_nhg_id(api, nhg_id);

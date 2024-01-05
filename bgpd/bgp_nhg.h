@@ -14,6 +14,16 @@ PREDECL_RBTREE_UNIQ(bgp_nhg_cache);
 
 extern struct bgp_nhg_cache_head nhg_cache_table;
 
+struct bgp_nhg_nexthop_cache {
+	uint16_t nexthop_num;
+	struct zapi_nexthop nexthops[MULTIPATH_NUM];
+};
+
+struct bgp_nhg_group_cache {
+	uint16_t group_num;
+	uint32_t groups[MULTIPATH_NUM];
+};
+
 struct bgp_nhg_cache {
 	struct bgp_nhg_cache_item entry;
 
@@ -26,6 +36,7 @@ struct bgp_nhg_cache {
 #define BGP_NHG_FLAG_ALLOW_RECURSION (1 << 0)
 #define BGP_NHG_FLAG_IBGP	     (1 << 1)
 #define BGP_NHG_FLAG_SRTE_PRESENCE   (1 << 2)
+#define BGP_NHG_FLAG_TYPE_GROUP	     (1 << 3)
 	uint16_t flags;
 #define BGP_NHG_STATE_INSTALLED (1 << 0)
 #define BGP_NHG_STATE_REMOVED	(1 << 1)
@@ -35,13 +46,37 @@ struct bgp_nhg_cache {
 	 * relevant for qualifying next-hop:
 	 * tag, metric, distance
 	 */
-	uint16_t nexthop_num;
-	struct zapi_nexthop nexthops[MULTIPATH_NUM];
+	union {
+		struct bgp_nhg_nexthop_cache nexthops;
+		struct bgp_nhg_group_cache groups;
+	};
 
 	LIST_HEAD(nhg_path_list, bgp_path_info) paths;
 
 	unsigned int path_count;
 	time_t last_update;
+
+	/* list of groups:
+	 * For instance a group with two
+	 * nexthops will have two dependencies
+	 * pointing to those bgp_nhg.
+	 *
+	 * NHG id 3 with nexthops id 1/2
+	 * bgp_nhg(3)->depends has 1 and 2 in the tree
+	 * bgp_nhg(3)->dependents_thread is empty
+	 *
+	 * bgp_nhg(1)->depends is empty
+	 * bgp_nhg(1)->dependents_thread is 3 in the tree
+	 *
+	 * bgp_nhg(2)->depends is empty
+	 * bgp_nhg(2)->dependents_thread is 3 in the tree
+	 */
+	LIST_HEAD(nhg_depend_list, bgp_nhg_cache) depends;
+
+	LIST_ENTRY(bgp_nhg_cache) dependents_thread;
+
+	struct bgp_nhg_cache *parent_nhg;
+	unsigned int depends_count;
 };
 
 extern int bgp_nhg_cache_compare(const struct bgp_nhg_cache *a,
@@ -59,9 +94,12 @@ extern struct bgp_nhg_cache *bgp_nhg_find(struct bgp *bgp, struct bgp_dest *dest
 					  struct bgp_path_info *pi, afi_t afi,
 					  safi_t safi);
 extern void bgp_nhg_path_unlink(struct bgp_path_info *pi);
+extern void bgp_nhg_group_link(struct bgp_nhg_cache *nhg[], int nexthop_num,
+			       struct bgp_nhg_cache *nhg_parent);
 
-extern struct bgp_nhg_cache *bgp_nhg_new(uint32_t flags, uint16_t nexthop_num,
-					 struct zapi_nexthop api_nh[]);
+extern struct bgp_nhg_cache *bgp_nhg_new(uint32_t flags, uint16_t num,
+					 struct zapi_nexthop api_nh[],
+					 uint32_t api_group[]);
 extern void bgp_nhg_id_set_installed(uint32_t id, bool install);
 extern void bgp_nhg_id_set_removed(uint32_t id);
 extern void bgp_nhg_refresh_by_nexthop(struct prefix *p, uint32_t srte_color,
