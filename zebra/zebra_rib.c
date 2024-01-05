@@ -656,22 +656,44 @@ struct route_entry *rib_lookup_ipv4(struct prefix_ipv4 *p, vrf_id_t vrf_id)
 	return NULL;
 }
 
+static int _zebra_rib_labeled_unicast(struct nexthop_group *nhg)
+{
+	struct nexthop *nexthop = NULL;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop))
+		if (!nexthop->nh_label || !nexthop->nh_label->num_labels)
+			return 0;
+	return 1;
+}
 /*
  * Is this RIB labeled-unicast? It must be of type BGP and all paths
  * (nexthops) must have a label.
  */
 int zebra_rib_labeled_unicast(struct route_entry *re)
 {
-	struct nexthop *nexthop = NULL;
+	struct nexthop_group_id *nhgid;
+	struct nhg_hash_entry *nhe_tmp;
 
 	if (re->type != ZEBRA_ROUTE_BGP)
 		return 0;
 
-	for (ALL_NEXTHOPS(re->nhe->nhg, nexthop))
-		if (!nexthop->nh_label || !nexthop->nh_label->num_labels)
-			return 0;
+        if (re->nhe == NULL)
+		return 0;
 
-	return 1;
+	if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		for (nhgid = re->nhe->nhg.group; nhgid; nhgid = nhgid->next) {
+			nhe_tmp = zebra_nhg_lookup_id(nhgid->id_grp);
+			if (nhe_tmp)
+				nhgid->nhg = &nhe_tmp->nhg;
+			else
+				nhgid->nhg = NULL;
+			if (nhgid->nhg)
+				if (_zebra_rib_labeled_unicast(nhgid->nhg))
+					return 1;
+		}
+		return 0;
+	}
+	return _zebra_rib_labeled_unicast(&re->nhe->nhg);
 }
 
 
