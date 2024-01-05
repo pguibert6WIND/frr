@@ -4307,16 +4307,19 @@ dplane_route_update_internal(struct route_node *rn,
 					"%s: Ignoring Route exactly the same",
 					__func__);
 
-			for (ALL_NEXTHOPS_PTR(dplane_ctx_get_ng(ctx),
-					      nexthop)) {
-				if (CHECK_FLAG(nexthop->flags,
-					       NEXTHOP_FLAG_RECURSIVE))
-					continue;
+			if (!CHECK_FLAG(dplane_ctx_get_ng(ctx)->flags,
+					NEXTHOP_GROUP_TYPE_GROUP)) {
+				for (ALL_NEXTHOPS_PTR(dplane_ctx_get_ng(ctx),
+						      nexthop)) {
+					if (CHECK_FLAG(nexthop->flags,
+						       NEXTHOP_FLAG_RECURSIVE))
+						continue;
 
-				if (CHECK_FLAG(nexthop->flags,
-					       NEXTHOP_FLAG_ACTIVE))
-					SET_FLAG(nexthop->flags,
-						 NEXTHOP_FLAG_FIB);
+					if (CHECK_FLAG(nexthop->flags,
+						       NEXTHOP_FLAG_ACTIVE))
+						SET_FLAG(nexthop->flags,
+							 NEXTHOP_FLAG_FIB);
+				}
 			}
 
 			if ((op == DPLANE_OP_ROUTE_UPDATE) && old_re && re &&
