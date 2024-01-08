@@ -15,14 +15,20 @@
 |        |          |        |          |        +          |        |
 |  ce7   +----------+  r1    +----------+  r3    +----------+  r5    +----------------+
 |        |          |        |          |  rr    +    +-----+        |  +--+-+--+ +--+++--+
-+--------+          ++--+----+          +--------+\  /      +--------+  |       | |       |
-                     |  |                          \/                   |  ce9  | |  ce10 |
-                     |  |                          /\                   |unicast| |  vpn  |
-+--------+           |  |               +--------+/  \      +--------+  +---+---+ +---+---+
-|        |           |  |               |        +    +-----+        +----------------+
-|  ce8   +-----------+  +---------------+  r4    +----------+  r6    +------+
-|        |                              |        |          |        |
-+--------+                              +--------+          +--------+
++--------+          +++-+----+          +--------+\  /      +--------+  |       | |       |
+                     || |                          \/                   |  ce9  | |  ce10 |
+                     || |                          /\                   |unicast| |  vpn  |
++--------+           || |               +--------+/  \      +--------+  +---+-+-+ +---+-+-+
+|        |           || |               |        +    +-----+        +----------------+ |
+|  ce8   +-----------+| +---------------+  r4    +----------+  r6    +------+ |         |
+|        |            |                 |        |          |        |        |         |
++--------+            |                 +--------+          +--------+        |         |
+                      |                                                       |         |
+                      |                 +--------+          +--------+        |         |
+                      |                 |        |          |        +--------+         |
+                      +-----------------+   r7   +----------+  r8    +------------------+
+                                        |        |          |        |
+                                        +--------+          +--------+
 """
 
 import os
@@ -70,6 +76,8 @@ def build_topo(tgen):
     tgen.add_router("r4")
     tgen.add_router("r5")
     tgen.add_router("r6")
+    tgen.add_router("r7")
+    tgen.add_router("r8")
 
     # switch
     switch = tgen.add_switch("s1")
@@ -120,6 +128,22 @@ def build_topo(tgen):
     switch.add_link(tgen.gears["ce8"])
     switch.add_link(tgen.gears["r1"])
 
+    switch = tgen.add_switch("s15")
+    switch.add_link(tgen.gears["r7"])
+    switch.add_link(tgen.gears["r1"])
+
+    switch = tgen.add_switch("s16")
+    switch.add_link(tgen.gears["r7"])
+    switch.add_link(tgen.gears["r8"])
+
+    switch = tgen.add_switch("s17")
+    switch.add_link(tgen.gears["r8"])
+    switch.add_link(tgen.gears["ce9"])
+
+    switch = tgen.add_switch("s18")
+    switch.add_link(tgen.gears["r8"])
+    switch.add_link(tgen.gears["ce10"])
+
 
 def _populate_iface():
     tgen = get_topogen()
@@ -151,13 +175,16 @@ def _populate_iface():
     output = tgen.net["r6"].cmd("ip link add vrf1 type vrf table 101")
     output = tgen.net["r6"].cmd("ip link set dev vrf1 up")
     output = tgen.net["r6"].cmd("ip link set dev r6-eth3 master vrf1")
+    output = tgen.net["r8"].cmd("ip link add vrf1 type vrf table 101")
+    output = tgen.net["r8"].cmd("ip link set dev vrf1 up")
+    output = tgen.net["r8"].cmd("ip link set dev r8-eth2 master vrf1")
 
     cmds_list = [
         "modprobe mpls_router",
         "echo 100000 > /proc/sys/net/mpls/platform_labels",
     ]
 
-    for name in ("r1", "r3", "r4", "r5", "r6"):
+    for name in ("r1", "r3", "r4", "r5", "r6", "r7", "r8"):
         for cmd in cmds_list:
             logger.info("input: " + cmd)
             output = tgen.net[name].cmd(cmd)
@@ -176,9 +203,13 @@ def setup_module(mod):
         router.load_config(
             TopoRouter.RD_ZEBRA, os.path.join(CWD, "{}/zebra.conf".format(rname))
         )
-        if rname in ("r1", "r3", "r4", "r5", "r6"):
+        if rname in ("r1", "r3", "r4", "r5", "r6", "r7", "r8"):
             router.load_config(
                 TopoRouter.RD_ISIS, os.path.join(CWD, "{}/isisd.conf".format(rname))
+            )
+        if rname in ("r1", "r3", "r5", "r6", "r8", "ce7", "ce8", "ce9", "ce10"):
+            router.load_config(
+                TopoRouter.RD_BFD, os.path.join(CWD, "{}/bfdd.conf".format(rname))
             )
         if rname in ("r1", "r3", "r5", "r6", "r8", "ce7", "ce8", "ce9", "ce10"):
             router.load_config(
@@ -213,7 +244,16 @@ def ip_check_path_selection(router, ipaddr_str, expected, vrf_name=None):
         )
     else:
         output = json.loads(router.vtysh_cmd(f"show ip route {ipaddr_str} json"))
-    return topotest.json_cmp(output, expected)
+    ret = topotest.json_cmp(output, expected)
+    if ret is None:
+        num_nh_expected = len(expected[ipaddr_str][0]["nexthops"])
+        num_nh_observed = len(output[ipaddr_str][0]["nexthops"])
+        if num_nh_expected == num_nh_observed:
+            return ret
+        return "{}, prefix {} does not have the correct number of nexthops : observed {}, expected {}".format(
+            router.name, ipaddr_str, num_nh_observed, num_nh_expected
+        )
+    return ret
 
 
 def route_check_nhg_id_is_protocol(ipaddr_str, rname, vrf_name=None, protocol="bgp"):
@@ -836,13 +876,120 @@ def test_bgp_ipv4_convergence_igp_label_changed():
     tgen.gears["r1"].vtysh_cmd(f"show bgp nexthop-group detail")
 
 
+def check_ipv4_prefix_with_multiple_nexthops(
+    prefix, r5_path=True, r6_path=True, r8_path=False
+):
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        f"Check that {prefix} unicast entry is installed with paths for r5 {r5_path}, r6 {r6_path}, r8 {r8_path}"
+    )
+
+    r5_nh = [
+        {
+            "ip": "192.0.2.5",
+            "active": True,
+            "recursive": True,
+        },
+        {
+            "ip": "172.31.0.3",
+            "interfaceName": "r1-eth1",
+            "active": True,
+            "labels": [
+                16055,
+            ],
+        },
+        {
+            "ip": "172.31.2.4",
+            "interfaceName": "r1-eth2",
+            "active": True,
+            "labels": [
+                16055,
+            ],
+        },
+    ]
+
+    r6_nh = [
+        {
+            "ip": "192.0.2.6",
+            "active": True,
+            "recursive": True,
+        },
+        {
+            "ip": "172.31.0.3",
+            "interfaceName": "r1-eth1",
+            "active": True,
+            "labels": [
+                16006,
+            ],
+        },
+        {
+            "ip": "172.31.2.4",
+            "interfaceName": "r1-eth2",
+            "active": True,
+            "labels": [
+                16006,
+            ],
+        },
+    ]
+
+    r8_nh = [
+        {
+            "ip": "192.0.2.8",
+            "active": True,
+            "recursive": True,
+        },
+        {
+            "ip": "172.31.8.7",
+            "interfaceName": "r1-eth4",
+            "active": True,
+            "labels": [
+                16008,
+            ],
+        },
+    ]
+
+    expected = {
+        prefix: [
+            {
+                "prefix": prefix,
+                "protocol": "bgp",
+                "metric": 0,
+                "table": 254,
+                "nexthops": [],
+            }
+        ]
+    }
+    if r5_path:
+        for nh in r5_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+    if r6_path:
+        for nh in r6_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+    if r8_path:
+        for nh in r8_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+
+    test_func = functools.partial(
+        ip_check_path_selection, tgen.gears["r1"], prefix, expected
+    )
+    _, result = topotest.run_and_expect(test_func, None, count=60, wait=0.5)
+    assert result is None, f"Failed to check that {prefix} uses the IGP label 16055"
+
+
 def test_bgp_ipv4_addpath_configured():
     """
     R6 lo metric is set to default
     R1 addpath is configured
     Change the r6 metric value
-    Check that the BGP route to 192.0.2.9/32 route uses zebra nexthops
+    Check that the BGP route to 192.0.2.9/32 route uses BGP nexthops
+    Check that the BGP nexthop groups used are same in BGP and in ZEBRA
     """
+    global nhg_id_1
+    global nhg_id_2
+
     tgen = get_topogen()
     if tgen.routers_have_failure():
         pytest.skip(tgen.errors)
@@ -859,72 +1006,309 @@ def test_bgp_ipv4_addpath_configured():
         isjson=False,
     )
 
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.9/32")
+
+    logger.info("Check that 192.0.2.9/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+
+    logger.info(f"Get 192.0.2.9/32 dependent groups for ID {local_nhg_id}")
+    output = json.loads(
+        tgen.gears["r1"].vtysh_cmd(f"show bgp nexthop-group {local_nhg_id} json")
+    )
+    assert (
+        "groups" in output.keys()
+    ), f"ID {local_nhg_id}, BGP nexthop group with no dependent groups."
+    assert (
+        "dependsCount" in output.keys() and output["dependsCount"] == 2
+    ), f"ID {local_nhg_id}, expected 2 dependent nexthops."
+
+    nhg_id_1 = None
+    for group in output["groups"]:
+        if nhg_id_1 is None:
+            nhg_id_1 = group["Id"]
+        else:
+            nhg_id_2 = group["Id"]
+
+    output = json.loads(
+        tgen.gears["r1"].vtysh_cmd(f"show nexthop-group rib {local_nhg_id} json")
+    )
+    assert (
+        "depends" in output[str(local_nhg_id)].keys()
+    ), f"ID {local_nhg_id}, ZEBRA nexthop group with no dependent groups."
+    for grpid in output[str(local_nhg_id)]["depends"]:
+        if grpid == nhg_id_1:
+            continue
+        elif grpid == nhg_id_2:
+            continue
+        else:
+            assert (
+                0
+            ), f"ID {local_nhg_id}, ZEBRA nexthop group dependent group {grpid} mismatch with BGP nexthop group."
+
+
+def test_bgp_ipv4_three_ecmp_paths_configured():
+    """
+    R7 interface is unshutdown
+    Check that the BGP route to 192.0.2.9/32 route uses 3 BGP nexthops
+    Check that the 3 BGP nexthop groups are used.
+    """
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    tgen.gears["r7"].vtysh_cmd(
+        "configure terminal\ninterface r7-eth0\nno shutdown\n",
+        isjson=False,
+    )
+
     logger.info(
-        "Check that 192.0.2.9/32 unicast entry is installed with both endpoints"
+        "Check that 192.0.2.9/32 unicast entry is installed with three endpoints"
     )
-    expected = {
-        "192.0.2.9/32": [
-            {
-                "prefix": "192.0.2.9/32",
-                "protocol": "bgp",
-                "metric": 0,
-                "table": 254,
-                "nexthops": [
-                    {
-                        "ip": "192.0.2.5",
-                        "active": True,
-                        "recursive": True,
-                    },
-                    {
-                        "ip": "172.31.0.3",
-                        "interfaceName": "r1-eth1",
-                        "active": True,
-                        "labels": [
-                            16055,
-                        ],
-                    },
-                    {
-                        "ip": "172.31.2.4",
-                        "interfaceName": "r1-eth2",
-                        "active": True,
-                        "labels": [
-                            16055,
-                        ],
-                    },
-                    {
-                        "ip": "192.0.2.6",
-                        "active": True,
-                        "recursive": True,
-                    },
-                    {
-                        "ip": "172.31.0.3",
-                        "interfaceName": "r1-eth1",
-                        "active": True,
-                        "labels": [
-                            16006,
-                        ],
-                    },
-                    {
-                        "ip": "172.31.2.4",
-                        "interfaceName": "r1-eth2",
-                        "active": True,
-                        "labels": [
-                            16006,
-                        ],
-                    },
-                ],
-            }
-        ]
-    }
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.9/32", r8_path=True)
 
-    test_func = functools.partial(
-        ip_check_path_selection, tgen.gears["r1"], "192.0.2.9/32", expected
+    logger.info("Check that 192.0.2.9/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+
+    logger.info(f"Get 192.0.2.9/32 dependent groups for ID {local_nhg_id}")
+    output = json.loads(
+        tgen.gears["r1"].vtysh_cmd(f"show bgp nexthop-group {local_nhg_id} json")
     )
-    _, result = topotest.run_and_expect(test_func, None, count=60, wait=0.5)
-    assert result is None, "Failed to check that 192.0.2.9/32 uses the IGP label 16055"
+    assert (
+        "groups" in output.keys()
+    ), f"ID {local_nhg_id}, BGP nexthop group with no dependent groups."
+    assert (
+        "dependsCount" in output.keys() and output["dependsCount"] == 3
+    ), f"ID {local_nhg_id}, expected 2 dependent nexthops."
 
-    logger.info("Check that 192.0.2.9/32 unicast entry uses a zebra NHG")
-    route_check_nhg_id_is_protocol("192.0.2.9/32", "r1", protocol="zebra")
+
+def test_bgp_ipv4_one_additional_network_configured():
+    """
+    R5, R6, and R8 have a new network to declare: 192.0.2.20/32
+    Check that 192.0.2.9/32 and 192.0.2.20/32 use the same NHG
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Check that 192.0.2.20/32 unicast entry is installed with three endpoints"
+    )
+    for rname in ("r5", "r6", "r8"):
+        tgen.gears[rname].vtysh_cmd(
+            "configure terminal\nrouter bgp 64500\naddress-family ipv4 unicast\nnetwork 192.0.2.20/32",
+            isjson=False,
+        )
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.20/32", r8_path=True)
+    logger.info(
+        "Check that same NHG is used by both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+    )
+    nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    assert nhg_id_1 == nhg_id_2, (
+        "The same NHG %d is not used for both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+        % nhg_id_1
+    )
+
+
+def test_bgp_ipv4_additional_network_has_only_two_paths_configured():
+    """
+    On R6, we remove the update to 192.0.2.9/32
+    Check that the same NHG is used by 192.0.2.9/32 unicast routes
+    Check that 192.0.2.9/32 and 192.0.2.20/32 do not use the same NHG
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info("Unconfigure 192.0.2.9/32 unicast entry on r6")
+    tgen.gears["r6"].vtysh_cmd(
+        "configure terminal\nrouter bgp 64500\naddress-family ipv4 unicast\nno network 192.0.2.9/32",
+        isjson=False,
+    )
+
+    logger.info("Check that 192.0.2.9/32 unicast entry is installed with two endpoints")
+    check_ipv4_prefix_with_multiple_nexthops(
+        "192.0.2.9/32", r6_path=False, r8_path=True
+    )
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.20/32", r8_path=True)
+
+    logger.info("Check that the same NHG is used by 192.0.2.20/32 unicast routes")
+    local_nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    assert (
+        local_nhg_id_2 == nhg_id_2
+    ), "The same NHG %d is not used by 192.0.2.20/32 unicast routes: %d" % (
+        nhg_id_1,
+        local_nhg_id_1,
+    )
+
+    logger.info(
+        "Check that different NHG is used by both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+    )
+    nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    assert nhg_id_1 != nhg_id_2, (
+        "The same NHG %d is used for both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+        % nhg_id_1
+    )
+
+
+def test_bgp_ipv4_additional_network_has_again_three_paths_configured():
+    """
+    On R6, we add back the update to 192.0.2.9/32
+    Check that the same NHG is used by 192.0.2.20/32 unicast routes
+    Check that the same NHG is used by both 192.0.2.20/32 and 192.0.2.9/32 unicast routes
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info("Reconfigure 192.0.2.9/32 unicast entry on r6")
+    tgen.gears["r6"].vtysh_cmd(
+        "configure terminal\nrouter bgp 64500\naddress-family ipv4 unicast\nnetwork 192.0.2.9/32",
+        isjson=False,
+    )
+
+    logger.info(
+        "Check that 192.0.2.20/32 unicast entry is installed with three endpoints"
+    )
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.9/32", r8_path=True)
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.20/32", r8_path=True)
+
+    logger.info("Check that the same NHG is used by 192.0.2.20/32 unicast routes")
+    local_nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    assert (
+        local_nhg_id_2 == nhg_id_2
+    ), "The same NHG %d is not used by 192.0.2.20/32 unicast routes: %d" % (
+        nhg_id_1,
+        local_nhg_id_1,
+    )
+
+    logger.info(
+        "Check that same NHG is used by both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+    )
+    nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    assert nhg_id_1 == nhg_id_2, (
+        "The same NHG %d is not used for both 192.0.2.9/32 and 192.0.2.20/32 unicast routes"
+        % nhg_id_1
+    )
+
+
+def test_bgp_ipv4_lower_preference_value_on_r5_and_r8_configured():
+    """
+    On R5, and R8, we add a route-map to lower local-preference
+    Check that only R6 is selected
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Reconfigure R5 and R8 to lower the preferece value of advertised unicast networks"
+    )
+    for rname in ("r5", "r8"):
+        tgen.gears[rname].vtysh_cmd(
+            "configure terminal\nroute-map rmap permit 1\nset local-preference 50\n",
+            isjson=False,
+        )
+        for prefix in ("192.0.2.9/32", "192.0.2.20/32"):
+            tgen.gears[rname].vtysh_cmd(
+                f"configure terminal\nrouter bgp 64500\naddress-family ipv4 unicast\nnetwork {prefix} route-map rmap",
+                isjson=False,
+            )
+    logger.info(
+        "Check that 192.0.2.20/32 unicast entry is installed with one endpoints"
+    )
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.9/32", r5_path=False)
+    check_ipv4_prefix_with_multiple_nexthops("192.0.2.20/32", r5_path=False)
+
+    nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    logger.info(
+        f"Get the nhg_id used for 192.0.2.9/32: {nhg_id_1}, and 192.0.2.20/32: {nhg_id_2}"
+    )
+
+
+def test_bgp_ipv4_increase_preference_value_on_r5_and_r8_configured():
+    """
+    On R5, and R8, we change the local-preference to a bigger value
+    Check that R5, and R8 are selected
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Reconfigure R5 and R8 to increase the preference value of advertised unicast networks"
+    )
+    for rname in ("r5", "r8"):
+        tgen.gears[rname].vtysh_cmd(
+            "configure terminal\nroute-map rmap permit 1\nset local-preference 220\n",
+            isjson=False,
+        )
+    check_ipv4_prefix_with_multiple_nexthops(
+        "192.0.2.9/32", r6_path=False, r8_path=True
+    )
+    check_ipv4_prefix_with_multiple_nexthops(
+        "192.0.2.20/32", r6_path=False, r8_path=True
+    )
+
+    nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    logger.info(
+        f"Get the nhg_id used for 192.0.2.9/32: {nhg_id_1}, and 192.0.2.20/32: {nhg_id_2}"
+    )
+
+
+def test_bgp_ipv4_simulate_r5_machine_going_down():
+    """
+    On R5, we shutdown the interface
+    Check that R8 is selected
+    Check that R5 failure did not change the NHG (EDGE implementation needed)
+    """
+    global nhg_id_1
+    global nhg_id_2
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info("Shutdown R5 interface")
+    for ifname in ("r5-eth1", "r5-eth2"):
+        tgen.gears["r5"].vtysh_cmd(
+            f"configure terminal\ninterface {ifname}\nshutdown\n",
+            isjson=False,
+        )
+    check_ipv4_prefix_with_multiple_nexthops(
+        "192.0.2.9/32", r5_path=False, r6_path=False, r8_path=True
+    )
+    check_ipv4_prefix_with_multiple_nexthops(
+        "192.0.2.20/32", r5_path=False, r6_path=False, r8_path=True
+    )
+
+    local_nhg_id_1 = route_check_nhg_id_is_protocol("192.0.2.9/32", "r1")
+    local_nhg_id_2 = route_check_nhg_id_is_protocol("192.0.2.20/32", "r1")
+    logger.info(
+        f"Get the nhg_id used for 192.0.2.9/32: {nhg_id_1}, and 192.0.2.20/32: {local_nhg_id_2}"
+    )
+    logger.info("Check that other NHG is used by 192.0.2.9/32 unicast routes")
+    assert local_nhg_id_1 == nhg_id_1, (
+        "The same NHG %d is used after R5 shutdown, EDGE implementation missing"
+        % nhg_id_1
+    )
 
 
 def test_memory_leak():
