@@ -1279,6 +1279,15 @@ static void show_nexthop_group_out(struct vty *vty, struct nhg_hash_entry *nhe,
 			json_object_object_add(json, "depends", json_depends);
 	}
 
+	if (nhe->nhg_proto_depends_id) {
+		if (json)
+			json_object_int_add(json, "protoDepends",
+					    nhe->nhg_proto_depends_id);
+		else
+			vty_out(vty, "     Protocol depends: (%u)\n",
+				nhe->nhg_proto_depends_id);
+	}
+
 	/* Output nexthops */
 	if (json)
 		json_nexthop_array = json_object_new_array();
@@ -1392,6 +1401,27 @@ static void show_nexthop_group_out(struct vty *vty, struct nhg_hash_entry *nhe,
 		}
 		if (json)
 			json_object_object_add(json, "dependents",
+					       json_dependants);
+		else
+			vty_out(vty, "\n");
+	}
+	if (!zebra_nhg_proto_dependents_is_empty(nhe)) {
+		if (json)
+			json_dependants = json_object_new_array();
+		else
+			vty_out(vty, "     Protocol dependents:");
+		frr_each (nhg_connected_tree, &nhe->nhg_proto_dependents,
+			  rb_node_dep) {
+			if (json)
+				json_object_array_add(json_dependants,
+						      json_object_new_int(
+							      rb_node_dep->nhe
+								      ->id));
+			else
+				vty_out(vty, " (%u)", rb_node_dep->nhe->id);
+		}
+		if (json)
+			json_object_object_add(json, "protoDependents",
 					       json_dependants);
 		else
 			vty_out(vty, "\n");

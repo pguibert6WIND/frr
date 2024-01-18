@@ -1982,7 +1982,8 @@ static void zread_nhg_add(ZAPI_HANDLER_ARGS)
 	struct zapi_nhg api_nhg = {};
 	struct nexthop_group *nhg = NULL;
 	struct nhg_backup_info *bnhg = NULL;
-	struct nhg_hash_entry *nhe, *nhe_tmp;
+	struct nhg_hash_entry *nhe, *nhe_tmp, *nhe_dependents;
+	struct nhg_connected *rb_node_dep = NULL;
 
 	s = msg;
 	if (zapi_nhg_decode(s, hdr->command, &api_nhg) < 0) {
@@ -2036,12 +2037,21 @@ static void zread_nhg_add(ZAPI_HANDLER_ARGS)
 	/* Enqueue to workqueue for processing */
 	rib_queue_nhe_add(nhe);
 
+	nhe_tmp = zebra_nhg_lookup_id(api_nhg.id);
+	if (nhe_tmp && !zebra_nhg_proto_dependents_is_empty(nhe_tmp)) {
+		frr_each (nhg_connected_tree, &nhe_tmp->nhg_proto_dependents,
+			  rb_node_dep) {
+			nhe_dependents = zebra_nhe_copy(nhe,
+							rb_node_dep->nhe->id);
+			rib_queue_nhe_add(nhe_dependents);
+		}
+	}
+
 	/* Free any local allocations */
 	nexthop_group_delete(&nhg);
 	zebra_nhg_backup_free(&bnhg);
 
 	/* Stats */
-	nhe_tmp = zebra_nhg_lookup_id(api_nhg.id);
 	if (nhe_tmp)
 		client->nhg_upd8_cnt++;
 	else

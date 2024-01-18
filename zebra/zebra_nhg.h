@@ -91,6 +91,18 @@ struct nhg_hash_entry {
 
 	struct event *timer;
 
+	/* When duplicating a protocol NHG
+	 * if protocol NHG is refreshed, the
+	 * dependents NHGs need to be refreshed
+	 * Create a dependent list for protocol NHG
+	 */
+	struct nhg_connected_tree_head nhg_proto_dependents;
+	/* When replacing a NHG, the new NHG
+	 * needs to know its proto NHG if present.
+	 * Create a field that contains the proto NHG id
+	 */
+	uint32_t nhg_proto_depends_id;
+
 /*
  * Is this nexthop group valid, ie all nexthops are fully resolved.
  * What is fully resolved?  It's a nexthop that is either self contained
@@ -266,6 +278,7 @@ extern struct nhg_hash_entry *zebra_nhg_resolve(struct nhg_hash_entry *nhe);
 
 extern unsigned int zebra_nhg_depends_count(const struct nhg_hash_entry *nhe);
 extern bool zebra_nhg_depends_is_empty(const struct nhg_hash_entry *nhe);
+extern bool zebra_nhg_proto_dependents_is_empty(const struct nhg_hash_entry *nhe);
 
 extern unsigned int
 zebra_nhg_dependents_count(const struct nhg_hash_entry *nhe);
@@ -367,6 +380,13 @@ extern void zebra_nhg_dplane_result(struct zebra_dplane_ctx *ctx);
 
 /* Sweep the nhg hash tables for old entries on restart */
 extern void zebra_nhg_sweep_table(struct hash *hash);
+
+/* Handle dependencies between protocol NHG and
+ * created NHGs
+ */
+struct nhg_hash_entry *zebra_nhg_get_proto_dependent(struct nhg_hash_entry *nhe);
+void zebra_nhg_proto_create_dependency(struct nhg_hash_entry *nhg,
+				       struct nhg_hash_entry *nhg_proto);
 
 /*
  * We are shutting down but the nexthops should be kept

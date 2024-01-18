@@ -416,7 +416,7 @@ int route_entry_update_nhe(struct route_entry *re,
 			   struct nhg_hash_entry *new_nhghe)
 {
 	int ret = 0;
-	struct nhg_hash_entry *old_nhg = NULL;
+	struct nhg_hash_entry *old_nhg = NULL, *proto_nhg;
 
 	if (new_nhghe == NULL) {
 		old_nhg = re->nhe;
@@ -440,6 +440,9 @@ done:
 	/* Detach / deref previous nhg */
 
 	if (old_nhg) {
+		proto_nhg = zebra_nhg_get_proto_dependent(old_nhg);
+		if (proto_nhg && re->nhe && !PROTO_OWNED(re->nhe))
+			zebra_nhg_proto_create_dependency(re->nhe, proto_nhg);
 		/*
 		 * Return true if we are deleting the previous NHE
 		 * Note: we dont check the return value of the function anywhere

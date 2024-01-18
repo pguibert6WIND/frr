@@ -253,10 +253,21 @@ bool zebra_nhg_dependents_is_empty(const struct nhg_hash_entry *nhe)
 	return nhg_connected_tree_is_empty(&nhe->nhg_dependents);
 }
 
+bool zebra_nhg_proto_dependents_is_empty(const struct nhg_hash_entry *nhe)
+{
+	return nhg_connected_tree_is_empty(&nhe->nhg_proto_dependents);
+}
+
 static void zebra_nhg_dependents_del(struct nhg_hash_entry *from,
 				     struct nhg_hash_entry *dependent)
 {
 	nhg_connected_tree_del_nhe(&from->nhg_dependents, dependent);
+}
+
+static void zebra_nhg_proto_dependents_del(struct nhg_hash_entry *from,
+					   struct nhg_hash_entry *dependent)
+{
+	nhg_connected_tree_del_nhe(&from->nhg_proto_dependents, dependent);
 }
 
 static void zebra_nhg_dependents_add(struct nhg_hash_entry *to,
@@ -265,9 +276,20 @@ static void zebra_nhg_dependents_add(struct nhg_hash_entry *to,
 	nhg_connected_tree_add_nhe(&to->nhg_dependents, dependent);
 }
 
+static void zebra_nhg_proto_dependents_add(struct nhg_hash_entry *to,
+					   struct nhg_hash_entry *dependent)
+{
+	nhg_connected_tree_add_nhe(&to->nhg_proto_dependents, dependent);
+}
+
 static void zebra_nhg_dependents_init(struct nhg_hash_entry *nhe)
 {
 	nhg_connected_tree_init(&nhe->nhg_dependents);
+}
+
+static void zebra_nhg_proto_dependents_init(struct nhg_hash_entry *nhe)
+{
+	nhg_connected_tree_init(&nhe->nhg_proto_dependents);
 }
 
 /* Release this nhe from anything depending on it */
@@ -280,6 +302,27 @@ static void zebra_nhg_dependents_release(struct nhg_hash_entry *nhe)
 		/* recheck validity of the dependent */
 		zebra_nhg_check_valid(rb_node_dep->nhe);
 	}
+}
+
+static void zebra_nhg_proto_dependents_release(struct nhg_hash_entry *nhe)
+{
+	struct nhg_connected *rb_node_dep = NULL;
+
+	frr_each_safe (nhg_connected_tree, &nhe->nhg_proto_dependents,
+		       rb_node_dep) {
+		rb_node_dep->nhe->nhg_proto_depends_id = 0;
+		zebra_nhg_proto_dependents_del(nhe, rb_node_dep->nhe);
+	}
+}
+
+static void zebra_nhg_proto_depends_release(struct nhg_hash_entry *nhe)
+{
+	struct nhg_hash_entry *proto_nhg;
+
+	proto_nhg = zebra_nhg_get_proto_dependent(nhe);
+	if (proto_nhg)
+		zebra_nhg_proto_dependents_del(proto_nhg, nhe);
+	nhe->nhg_proto_depends_id = 0;
 }
 
 /* Release this nhe from anything that it depends on */
@@ -352,6 +395,22 @@ zebra_nhg_connect_depends(struct nhg_hash_entry *nhe,
 	}
 }
 
+struct nhg_hash_entry *zebra_nhg_get_proto_dependent(struct nhg_hash_entry *nhe)
+{
+	if (PROTO_OWNED(nhe))
+		return nhe;
+	if (!nhe->nhg_proto_depends_id)
+		return NULL;
+	return zebra_nhg_lookup_id(nhe->nhg_proto_depends_id);
+}
+
+void zebra_nhg_proto_create_dependency(struct nhg_hash_entry *nhg,
+				       struct nhg_hash_entry *nhg_proto)
+{
+	zebra_nhg_proto_dependents_add(nhg_proto, nhg);
+	nhg->nhg_proto_depends_id = nhg_proto->id;
+}
+
 /* Init an nhe, for use in a hash lookup for example */
 void zebra_nhe_init(struct nhg_hash_entry *nhe, afi_t afi,
 		    const struct nexthop *nh)
@@ -419,6 +478,8 @@ struct nhg_hash_entry *zebra_nhe_copy(const struct nhg_hash_entry *orig,
 	nhe->type = orig->type ? orig->type : ZEBRA_ROUTE_NHG;
 	nhe->refcnt = 0;
 	nhe->dplane_ref = zebra_router_get_next_sequence();
+	/* dependencies are not updated */
+	zebra_nhg_proto_dependents_init(nhe);
 
 	/* Copy backup info also, if present */
 	if (orig->backup_info)
@@ -722,7 +783,24 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 		 * It goes in HASH and ID table.
 		 */
 		newnhe = hash_get(zrouter.nhgs, lookup, zebra_nhg_hash_alloc);
-		zebra_nhg_insert_id(newnhe);
+		if (newnhe->id == lookup->id) {
+			zebra_nhg_insert_id(newnhe);
+		} else {
+			*nhe = newnhe;
+			/* If we found an existing object, we're done */
+			if (IS_ZEBRA_DEBUG_NHG_DETAIL)
+				zlog_debug("%s: hash_get id %u => %p (%pNG)",
+					   __func__, lookup->id, *nhe, *nhe);
+			if (nhg_depends) {
+				/* If you don't want to hash on each nexthop in the
+                     * nexthop group struct you can pass the depends
+                     * directly. Kernel-side we do this since it just looks
+                     * them up via IDs.
+                     */
+				zebra_nhg_connect_depends(newnhe, nhg_depends);
+			}
+			goto done;
+		}
 	} else {
 		/*
 		 * This is upperproto owned NHG or one we read in from dataplane
@@ -764,6 +842,8 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 	 * relationships with the corresponding singletons.
 	 */
 	zebra_nhg_depends_init(newnhe);
+
+	zebra_nhg_proto_dependents_init(newnhe);
 
 	nh = newnhe->nhg.nexthop;
 
@@ -1099,6 +1179,8 @@ static void zebra_nhg_release_all_deps(struct nhg_hash_entry *nhe)
 	zebra_nhg_dependents_release(nhe);
 	if (nhe->ifp)
 		if_nhg_dependents_del(nhe->ifp, nhe);
+	zebra_nhg_proto_dependents_release(nhe);
+	zebra_nhg_proto_depends_release(nhe);
 }
 
 static void zebra_nhg_release(struct nhg_hash_entry *nhe)
@@ -2900,10 +2982,6 @@ int nexthop_active_update(struct route_node *rn, struct route_entry *re)
 {
 	struct nhg_hash_entry *curr_nhe;
 	uint32_t curr_active = 0, backup_active = 0;
-
-	if (PROTO_OWNED(re->nhe))
-		return proto_nhg_nexthop_active_update(&re->nhe->nhg);
-
 	afi_t rt_afi = family2afi(rn->p.family);
 
 	UNSET_FLAG(re->status, ROUTE_ENTRY_CHANGED);
@@ -3361,7 +3439,7 @@ struct nhg_hash_entry *zebra_nhg_proto_add(uint32_t id, int type,
 					   struct nexthop_group *nhg, afi_t afi)
 {
 	struct nhg_hash_entry lookup;
-	struct nhg_hash_entry *new, *old;
+	struct nhg_hash_entry *new, *old, *proto_nhg = NULL;
 	struct nhg_connected *rb_node_dep = NULL;
 	struct nexthop *newhop;
 	bool replace = false;
@@ -3433,6 +3511,9 @@ struct nhg_hash_entry *zebra_nhg_proto_add(uint32_t id, int type,
 		 * old parent.
 		 */
 		replace = true;
+
+		proto_nhg = zebra_nhg_get_proto_dependent(old);
+
 		hash_release(zrouter.nhgs_id, old);
 
 		/* Free all the things */
@@ -3440,7 +3521,10 @@ struct nhg_hash_entry *zebra_nhg_proto_add(uint32_t id, int type,
 	}
 
 	new = zebra_nhg_rib_find_nhe(&lookup, afi);
-
+	if (proto_nhg && proto_nhg->id != new->id) {
+		new->nhg_proto_depends_id = proto_nhg->id;
+		zebra_nhg_proto_dependents_add(proto_nhg, new);
+	}
 	zebra_nhg_increment_ref(new);
 
 	/* Capture zapi client info */
