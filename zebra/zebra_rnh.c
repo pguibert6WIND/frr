@@ -358,43 +358,78 @@ void zebra_deregister_rnh_pseudowire(vrf_id_t vrf_id, struct zebra_pw *pw)
 	zebra_delete_rnh(rnh);
 }
 
+static void zebra_rnh_clear_nexthop_rnh_filters_nhg(struct nexthop_group *nhg)
+{
+	struct nexthop *nexthop = NULL;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop))
+		UNSET_FLAG(nexthop->flags, NEXTHOP_FLAG_RNH_FILTERED);
+}
+
 /* Clear the NEXTHOP_FLAG_RNH_FILTERED flags on all nexthops
  */
 static void zebra_rnh_clear_nexthop_rnh_filters(struct route_entry *re)
 {
-	struct nexthop *nexthop;
+	struct nexthop_group_id *nhgid;
 
 	if (re) {
-		for (nexthop = re->nhe->nhg.nexthop; nexthop;
-		     nexthop = nexthop->next) {
-			UNSET_FLAG(nexthop->flags, NEXTHOP_FLAG_RNH_FILTERED);
-		}
+		if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = re->nhe->nhg.group; nhgid;
+			     nhgid = nhgid->next) {
+				if (nhgid->nhg)
+					zebra_rnh_clear_nexthop_rnh_filters_nhg(
+						nhgid->nhg);
+			}
+		} else
+			zebra_rnh_clear_nexthop_rnh_filters_nhg(&re->nhe->nhg);
 	}
 }
 
 /* Apply the NHT route-map for a client to the route (and nexthops)
  * resolving a NH.
  */
+static int zebra_rnh_apply_nht_rmap_nhg(struct nexthop_group *nhg, afi_t afi,
+					int proto, struct prefix *p,
+					struct zebra_vrf *zvrf,
+					struct route_entry *re)
+{
+	struct nexthop *nexthop = NULL;
+	route_map_result_t ret;
+	int count = 0;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop))
+		ret = zebra_nht_route_map_check(afi, proto, p, zvrf, re,
+						nexthop);
+	if (ret != RMAP_DENYMATCH)
+		count++;
+	else {
+		SET_FLAG(nexthop->flags, NEXTHOP_FLAG_RNH_FILTERED);
+	}
+	return count;
+}
+
 static int zebra_rnh_apply_nht_rmap(afi_t afi, struct zebra_vrf *zvrf,
 				    struct route_node *prn,
 				    struct route_entry *re, int proto)
 {
 	int at_least_one = 0;
-	struct nexthop *nexthop;
-	route_map_result_t ret;
+	struct nexthop_group_id *nhgid;
 
 	if (prn && re) {
-		for (nexthop = re->nhe->nhg.nexthop; nexthop;
-		     nexthop = nexthop->next) {
-			ret = zebra_nht_route_map_check(
-				afi, proto, &prn->p, zvrf, re, nexthop);
-			if (ret != RMAP_DENYMATCH)
-				at_least_one++; /* at least one valid NH */
-			else {
-				SET_FLAG(nexthop->flags,
-					 NEXTHOP_FLAG_RNH_FILTERED);
+		if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = re->nhe->nhg.group; nhgid;
+			     nhgid = nhgid->next) {
+				if (nhgid->nhg)
+					at_least_one +=
+						zebra_rnh_apply_nht_rmap_nhg(
+							nhgid->nhg, afi, proto,
+							&prn->p, zvrf, re);
 			}
-		}
+		} else
+			at_least_one +=
+				zebra_rnh_apply_nht_rmap_nhg(&re->nhe->nhg, afi,
+							     proto, &prn->p,
+							     zvrf, re);
 	}
 	return (at_least_one);
 }
@@ -480,6 +515,18 @@ bool rnh_nexthop_valid(const struct route_entry *re, const struct nexthop *nh)
 		&& !CHECK_FLAG(nh->flags, RNH_INVALID_NH_FLAGS));
 }
 
+static const struct nexthop *
+check_rnh_nexthop_valid(const struct route_entry *re, struct nexthop_group *nhg)
+{
+	const struct nexthop *nexthop = NULL;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop)) {
+		if (rnh_nexthop_valid(re, nexthop))
+			return nexthop;
+	}
+	return NULL;
+}
+
 /*
  * Determine whether an re's nexthops are valid for tracking.
  */
@@ -488,20 +535,35 @@ static bool rnh_check_re_nexthops(const struct route_entry *re,
 {
 	bool ret = false;
 	const struct nexthop *nexthop = NULL;
+	struct nexthop_group_id *nhgid;
 
 	/* Check route's nexthops */
-	for (ALL_NEXTHOPS(re->nhe->nhg, nexthop)) {
-		if (rnh_nexthop_valid(re, nexthop))
-			break;
-	}
+	if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		for (nhgid = re->nhe->nhg.group; nhgid; nhgid = nhgid->next) {
+			if (nhgid->nhg &&
+			    (nexthop = check_rnh_nexthop_valid(re, nhgid->nhg)))
+				break;
+		}
+	} else
+		nexthop = check_rnh_nexthop_valid(re, &re->nhe->nhg);
 
 	/* Check backup nexthops, if any. */
 	if (nexthop == NULL && re->nhe->backup_info &&
 	    re->nhe->backup_info->nhe) {
-		for (ALL_NEXTHOPS(re->nhe->backup_info->nhe->nhg, nexthop)) {
-			if (rnh_nexthop_valid(re, nexthop))
-				break;
-		}
+		if (CHECK_FLAG(re->nhe->backup_info->nhe->nhg.flags,
+			       NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = re->nhe->backup_info->nhe->nhg.group;
+			     nhgid; nhgid = nhgid->next) {
+				if (nhgid->nhg &&
+				    (nexthop =
+					     check_rnh_nexthop_valid(re,
+								     nhgid->nhg)))
+					break;
+			}
+		} else
+			nexthop = check_rnh_nexthop_valid(re,
+							  &re->nhe->backup_info
+								   ->nhe->nhg);
 	}
 
 	if (nexthop == NULL) {
@@ -1135,17 +1197,37 @@ static bool compare_state(struct route_entry *r1,
 	return false;
 }
 
+static int zebra_send_rnh_update_nhg(struct stream *s, struct route_entry *re,
+				     struct nexthop_group *nhg, uint32_t message)
+{
+	struct nexthop *nh;
+	int ret;
+	int num = 0;
+	struct zapi_nexthop znh;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nh))
+		if (rnh_nexthop_valid(re, nh)) {
+			zapi_nexthop_from_nexthop(&znh, nh);
+			ret = zapi_nexthop_encode(s, &znh, 0, message);
+			if (ret < 0)
+				goto failure;
+			num++;
+		}
+	return num;
+failure:
+	return -1;
+}
+
 int zebra_send_rnh_update(struct rnh *rnh, struct zserv *client,
 			  vrf_id_t vrf_id, uint32_t srte_color)
 {
 	struct stream *s = NULL;
 	struct route_entry *re;
 	unsigned long nump;
-	uint8_t num;
-	struct nexthop *nh;
+	int num;
 	struct route_node *rn;
-	int ret;
 	uint32_t message = 0;
+	struct nexthop_group_id *nhgid;
 
 	rn = rnh->node;
 	re = rnh->state;
@@ -1203,7 +1285,6 @@ int zebra_send_rnh_update(struct rnh *rnh, struct zserv *client,
 		stream_putl(s, srte_color);
 
 	if (re) {
-		struct zapi_nexthop znh;
 		struct nexthop_group *nhg;
 
 		stream_putc(s, re->type);
@@ -1215,32 +1296,44 @@ int zebra_send_rnh_update(struct rnh *rnh, struct zserv *client,
 		stream_putc(s, 0);
 
 		nhg = rib_get_fib_nhg(re);
-		for (ALL_NEXTHOPS_PTR(nhg, nh))
-			if (rnh_nexthop_valid(re, nh)) {
-				zapi_nexthop_from_nexthop(&znh, nh);
-				ret = zapi_nexthop_encode(s, &znh, 0, message);
-				if (ret < 0)
-					goto failure;
-
-				num++;
+		if (CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = re->nhe->nhg.group; nhgid;
+			     nhgid = nhgid->next) {
+				if (nhgid->nhg) {
+					num += zebra_send_rnh_update_nhg(s, re,
+									 nhg,
+									 message);
+					if (num < 0)
+						goto failure;
+				}
 			}
+		} else {
+			num += zebra_send_rnh_update_nhg(s, re, nhg, message);
+			if (num < 0)
+				goto failure;
+		}
 
 		nhg = rib_get_fib_backup_nhg(re);
 		if (nhg) {
-			for (ALL_NEXTHOPS_PTR(nhg, nh))
-				if (rnh_nexthop_valid(re, nh)) {
-					zapi_nexthop_from_nexthop(&znh, nh);
-					ret = zapi_nexthop_encode(
-						s, &znh, 0 /* flags */,
-						0 /* message */);
-					if (ret < 0)
-						goto failure;
-
-					num++;
+			if (CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+				for (nhgid = re->nhe->nhg.group; nhgid;
+				     nhgid = nhgid->next) {
+					if (nhgid->nhg) {
+						num += zebra_send_rnh_update_nhg(
+							s, re, nhg,
+							0 /* message */);
+						if (num < 0)
+							goto failure;
+					}
 				}
+			} else {
+				num += zebra_send_rnh_update_nhg(s, re, nhg,
+								 0 /* message */);
+				if (num < 0)
+					goto failure;
+			}
 		}
-
-		stream_putc_at(s, nump, num);
+		stream_putc_at(s, nump, (uint8_t)num);
 	} else {
 		stream_putc(s, 0); // type
 		stream_putw(s, 0); // instance
