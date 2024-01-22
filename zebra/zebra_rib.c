@@ -687,25 +687,38 @@ int zebra_rib_labeled_unicast(struct route_entry *re)
 	return _zebra_rib_labeled_unicast(&re->nhe->nhg);
 }
 
+
+static void rib_install_kernel_nhg(struct nexthop_group *nhg)
+{
+	struct nexthop *nexthop;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop))
+		SET_FLAG(nexthop->flags, NEXTHOP_FLAG_FIB);
+}
+
 /* Update flag indicates whether this is a "replace" or not. Currently, this
  * is only used for IPv4.
  */
 void rib_install_kernel(struct route_node *rn, struct route_entry *re,
 			struct route_entry *old)
 {
-	struct nexthop *nexthop;
 	struct rib_table_info *info = srcdest_rnode_table_info(rn);
 	struct zebra_vrf *zvrf = zebra_vrf_lookup_by_id(re->vrf_id);
 	const struct prefix *p, *src_p;
 	enum zebra_dplane_result ret;
-
+	struct nexthop_group_id *nhgid;
 	rib_dest_t *dest = rib_dest_from_rnode(rn);
 
 	srcdest_rnode_prefixes(rn, &p, &src_p);
 
 	if (info->safi != SAFI_UNICAST) {
-		for (ALL_NEXTHOPS(re->nhe->nhg, nexthop))
-			SET_FLAG(nexthop->flags, NEXTHOP_FLAG_FIB);
+		if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = re->nhe->nhg.group; nhgid;
+			     nhgid = nhgid->next)
+				if (nhgid->nhg)
+					rib_install_kernel_nhg(nhgid->nhg);
+		} else
+			rib_install_kernel_nhg(&re->nhe->nhg);
 		return;
 	}
 
