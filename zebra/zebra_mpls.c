@@ -147,41 +147,17 @@ static void clear_nhlfe_installed(struct zebra_lsp *lsp)
 	}
 }
 
-/*
- * Install label forwarding entry based on labeled-route entry.
- */
-static int lsp_install(struct zebra_vrf *zvrf, mpls_label_t label,
-		       struct route_node *rn, struct route_entry *re)
+static int lsp_install_nhg(struct nexthop_group *nhg, struct route_entry *re,
+			   struct zebra_lsp *lsp, int *changed, int *added)
 {
-	struct hash *lsp_table;
-	struct zebra_ile tmp_ile;
-	struct zebra_lsp *lsp;
+	char buf[BUFSIZ];
 	struct zebra_nhlfe *nhlfe;
 	struct nexthop *nexthop;
 	enum lsp_types_t lsp_type;
-	char buf[BUFSIZ];
-	int added, changed;
-
-	/* Lookup table. */
-	lsp_table = zvrf->lsp_table;
-	if (!lsp_table)
-		return -1;
 
 	lsp_type = lsp_type_from_re_type(re->type);
-	added = changed = 0;
 
-	/* Locate or allocate LSP entry. */
-	tmp_ile.in_label = label;
-	lsp = hash_get(lsp_table, &tmp_ile, lsp_alloc);
-
-	/* For each active nexthop, create NHLFE. Note that we deliberately skip
-	 * recursive nexthops right now, because intermediate hops won't
-	 * understand
-	 * the label advertised by the recursive nexthop (plus we don't have the
-	 * logic yet to push multiple labels).
-	 */
-	for (nexthop = re->nhe->nhg.nexthop;
-	     nexthop; nexthop = nexthop->next) {
+	for (nexthop = nhg->nexthop; nexthop; nexthop = nexthop->next) {
 		/* Skip inactive and recursive entries. */
 		if (!CHECK_FLAG(nexthop->flags, NEXTHOP_FLAG_ACTIVE))
 			continue;
@@ -209,7 +185,8 @@ static int lsp_install(struct zebra_vrf *zvrf, mpls_label_t label,
 			/* Update out label, trigger processing. */
 			nhlfe_out_label_update(nhlfe, nexthop->nh_label);
 			SET_FLAG(nhlfe->flags, NHLFE_FLAG_CHANGED);
-			changed++;
+			if (changed)
+				(*changed)++;
 		} else {
 			/* Add LSP entry to this nexthop */
 			nhlfe = nhlfe_add(
@@ -232,8 +209,56 @@ static int lsp_install(struct zebra_vrf *zvrf, mpls_label_t label,
 
 			/* Mark NHLFE as changed. */
 			SET_FLAG(nhlfe->flags, NHLFE_FLAG_CHANGED);
-			added++;
+			if (added)
+				(*added)++;
 		}
+	}
+	return 0;
+}
+
+
+/*
+ * Install label forwarding entry based on labeled-route entry.
+ */
+static int lsp_install(struct zebra_vrf *zvrf, mpls_label_t label,
+		       struct route_node *rn, struct route_entry *re)
+{
+	struct hash *lsp_table;
+	struct zebra_ile tmp_ile;
+	struct zebra_lsp *lsp;
+	int added, changed;
+	struct nexthop_group_id *nhgid;
+	int ret;
+
+	/* Lookup table. */
+	lsp_table = zvrf->lsp_table;
+	if (!lsp_table)
+		return -1;
+
+	/* Locate or allocate LSP entry. */
+	tmp_ile.in_label = label;
+	lsp = hash_get(lsp_table, &tmp_ile, lsp_alloc);
+
+	/* For each active nexthop, create NHLFE. Note that we deliberately skip
+	 * recursive nexthops right now, because intermediate hops won't
+	 * understand
+	 * the label advertised by the recursive nexthop (plus we don't have the
+	 * logic yet to push multiple labels).
+	 */
+
+	if (CHECK_FLAG(re->nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		for (nhgid = re->nhe->nhg.group; nhgid; nhgid = nhgid->next) {
+			if (nhgid->nhg) {
+				ret = lsp_install_nhg(nhgid->nhg, re, lsp,
+						      &changed, &added);
+				if (ret < 0)
+					return ret;
+			}
+		}
+	} else {
+		ret = lsp_install_nhg(&re->nhe->nhg, re, lsp, &changed, &added);
+		if (ret < 0)
+			return ret;
 	}
 
 	/* Queue LSP for processing if necessary. If no NHLFE got added (special
