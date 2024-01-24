@@ -3176,6 +3176,32 @@ done:
 	return i;
 }
 
+static void zebra_nhg_update_fib_flag_nhg(enum dplane_op_e op,
+					  struct nexthop_group *nhg)
+{
+	if (op == DPLANE_OP_NH_INSTALL || op == DPLANE_OP_NH_UPDATE)
+		zebra_rib_install_kernel_nhg(nhg, true);
+	else
+		zebra_rib_install_kernel_nhg(nhg, false);
+}
+
+static void zebra_nhg_update_fib_flag(enum dplane_op_e op,
+				      struct nhg_hash_entry *nhe)
+{
+	struct nexthop_group_id *nhgroup = NULL;
+	struct nhg_hash_entry *nhe_tmp;
+
+	if (CHECK_FLAG(nhe->nhg.flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+		for (nhgroup = nhe->nhg.group; nhgroup;
+		     nhgroup = nhgroup->next) {
+			nhe_tmp = zebra_nhg_lookup_id(nhgroup->id_grp);
+			if (nhe_tmp)
+				zebra_nhg_update_fib_flag_nhg(op, &nhe_tmp->nhg);
+		}
+	} else
+		zebra_nhg_update_fib_flag_nhg(op, &nhe->nhg);
+}
+
 /* Convert a nhe into a group array */
 uint8_t zebra_nhg_nhe2grp(struct nh_grp *grp, struct nhg_hash_entry *nhe,
 			  int max_num)
@@ -3297,12 +3323,13 @@ void zebra_nhg_dplane_result(struct zebra_dplane_ctx *ctx)
 		case ZEBRA_DPLANE_REQUEST_SUCCESS:
 			SET_FLAG(nhe->flags, NEXTHOP_GROUP_INSTALLED);
 			zebra_nhg_handle_install(nhe, true);
-
-			/* If daemon nhg, send it an update */
-			if (PROTO_OWNED(nhe))
+			if (PROTO_OWNED(nhe)) {
+				zebra_nhg_update_fib_flag(op, nhe);
+				/* If daemon nhg, send it an update */
 				zsend_nhg_notify(nhe->type, nhe->zapi_instance,
 						 nhe->zapi_session, nhe->id,
 						 ZAPI_NHG_INSTALLED);
+			}
 			break;
 		case ZEBRA_DPLANE_REQUEST_FAILURE:
 			UNSET_FLAG(nhe->flags, NEXTHOP_GROUP_INSTALLED);
