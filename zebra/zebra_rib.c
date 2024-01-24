@@ -675,12 +675,16 @@ int zebra_rib_labeled_unicast(struct route_entry *re)
 }
 
 
-static void rib_install_kernel_nhg(struct nexthop_group *nhg)
+void zebra_rib_install_kernel_nhg(struct nexthop_group *nhg, bool install)
 {
 	struct nexthop *nexthop;
 
-	for (ALL_NEXTHOPS_PTR(nhg, nexthop))
-		SET_FLAG(nexthop->flags, NEXTHOP_FLAG_FIB);
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop)) {
+		if (install)
+			SET_FLAG(nexthop->flags, NEXTHOP_FLAG_FIB);
+		else
+			UNSET_FLAG(nexthop->flags, NEXTHOP_FLAG_FIB);
+	}
 }
 
 /* Update flag indicates whether this is a "replace" or not. Currently, this
@@ -703,9 +707,10 @@ void rib_install_kernel(struct route_node *rn, struct route_entry *re,
 			for (nhgid = re->nhe->nhg.group; nhgid;
 			     nhgid = nhgid->next)
 				if (nhgid->nhg)
-					rib_install_kernel_nhg(nhgid->nhg);
+					zebra_rib_install_kernel_nhg(nhgid->nhg,
+								     true);
 		} else
-			rib_install_kernel_nhg(&re->nhe->nhg);
+			zebra_rib_install_kernel_nhg(&re->nhe->nhg, true);
 		return;
 	}
 
