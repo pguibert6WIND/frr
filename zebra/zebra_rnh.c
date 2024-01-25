@@ -1589,10 +1589,28 @@ void show_route_nexthop_helper(struct vty *vty, const struct route_entry *re,
 	}
 }
 
+static void show_nexthop_group_helper_nhg(struct vty *vty,
+					  json_object *json_nexthop_array,
+					  const struct nexthop_group *nhg)
+{
+	struct nexthop *nexthop;
+	json_object *json_nexthop = NULL;
+
+	for (nexthop = nhg->nexthop; nexthop; nexthop = nexthop->next) {
+		if (json_nexthop_array) {
+			json_nexthop = json_object_new_object();
+			json_object_array_add(json_nexthop_array, json_nexthop);
+			show_nexthop_json_helper(json_nexthop, nexthop, NULL);
+		} else {
+			show_route_nexthop_helper(vty, NULL, nexthop);
+			vty_out(vty, "\n");
+		}
+	}
+}
+
 static void print_rnh(struct route_node *rn, struct vty *vty, json_object *json)
 {
 	struct rnh *rnh;
-	struct nexthop *nexthop;
 	struct listnode *node;
 	struct zserv *client;
 	char buf[BUFSIZ];
@@ -1600,7 +1618,7 @@ static void print_rnh(struct route_node *rn, struct vty *vty, json_object *json)
 	json_object *json_client_array = NULL;
 	json_object *json_client = NULL;
 	json_object *json_nexthop_array = NULL;
-	json_object *json_nexthop = NULL;
+	struct nexthop_group_id *nhgid;
 
 	rnh = rn->info;
 
@@ -1637,18 +1655,18 @@ static void print_rnh(struct route_node *rn, struct vty *vty, json_object *json)
 			vty_out(vty, " resolved via %s\n",
 				zebra_route_string(rnh->state->type));
 
-		for (nexthop = rnh->state->nhe->nhg.nexthop; nexthop;
-		     nexthop = nexthop->next) {
-			if (json) {
-				json_nexthop = json_object_new_object();
-				json_object_array_add(json_nexthop_array,
-						      json_nexthop);
-				show_nexthop_json_helper(json_nexthop, nexthop,
-							 NULL);
-			} else {
-				show_route_nexthop_helper(vty, NULL, nexthop);
-				vty_out(vty, "\n");
+		if (CHECK_FLAG(rnh->state->nhe->nhg.flags,
+			       NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = rnh->state->nhe->nhg.group; nhgid;
+			     nhgid = nhgid->next) {
+				if (nhgid->nhg)
+					show_nexthop_group_helper_nhg(vty,
+								      json_nexthop_array,
+								      nhgid->nhg);
 			}
+		} else {
+			show_nexthop_group_helper_nhg(vty, json_nexthop_array,
+						      &rnh->state->nhe->nhg);
 		}
 	} else {
 		if (json)
