@@ -645,6 +645,19 @@ int zsend_redistribute_route(int cmd, struct zserv *client,
 	return zserv_send_message(client, s);
 }
 
+static int zserv_encode_valid_nhg(struct stream *s, struct nexthop_group *nhg,
+				  struct route_entry *re)
+{
+	struct nexthop *nexthop;
+	int num = 0;
+
+	for (ALL_NEXTHOPS_PTR(nhg, nexthop)) {
+		if (rnh_nexthop_valid(re, nexthop))
+			num += zserv_encode_nexthop(s, nexthop);
+	}
+	return num;
+}
+
 /*
  * Modified version of zsend_ipv4_nexthop_lookup(): Query unicast rib if
  * nexthop is not found on mrib. Returns both route metric and protocol
@@ -665,7 +678,7 @@ static int zsend_nexthop_lookup_mrib(struct zserv *client, struct ipaddr *addr,
 	struct stream *s;
 	unsigned long nump;
 	uint8_t num;
-	struct nexthop *nexthop;
+	struct nexthop_group_id *nhgid;
 
 	/* Get output stream. */
 	s = stream_new(ZEBRA_MAX_PACKET_SIZ);
@@ -686,10 +699,15 @@ static int zsend_nexthop_lookup_mrib(struct zserv *client, struct ipaddr *addr,
 		/* reserve room for nexthop_num */
 		stream_putc(s, 0);
 		nhg = rib_get_fib_nhg(re);
-		for (ALL_NEXTHOPS_PTR(nhg, nexthop)) {
-			if (rnh_nexthop_valid(re, nexthop))
-				num += zserv_encode_nexthop(s, nexthop);
-		}
+		if (CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+			for (nhgid = nhg->group; nhgid; nhgid = nhgid->next) {
+				if (nhgid->nhg)
+					num += zserv_encode_valid_nhg(s,
+								      nhgid->nhg,
+								      re);
+			}
+		} else
+			num += zserv_encode_valid_nhg(s, nhg, re);
 
 		/* store nexthop_num */
 		stream_putc_at(s, nump, num);
