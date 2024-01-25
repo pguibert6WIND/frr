@@ -2239,6 +2239,37 @@ zebra_nhg_connected_ifindex(struct route_node *rn, struct route_entry *match,
 	return match;
 }
 
+static void nexthop_active_resolve_nhg(struct nexthop_group *nhg,
+				       struct nexthop *nexthop, afi_t afi,
+				       struct route_entry *match, int *resolved,
+				       struct nhg_hash_entry *nhe)
+{
+	struct nexthop *newhop;
+	struct nexthop *resolver;
+	struct backup_nh_map_s map = {};
+
+	for (ALL_NEXTHOPS_PTR(nhg, newhop)) {
+		if (!nexthop_valid_resolve(nexthop, newhop))
+			continue;
+
+		if (IS_ZEBRA_DEBUG_NHG_DETAIL)
+			zlog_debug("%s: RECURSIVE match %p (%pNG), newhop %pNHv",
+				   __func__, match, match->nhe, newhop);
+
+		SET_FLAG(nexthop->flags, NEXTHOP_FLAG_RECURSIVE);
+		resolver = nexthop_set_resolved(afi, newhop, nexthop, NULL);
+		if (resolved)
+			*resolved = 1;
+
+		/* If there are backup nexthops, capture
+		 * that info with the resolving nexthop.
+		 */
+		if (resolver && newhop->backup_num > 0) {
+			resolve_backup_nexthops(newhop, match->nhe, resolver,
+						nhe, &map);
+		}
+	}
+}
 /*
  * Given a nexthop we need to properly recursively resolve,
  * do a table lookup to find and match if at all possible.
@@ -2261,6 +2292,7 @@ static int nexthop_active(struct nexthop *nexthop, struct nhg_hash_entry *nhe,
 	struct in_addr local_ipv4;
 	struct in_addr *ipv4;
 	afi_t afi = AFI_IP;
+	struct nexthop_group_id *nhgid;
 
 	/* Reset some nexthop attributes that we'll recompute if necessary */
 	if ((nexthop->type == NEXTHOP_TYPE_IPV4)
@@ -2506,8 +2538,6 @@ static int nexthop_active(struct nexthop *nexthop, struct nhg_hash_entry *nhe,
 			return 1;
 		} else if (match && CHECK_FLAG(flags, ZEBRA_FLAG_ALLOW_RECURSION)) {
 			struct nexthop_group *nhg;
-			struct nexthop *resolver;
-			struct backup_nh_map_s map = {};
 
 			resolved = 0;
 
@@ -2552,32 +2582,20 @@ static int nexthop_active(struct nexthop *nexthop, struct nhg_hash_entry *nhe,
 			 * only backups are installed.
 			 */
 			nhg = rib_get_fib_nhg(match);
-			for (ALL_NEXTHOPS_PTR(nhg, newhop)) {
-				if (!nexthop_valid_resolve(nexthop, newhop))
-					continue;
-
-				if (IS_ZEBRA_DEBUG_NHG_DETAIL)
-					zlog_debug(
-						"%s: RECURSIVE match %p (%pNG), newhop %pNHv",
-						__func__, match, match->nhe,
-						newhop);
-
-				SET_FLAG(nexthop->flags,
-					 NEXTHOP_FLAG_RECURSIVE);
-				resolver = nexthop_set_resolved(afi, newhop,
-								nexthop, NULL);
-				resolved = 1;
-
-				/* If there are backup nexthops, capture
-				 * that info with the resolving nexthop.
-				 */
-				if (resolver && newhop->backup_num > 0) {
-					resolve_backup_nexthops(newhop,
-								match->nhe,
-								resolver, nhe,
-								&map);
-				}
-			}
+			if (CHECK_FLAG(nhg->flags, NEXTHOP_GROUP_TYPE_GROUP)) {
+				for (nhgid = nhg->group; nhgid;
+				     nhgid = nhgid->next)
+					if (nhgid->nhg)
+						nexthop_active_resolve_nhg(nhgid->nhg,
+									   nexthop,
+									   afi,
+									   match,
+									   &resolved,
+									   nhe);
+			} else
+				nexthop_active_resolve_nhg(nhg, nexthop, afi,
+							   match, &resolved,
+							   nhe);
 
 			/* Examine installed backup nexthops, if any. There
 			 * are only installed backups *if* there is a
