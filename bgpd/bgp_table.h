@@ -91,6 +91,9 @@ struct bgp_dest {
 #define BGP_NODE_LABEL_REQUESTED        (1 << 7)
 #define BGP_NODE_SOFT_RECONFIG (1 << 8)
 #define BGP_NODE_PROCESS_CLEAR (1 << 9)
+#define BGP_NODE_FIB_UPDATE_UNNEEDED (1 << 10)
+/* this flag overrides previous one, when present */
+#define BGP_NODE_FIB_UPDATE_OVERRIDE (1 << 11)
 
 	struct bgp_addpath_node_data tx_addpath;
 
