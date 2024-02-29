@@ -46,11 +46,7 @@ sys.path.append(os.path.join(CWD, "../"))
 # Import topogen and topotest helpers
 from lib import topotest
 from lib.common_config import step
-from lib.nexthopgroup import (
-    route_get_nhg_id,
-    verify_nexthop_group,
-    verify_route_nexthop_group,
-)
+from lib.nexthopgroup import route_check_nhg_id_is_protocol
 from lib.topogen import Topogen, TopoRouter, get_topogen
 from lib.topolog import logger
 
@@ -295,19 +291,6 @@ def iproute2_check_path_selection(
             return f"problem: invalid nhid {entry['nhid']}, expected {nhg_id}"
 
     return topotest.json_cmp(output, expected)
-
-
-def route_check_nhg_id_is_protocol(ipaddr_str, rname, vrf_name=None, protocol="bgp"):
-    tgen = get_topogen()
-    nhg_id = route_get_nhg_id(ipaddr_str, rname, vrf_name=vrf_name)
-    output = tgen.gears["r1"].vtysh_cmd(
-        "show nexthop-group rib %d" % nhg_id,
-    )
-    assert f"ID: {nhg_id} ({protocol})" in output, (
-        "NHG %d not found in 'show nexthop-group rib ID json" % nhg_id
-    )
-
-    return nhg_id
 
 
 def test_bgp_ipv4_route_presence():
