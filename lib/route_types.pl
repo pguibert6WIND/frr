@@ -115,7 +115,8 @@ sub codelist {
 		$str .= $s;
 	}
 	$str =~ s/ $//;
-	push @lines, $str . "\\n\" \\\n";
+	push @lines, $str . " p - SR-TE,";
+	push @lines, "\\n\" \\\n";
 	push @lines, "  \"       > - selected route, * - FIB route, q - queued, r - rejected, b - backup\\n\"";
 	push @lines, "  \"       t - trapped, o - offload failure\\n\\n\"";
 
@@ -136,7 +137,7 @@ sub collect {
 		next if ($ip_prot == 1 && $daemon eq "zebra" && $protodetail{$p}->{"cname"} eq "connected");
 		next if ($ip_prot == 1 && $daemon eq "zebra" && $protodetail{$p}->{"cname"} eq "local");
 		next if ($protodetail{$p}->{"daemon"} eq $daemon && $daemon ne "zebra");
-		next if ($protodetail{$p}->{"restrict2"} ne "" && 
+		next if ($protodetail{$p}->{"restrict2"} ne "" &&
 		         $protodetail{$p}->{"restrict2"} ne $daemon);
 		next if ($protodetail{$p}->{"redist"} eq 0);
 		next unless (grep $_ eq $protodetail{$p}->{"enabled"}, @enabled);
@@ -215,4 +216,3 @@ print <<EOF;
 
 #endif /* _FRR_ROUTE_TYPES_H */
 EOF
-
