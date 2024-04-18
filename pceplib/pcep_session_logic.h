@@ -89,6 +89,12 @@ typedef struct pcep_configuration_ {
 	 * sub-TLV in a Path Setup Type Capability TLV with a PST = 1,
 	 * Path is setup using SR TE. */
 	bool support_sr_te_pst;
+	/* draft-ietf-pce-segment-routing-ipv6:
+	 * A PCEP speaker indicates its support of the function described in
+	 * this document by sending a PATH-SETUP-TYPE-CAPABILITY TLV in the OPEN
+	 * object with this new PST "3" included in the PST list.
+	 */
+	bool support_srv6_te_pst;
 	/* Used in the SR PCE Capability sub-TLV */
 	bool pcc_can_resolve_nai_to_sid;
 	/* Used in the SR TE Capability sub-TLV, 0 means there are no max sid

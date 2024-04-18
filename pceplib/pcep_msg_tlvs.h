@@ -164,6 +164,8 @@ struct pcep_object_tlv_lsp_error_code {
 /* Path Setup Type TLV, Used in RP and SRP Object. RFCs: 8408,
  * draft-ietf-pce-segment-routing-16 */
 #define SR_TE_PST 1
+/* draft-ietf-pce-segment-routing-ipv6 */
+#define SRV6_TE_PST 3
 
 struct pcep_object_tlv_path_setup_type {
 	struct pcep_object_tlv_header header;

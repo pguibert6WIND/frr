@@ -121,6 +121,7 @@ static const char PCEP_CLI_CAP_LSP_DELTA[] = " [LSP Delta Sync]";
 static const char PCEP_CLI_CAP_PCE_TRIGGERED[] =
 	" [PCE triggered Initial Sync]";
 static const char PCEP_CLI_CAP_SR_TE_PST[] = " [SR TE PST]";
+static const char PCEP_CLI_CAP_SRV6_TE_PST[] = " [SRV6 TE PST]";
 static const char PCEP_CLI_CAP_PCC_RESOLVE_NAI[] =
 	" [PCC can resolve NAI to SID]";
 static const char PCEP_CLI_CAP_PCC_INITIATED[] = " [PCC Initiated LSPs]";
@@ -1185,6 +1186,9 @@ static void print_pcep_capabilities(char *buf, size_t buf_len,
 	}
 	if (config->support_sr_te_pst) {
 		csnprintfrr(buf, buf_len, "%s", PCEP_CLI_CAP_SR_TE_PST);
+	}
+	if (config->support_srv6_te_pst) {
+		csnprintfrr(buf, buf_len, "%s", PCEP_CLI_CAP_SRV6_TE_PST);
 	}
 	if (config->pcc_can_resolve_nai_to_sid) {
 		csnprintfrr(buf, buf_len, "%s", PCEP_CLI_CAP_PCC_RESOLVE_NAI);

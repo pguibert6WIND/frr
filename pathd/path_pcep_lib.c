@@ -165,6 +165,7 @@ pcep_lib_connect(struct ipaddr *src_addr, int src_port, struct ipaddr *dst_addr,
 	config->support_lsp_delta_sync = false;
 	config->support_pce_triggered_initial_sync = false;
 	config->support_sr_te_pst = true;
+	config->support_srv6_te_pst = true;
 	config->pcc_can_resolve_nai_to_sid = false;
 
 	config->max_sid_depth = msd;
@@ -325,6 +326,8 @@ static struct pcep_object_rp *create_rp(uint32_t reqid)
 	rp_tlvs = dll_initialize();
 	setup_type_tlv = pcep_tlv_create_path_setup_type(SR_TE_PST);
 	dll_append(rp_tlvs, setup_type_tlv);
+	setup_type_tlv = pcep_tlv_create_path_setup_type(SRV6_TE_PST);
+	dll_append(rp_tlvs, setup_type_tlv);
 
 	rp = pcep_obj_create_rp(0, false, false, false, true, reqid, rp_tlvs);
 
@@ -390,6 +393,9 @@ struct pcep_message *pcep_lib_format_error(int error_type, int error_value,
 	srp_tlvs = dll_initialize();
 	tlv = (struct pcep_object_tlv_header *)pcep_tlv_create_path_setup_type(
 		SR_TE_PST);
+	dll_append(srp_tlvs, tlv);
+	tlv = (struct pcep_object_tlv_header *)pcep_tlv_create_path_setup_type(
+		SRV6_TE_PST);
 	dll_append(srp_tlvs, tlv);
 	srp = pcep_obj_create_srp(path->do_remove, path->srp_id, srp_tlvs);
 	dll_append(objs, srp);
@@ -609,6 +615,10 @@ double_linked_list *pcep_lib_format_path(struct pcep_caps *caps,
 		srp_tlvs = dll_initialize();
 		tlv = (struct pcep_object_tlv_header *)
 			pcep_tlv_create_path_setup_type(SR_TE_PST);
+		assert(tlv != NULL);
+		dll_append(srp_tlvs, tlv);
+		tlv = (struct pcep_object_tlv_header *)
+			pcep_tlv_create_path_setup_type(SRV6_TE_PST);
 		assert(tlv != NULL);
 		dll_append(srp_tlvs, tlv);
 		srp = pcep_obj_create_srp(path->do_remove, path->srp_id,

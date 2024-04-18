@@ -560,6 +560,9 @@ struct pcep_message *create_pcep_open(pcep_session *session)
 	 * message,
 	 * and the PCE will send an open with the config the PCC should use. */
 	double_linked_list *tlv_list = dll_initialize();
+	double_linked_list *pst_list = NULL;
+	double_linked_list *sub_tlv_list = NULL;
+
 	if (session->pcc_config.support_stateful_pce_lsp_update
 	    || session->pcc_config.support_pce_lsp_instantiation
 	    || session->pcc_config.support_include_db_version
@@ -596,6 +599,10 @@ struct pcep_message *create_pcep_open(pcep_session *session)
 		}
 	}
 
+	if (session->pcc_config.support_sr_te_pst ||
+	    session->pcc_config.support_srv6_te_pst)
+		pst_list = dll_initialize();
+
 	if (session->pcc_config.support_sr_te_pst) {
 		bool flag_n = false;
 		bool flag_x = false;
@@ -611,7 +618,6 @@ struct pcep_message *create_pcep_open(pcep_session *session)
 				flag_n, flag_x,
 				session->pcc_config.max_sid_depth);
 
-		double_linked_list *sub_tlv_list = NULL;
 		if (session->pcc_config.pcep_msg_versioning
 			    ->draft_ietf_pce_segment_routing_07
 		    == true) {
@@ -628,11 +634,20 @@ struct pcep_message *create_pcep_open(pcep_session *session)
 		uint8_t *pst =
 			pceplib_malloc(PCEPLIB_MESSAGES, sizeof(uint8_t));
 		*pst = SR_TE_PST;
-		double_linked_list *pst_list = dll_initialize();
 		dll_append(pst_list, pst);
+	}
+
+	if (session->pcc_config.support_srv6_te_pst) {
+		uint8_t *pst =
+			pceplib_malloc(PCEPLIB_MESSAGES, sizeof(uint8_t));
+		*pst = SRV6_TE_PST;
+		dll_append(pst_list, pst);
+	}
+
+	if (session->pcc_config.support_sr_te_pst ||
+	    session->pcc_config.support_srv6_te_pst)
 		dll_append(tlv_list, pcep_tlv_create_path_setup_type_capability(
 					     pst_list, sub_tlv_list));
-	}
 
 	struct pcep_message *open_msg = pcep_msg_create_open_with_tlvs(
 		session->pcc_config.keep_alive_seconds,
