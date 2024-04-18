@@ -21,6 +21,7 @@ void test_pcep_tlv_create_lsp_db_version(void);
 void test_pcep_tlv_create_path_setup_type(void);
 void test_pcep_tlv_create_path_setup_type_capability(void);
 void test_pcep_tlv_create_sr_pce_capability(void);
+void test_pcep_tlv_create_srv6_pce_capability(void);
 void test_pcep_tlv_create_symbolic_path_name(void);
 void test_pcep_tlv_create_ipv4_lsp_identifiers(void);
 void test_pcep_tlv_create_ipv6_lsp_identifiers(void);

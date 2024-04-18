@@ -97,9 +97,18 @@ typedef struct pcep_configuration_ {
 	bool support_srv6_te_pst;
 	/* Used in the SR PCE Capability sub-TLV */
 	bool pcc_can_resolve_nai_to_sid;
+	/* Used in the SRv6 PCE Capability sub-TLV */
+	bool pcc_can_resolve_nai_to_ipv6_sid;
 	/* Used in the SR TE Capability sub-TLV, 0 means there are no max sid
 	 * limits */
 	uint8_t max_sid_depth;
+	/* Used in the SRv6 TE Capability sub-TLV when value is different from 0
+	 * MSD definitions for SRv6 are in rfc9352, 4.
+	 */
+	uint8_t max_sid_depth_srv6_end_d;
+	uint8_t max_sid_depth_srv6_end_pop;
+	uint8_t max_sid_depth_srv6_h_encaps;
+	uint8_t max_sid_depth_srv6_segs_left;
 
 	/* If set to 0, then the default 4189 PCEP port will be used */
 	uint16_t dst_pcep_port;

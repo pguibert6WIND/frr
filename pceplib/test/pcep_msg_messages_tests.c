@@ -81,6 +81,8 @@ int main(int argc, char **argv)
 		    test_pcep_tlv_create_path_setup_type_capability);
 	CU_add_test(tlvs_suite, "test_pcep_tlv_create_sr_pce_capability",
 		    test_pcep_tlv_create_sr_pce_capability);
+	CU_add_test(tlvs_suite, "test_pcep_tlv_create_srv6_pce_capability",
+		    test_pcep_tlv_create_srv6_pce_capability);
 	CU_add_test(tlvs_suite, "test_pcep_tlv_create_symbolic_path_name",
 		    test_pcep_tlv_create_symbolic_path_name);
 	CU_add_test(tlvs_suite, "test_pcep_tlv_create_ipv4_lsp_identifiers",
