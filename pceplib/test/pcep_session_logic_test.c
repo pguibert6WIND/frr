@@ -198,6 +198,7 @@ void test_create_pcep_session_open_tlvs()
 	config.support_stateful_pce_lsp_update = true;
 	config.pcep_msg_versioning->draft_ietf_pce_segment_routing_07 = false;
 	config.support_sr_te_pst = false;
+	config.support_srv6_te_pst = false;
 
 	session = create_pcep_session(&config, &pce_ip);
 	CU_ASSERT_PTR_NOT_NULL(session);
@@ -276,6 +277,7 @@ void test_create_pcep_session_open_tlvs()
 	reset_mock_socket_comm_info();
 	mock_info->send_message_save_message = true;
 	config.support_sr_te_pst = true;
+	config.support_srv6_te_pst = true;
 
 	session = create_pcep_session(&config, &pce_ip);
 	CU_ASSERT_PTR_NOT_NULL(session);

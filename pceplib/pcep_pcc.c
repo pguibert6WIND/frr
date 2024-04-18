@@ -248,6 +248,8 @@ void send_pce_report_message(pcep_session *session)
 	double_linked_list *srp_tlv_list = dll_initialize();
 	dll_append(srp_tlv_list, pst_tlv);
 
+	pst_tlv = pcep_tlv_create_path_setup_type(SRV6_TE_PST);
+	dll_append(srp_tlv_list, pst_tlv);
 	/*
 	 * Create the SRP object
 	 */
