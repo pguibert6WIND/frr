@@ -61,6 +61,8 @@ static void _format_pcep_object_tlv_stateful_pce_capability(
 	int ps, struct pcep_object_tlv_stateful_pce_capability *tlv);
 static void _format_pcep_object_tlv_sr_pce_capability(
 	int ps, struct pcep_object_tlv_sr_pce_capability *tlv);
+static void _format_pcep_object_tlv_srv6_pce_capability(
+	int ps, struct pcep_object_tlv_srv6_pce_capability *tlv);
 static void _format_pcep_object_tlv_path_setup_type(
 	int ps, struct pcep_object_tlv_path_setup_type *tlv);
 
@@ -797,6 +799,8 @@ const char *pcep_tlv_type_name(enum pcep_object_tlv_types tlv_type)
 		return "SPEAKER_ENTITY_ID";
 	case PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY:
 		return "SR_PCE_CAPABILITY";
+	case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
+		return "SRV6_PCE_CAPABILITY";
 	case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE:
 		return "PATH_SETUP_TYPE";
 	case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY:
@@ -1737,6 +1741,11 @@ void _format_pcep_object_tlv_details(int ps,
 			ps,
 			(struct pcep_object_tlv_sr_pce_capability *)tlv_header);
 		break;
+	case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
+		_format_pcep_object_tlv_srv6_pce_capability(
+			ps,
+			(struct pcep_object_tlv_srv6_pce_capability *)tlv_header);
+		break;
 	case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE:
 		_format_pcep_object_tlv_path_setup_type(
 			ps,
@@ -1795,6 +1804,17 @@ void _format_pcep_object_tlv_sr_pce_capability(
 	PATHD_FORMAT("%*sflag_n: %u\n", ps, "", tlv->flag_n);
 	PATHD_FORMAT("%*sflag_x: %u\n", ps, "", tlv->flag_x);
 	PATHD_FORMAT("%*smax_sid_depth: %u\n", ps, "", tlv->max_sid_depth);
+}
+
+void _format_pcep_object_tlv_srv6_pce_capability(
+	int ps, struct pcep_object_tlv_srv6_pce_capability *tlv)
+{
+
+	PATHD_FORMAT("%*sflag_n: %u\n", ps, "", tlv->flag_n);
+	PATHD_FORMAT("%*smax_sid_depth_end_d: %u\n", ps, "", tlv->msd_end_d);
+	PATHD_FORMAT("%*smax_sid_depth_end_pop: %u\n", ps, "", tlv->msd_end_pop);
+	PATHD_FORMAT("%*smax_sid_depth_h_encaps: %u\n", ps, "", tlv->msd_h_encaps);
+	PATHD_FORMAT("%*smax_sid_depth_segs_left: %u\n", ps, "", tlv->msd_segs_left);
 }
 
 void _format_pcep_object_tlv_path_setup_type(

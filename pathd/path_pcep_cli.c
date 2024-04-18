@@ -2,6 +2,7 @@
 /*
  * Copyright (C) 2020 Volta Networks, Inc
  *                     Brady Johnson
+ * Copyright 2024 6WIND S.A.
  */
 
 #include <zebra.h>
@@ -13,6 +14,7 @@
 #include "libfrr.h"
 #include "printfrr.h"
 #include "lib/version.h"
+#include "lib/srv6.h"
 #include "northbound.h"
 #include "frr_pthread.h"
 #include "jhash.h"
@@ -97,6 +99,10 @@ static const char PCEP_VTYSH_ARG_IPV6[] = "ipv6";
 static const char PCEP_VTYSH_ARG_PORT[] = "port";
 static const char PCEP_VTYSH_ARG_PRECEDENCE[] = "precedence";
 static const char PCEP_VTYSH_ARG_MSD[] = "msd";
+static const char PCEP_VTYSH_ARG_MSD_SRV6_ENDD[] = "max-end-d";
+static const char PCEP_VTYSH_ARG_MSD_SRV6_ENDPOP[] = "max-end-pop";
+static const char PCEP_VTYSH_ARG_MSD_SRV6_HENCAPS[] = "max-h-encaps";
+static const char PCEP_VTYSH_ARG_MSD_SRV6_SEGSLEFT[] = "max-segs-left";
 static const char PCEP_VTYSH_ARG_KEEP_ALIVE[] = "keep-alive";
 static const char PCEP_VTYSH_ARG_TIMER[] = "timer";
 static const char PCEP_VTYSH_ARG_KEEP_ALIVE_MIN[] = "min-peer-keep-alive";
@@ -124,6 +130,8 @@ static const char PCEP_CLI_CAP_SR_TE_PST[] = " [SR TE PST]";
 static const char PCEP_CLI_CAP_SRV6_TE_PST[] = " [SRV6 TE PST]";
 static const char PCEP_CLI_CAP_PCC_RESOLVE_NAI[] =
 	" [PCC can resolve NAI to SID]";
+static const char PCEP_CLI_CAP_PCC_RESOLVE_SRV6_NAI[] =
+	" [PCC can resolve NAI to SRv6 SID]";
 static const char PCEP_CLI_CAP_PCC_INITIATED[] = " [PCC Initiated LSPs]";
 static const char PCEP_CLI_CAP_PCC_PCE_INITIATED[] =
 	" [PCC and PCE Initiated LSPs]";
@@ -162,6 +170,15 @@ struct pcep_config_group_opts *current_pcep_config_group_opts_g = NULL;
 struct pce_opts_cli *current_pce_opts_g = NULL;
 short pcc_msd_g = DEFAULT_PCC_MSD;
 bool pcc_msd_configured_g = false;
+
+short pcc_msd_srv6_end_d = SRV6_DEFAULT_MSD_END_D;
+short pcc_msd_srv6_h_encaps = SRV6_DEFAULT_MSD_H_ENCAPS;
+short pcc_msd_srv6_end_pop = SRV6_DEFAULT_MSD_END_POP;
+short pcc_msd_srv6_segs_left = SRV6_DEFAULT_MSD_SEGS_LEFT;
+bool pcc_msd_srv6_end_d_configured = false;
+bool pcc_msd_srv6_h_encaps_configured = false;
+bool pcc_msd_srv6_end_pop_configured = false;
+bool pcc_msd_srv6_segs_left_configured = false;
 
 static struct cmd_node pcep_node = {
 	.name = "srte pcep",
@@ -1021,9 +1038,53 @@ static int path_pcep_cli_pcc_delete(struct vty *vty)
 	/* Clear the pce_connections */
 	memset(&pce_connections_g, 0, sizeof(pce_connections_g));
 	pcc_msd_configured_g = false;
+	pcc_msd_srv6_end_d_configured = false;
+	pcc_msd_srv6_h_encaps_configured = false;
+	pcc_msd_srv6_end_pop_configured = false;
+	pcc_msd_srv6_segs_left_configured = false;
 
 	pcep_ctrl_remove_pcc(pcep_g->fpt, NULL);
 
+	return CMD_SUCCESS;
+}
+
+static int path_pcep_cli_pcc_pcc_msd_srv6_reset_max(struct vty *vty, const char *maxendd, const char *maxendpop,
+                                                   const char *maxhencaps, const char *maxsegsleft)
+{
+	if (maxendd)
+		pcc_msd_srv6_end_d_configured = false;
+
+	if (maxendpop)
+		pcc_msd_srv6_end_pop_configured = false;
+
+        if (maxhencaps)
+		pcc_msd_srv6_h_encaps_configured = false;
+
+	if (maxsegsleft)
+		pcc_msd_srv6_segs_left_configured = false;
+
+	return CMD_SUCCESS;
+}
+
+static int path_pcep_cli_pcc_pcc_msd_srv6_max(struct vty *vty, long maxendd, long maxendpop, long maxhencaps, long maxsegsleft)
+{
+	if (maxendd) {
+		pcc_msd_srv6_end_d_configured = true;
+		PCEP_VTYSH_INT_ARG_CHECK(PCEP_VTYSH_ARG_MSD_SRV6_ENDD, maxendd, pcc_msd_srv6_end_d, 0, 33);
+	}
+	if (maxendpop) {
+		pcc_msd_srv6_end_pop_configured = true;
+		PCEP_VTYSH_INT_ARG_CHECK(PCEP_VTYSH_ARG_MSD_SRV6_ENDPOP, maxendpop, pcc_msd_srv6_end_pop, 0, 33);
+	}
+	if (maxhencaps) {
+		pcc_msd_srv6_h_encaps_configured = true;
+		PCEP_VTYSH_INT_ARG_CHECK(PCEP_VTYSH_ARG_MSD_SRV6_HENCAPS, maxhencaps, pcc_msd_srv6_h_encaps, 0, 33);
+	}
+
+	if (maxsegsleft) {
+		pcc_msd_srv6_segs_left_configured = true;
+		PCEP_VTYSH_INT_ARG_CHECK(PCEP_VTYSH_ARG_MSD_SRV6_SEGSLEFT, maxsegsleft, pcc_msd_srv6_segs_left, 0, 33);
+	}
 	return CMD_SUCCESS;
 }
 
@@ -1062,6 +1123,10 @@ void reset_pcc_peer(const char *peer_name)
 	       &pce_opts_cli->pce_opts.config_opts.source_ip,
 	       sizeof(pcc_opts_copy->addr));
 	pcc_opts_copy->msd = pcc_msd_g;
+	pcc_opts_copy->msd_srv6_end_d = pcc_msd_srv6_end_d;
+	pcc_opts_copy->msd_srv6_end_pop = pcc_msd_srv6_h_encaps;
+	pcc_opts_copy->msd_srv6_h_encaps = pcc_msd_srv6_end_pop;
+	pcc_opts_copy->msd_srv6_segs_left = pcc_msd_srv6_segs_left;
 	pcc_opts_copy->port = pce_opts_cli->pce_opts.config_opts.source_port;
 	pcep_ctrl_update_pcc_options(pcep_g->fpt, pcc_opts_copy);
 
@@ -1117,6 +1182,10 @@ static int path_pcep_cli_pcc_pcc_peer(struct vty *vty, const char *peer_name,
 	       &pce_opts_cli->pce_opts.config_opts.source_ip,
 	       sizeof(pcc_opts_copy->addr));
 	pcc_opts_copy->msd = pcc_msd_g;
+	pcc_opts_copy->msd_srv6_end_d = pcc_msd_srv6_end_d;
+	pcc_opts_copy->msd_srv6_end_pop = pcc_msd_srv6_h_encaps;
+	pcc_opts_copy->msd_srv6_h_encaps = pcc_msd_srv6_end_pop;
+	pcc_opts_copy->msd_srv6_segs_left = pcc_msd_srv6_segs_left;
 	pcc_opts_copy->port = pce_opts_cli->pce_opts.config_opts.source_port;
 	if (pcep_ctrl_update_pcc_options(pcep_g->fpt, pcc_opts_copy)) {
 		return CMD_WARNING;
@@ -1161,6 +1230,10 @@ static int path_pcep_cli_pcc_pcc_peer_delete(struct vty *vty,
 static int path_pcep_cli_show_srte_pcep_pcc(struct vty *vty)
 {
 	vty_out(vty, "pcc msd %d\n", pcc_msd_g);
+	vty_out(vty, "pcc msd srv6 end-d %d\n", pcc_msd_srv6_end_d);
+	vty_out(vty, "pcc msd srv6 h-encaps %d\n", pcc_msd_srv6_h_encaps);
+	vty_out(vty, "pcc msd srv6 end-pop %d\n", pcc_msd_srv6_end_pop);
+	vty_out(vty, "pcc msd srv6 segs-left %d\n", pcc_msd_srv6_segs_left);
 
 	return CMD_SUCCESS;
 }
@@ -1192,6 +1265,9 @@ static void print_pcep_capabilities(char *buf, size_t buf_len,
 	}
 	if (config->pcc_can_resolve_nai_to_sid) {
 		csnprintfrr(buf, buf_len, "%s", PCEP_CLI_CAP_PCC_RESOLVE_NAI);
+	}
+	if (config->pcc_can_resolve_nai_to_ipv6_sid) {
+		csnprintfrr(buf, buf_len, "%s", PCEP_CLI_CAP_PCC_RESOLVE_SRV6_NAI);
 	}
 }
 
@@ -1769,7 +1845,9 @@ int pcep_cli_pcc_config_write(struct vty *vty)
 	int lines = 0;
 
 	/* The MSD, nor any PCE peers have been configured on the PCC */
-	if (!pcc_msd_configured_g && pce_connections_g.num_connections == 0) {
+	if (!pcc_msd_configured_g && pce_connections_g.num_connections == 0
+	    && !pcc_msd_srv6_end_d_configured && !pcc_msd_srv6_h_encaps_configured
+	    && !pcc_msd_srv6_end_pop_configured && !pcc_msd_srv6_segs_left_configured) {
 		return lines;
 	}
 
@@ -1779,6 +1857,23 @@ int pcep_cli_pcc_config_write(struct vty *vty)
 	/* Prepare the MSD, if present */
 	if (pcc_msd_configured_g) {
 		vty_out(vty, "    %s %d\n", PCEP_VTYSH_ARG_MSD, pcc_msd_g);
+		lines++;
+	}
+
+	if (pcc_msd_srv6_end_d_configured) {
+		vty_out(vty, "    %s %d\n", PCEP_VTYSH_ARG_MSD_SRV6_ENDD, pcc_msd_srv6_end_d);
+		lines++;
+	}
+	if (pcc_msd_srv6_end_pop_configured) {
+		vty_out(vty, "    %s %d\n", PCEP_VTYSH_ARG_MSD_SRV6_ENDPOP, pcc_msd_srv6_end_pop);
+		lines++;
+	}
+	if (pcc_msd_srv6_h_encaps_configured) {
+		vty_out(vty, "    %s %d\n", PCEP_VTYSH_ARG_MSD_SRV6_HENCAPS, pcc_msd_srv6_h_encaps);
+		lines++;
+	}
+	if (pcc_msd_srv6_segs_left_configured) {
+		vty_out(vty, "    %s %d\n", PCEP_VTYSH_ARG_MSD_SRV6_SEGSLEFT, pcc_msd_srv6_segs_left);
 		lines++;
 	}
 
@@ -2307,6 +2402,35 @@ DEFPY(no_pcep_cli_pcc_pcc_msd,
 	return path_pcep_cli_pcc_pcc_msd(vty, msd_str, msd, true);
 }
 
+DEFPY(pcep_cli_pcc_pcc_msd_srv6,
+      pcep_cli_pcc_pcc_msd_srv6_cmd,
+      "msd-srv6 [max-end-d (1-32)$maxendd] [max-end-pop (1-32)$maxendpop] [max-h-encaps (1-32)$maxhencaps] [max-segs-left (1-32)$maxsegsleft]",
+      "Maximum number of SIDs for SRv6\n"
+      "Maximum number of SIDs present in an SRH when performing decapsulation for SRv6\n"
+      "Maximum number of SIDs value\n"
+      "Maximum number of SIDs in the SRH to which the router can apply PSP or USP behaviors\n"
+      "Maximum number of SIDs value\n"
+      "Maximum number of SIDs in the SRH that can be added to SRH with the H.Encaps behavior\n"
+      "Maximum number of SIDs value\n"
+      "Maximum number of SIDs in the SRH before applying the End behavior\n"
+      "Maximum number of SIDs value\n")
+{
+	return path_pcep_cli_pcc_pcc_msd_srv6_max(vty, maxendd, maxendpop, maxhencaps, maxsegsleft);
+}
+
+DEFPY(no_pcep_cli_pcc_pcc_msd_srv6,
+      no_pcep_cli_pcc_pcc_msd_srv6_cmd,
+      "no msd-srv6 [max-end-d$maxendd_str] [max-end-pop$maxendpop_str] [max-h-encaps$maxhencaps_str] [max-segs-left$maxsegsleft_str]",
+      NO_STR
+      "Maximum number of SIDs for SRv6\n"
+      "Maximum number of SIDs present in an SRH when performing decapsulation for SRv6\n"
+      "Maximum number of SIDs in the SRH to which the router can apply PSP or USP behaviors\n"
+      "Maximum number of SIDs in the SRH that can be added to SRH with the H.Encaps behavior\n"
+      "Maximum number of SIDs in the SRH before applying the End behavior\n")
+{
+	return path_pcep_cli_pcc_pcc_msd_srv6_reset_max(vty, maxendd_str, maxendpop_str, maxhencaps_str, maxsegsleft_str);
+}
+
 DEFPY(pcep_cli_pcc_pcc_peer,
       pcep_cli_pcc_pcc_peer_cmd,
       "[no] peer WORD [precedence (1-255)]",
@@ -2423,6 +2547,8 @@ void pcep_cli_init(void)
 	install_element(PCEP_PCC_NODE, &pcep_cli_pcc_pcc_peer_cmd);
 	install_element(PCEP_PCC_NODE, &pcep_cli_pcc_pcc_msd_cmd);
 	install_element(PCEP_PCC_NODE, &no_pcep_cli_pcc_pcc_msd_cmd);
+	install_element(PCEP_PCC_NODE, &pcep_cli_pcc_pcc_msd_srv6_cmd);
+	install_element(PCEP_PCC_NODE, &no_pcep_cli_pcc_pcc_msd_srv6_cmd);
 
 	/* Top commands */
 	install_element(CONFIG_NODE, &pcep_cli_debug_cmd);

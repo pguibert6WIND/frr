@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib/srv6.h"
 #include "pcep.h"
 #include "pcep_msg_encoding.h"
 #include "pcep_msg_tlvs.h"
@@ -73,6 +74,9 @@ uint16_t pcep_encode_tlv_speaker_entity_id(struct pcep_object_tlv_header *tlv,
 uint16_t pcep_encode_tlv_sr_pce_capability(struct pcep_object_tlv_header *tlv,
 					   struct pcep_versioning *versioning,
 					   uint8_t *tlv_body_buf);
+uint16_t pcep_encode_tlv_srv6_pce_capability(struct pcep_object_tlv_header *tlv,
+					     struct pcep_versioning *versioning,
+					     uint8_t *tlv_body_buf);
 uint16_t pcep_encode_tlv_path_setup_type(struct pcep_object_tlv_header *tlv,
 					 struct pcep_versioning *versioning,
 					 uint8_t *tlv_body_buf);
@@ -128,6 +132,8 @@ uint16_t (*const tlv_encoders[MAX_TLV_ENCODER_INDEX])(
 		pcep_encode_tlv_speaker_entity_id,
 	[PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY] =
 		pcep_encode_tlv_sr_pce_capability,
+	[PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY] =
+		pcep_encode_tlv_srv6_pce_capability,
 	[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE] = pcep_encode_tlv_path_setup_type,
 	[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY] =
 		pcep_encode_tlv_path_setup_type_capability,
@@ -173,6 +179,9 @@ pcep_decode_tlv_speaker_entity_id(struct pcep_object_tlv_header *tlv_hdr,
 struct pcep_object_tlv_header *
 pcep_decode_tlv_sr_pce_capability(struct pcep_object_tlv_header *tlv_hdr,
 				  const uint8_t *tlv_body_buf);
+struct pcep_object_tlv_header *
+pcep_decode_tlv_srv6_pce_capability(struct pcep_object_tlv_header *tlv_hdr,
+				    const uint8_t *tlv_body_buf);
 struct pcep_object_tlv_header *
 pcep_decode_tlv_path_setup_type(struct pcep_object_tlv_header *tlv_hdr,
 				const uint8_t *tlv_body_buf);
@@ -225,6 +234,8 @@ struct pcep_object_tlv_header *(*const tlv_decoders[MAX_TLV_ENCODER_INDEX])(
 		pcep_decode_tlv_speaker_entity_id,
 	[PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY] =
 		pcep_decode_tlv_sr_pce_capability,
+	[PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY] =
+		pcep_decode_tlv_srv6_pce_capability,
 	[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE] = pcep_decode_tlv_path_setup_type,
 	[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY] =
 		pcep_decode_tlv_path_setup_type_capability,
@@ -271,6 +282,8 @@ static void initialize_tlv_coders(void)
 	pcep_encode_tlv_speaker_entity_id;
 	tlv_encoders[PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY]           =
 	pcep_encode_tlv_sr_pce_capability;
+	tlv_encoders[PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY]         =
+	pcep_encode_tlv_srv6_pce_capability;
 	tlv_encoders[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE]             =
 	pcep_encode_tlv_path_setup_type;
 	tlv_encoders[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY]  =
@@ -313,6 +326,8 @@ static void initialize_tlv_coders(void)
 	pcep_decode_tlv_speaker_entity_id;
 	tlv_decoders[PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY]           =
 	pcep_decode_tlv_sr_pce_capability;
+	tlv_decoders[PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY]         =
+	pcep_decode_tlv_srv6_pce_capability;
 	tlv_decoders[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE]             =
 	pcep_decode_tlv_path_setup_type;
 	tlv_decoders[PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY]  =
@@ -615,6 +630,37 @@ uint16_t pcep_encode_tlv_sr_pce_capability(struct pcep_object_tlv_header *tlv,
 	tlv_body_buf[3] = sr_pce_cap->max_sid_depth;
 
 	return LENGTH_1WORD;
+}
+
+uint16_t pcep_encode_tlv_srv6_pce_capability(struct pcep_object_tlv_header *tlv,
+					   struct pcep_versioning *versioning,
+					   uint8_t *tlv_body_buf)
+{
+	(void)versioning;
+	struct pcep_object_tlv_srv6_pce_capability *srv6_pce_cap =
+		(struct pcep_object_tlv_srv6_pce_capability *)tlv;
+	int i = 3;
+
+	tlv_body_buf[i] =
+		srv6_pce_cap->flag_n ? TLV_SRV6_PCE_CAP_FLAG_N : 0x00;
+
+	if (srv6_pce_cap->msd_end_d) {
+		tlv_body_buf[++i] = SRV6_MSD_TYPE_END_D;
+		tlv_body_buf[++i] = srv6_pce_cap->msd_end_d;
+	}
+	if (srv6_pce_cap->msd_end_pop) {
+		tlv_body_buf[++i] = SRV6_MSD_TYPE_END_POP;
+		tlv_body_buf[++i] = srv6_pce_cap->msd_end_pop;
+	}
+	if (srv6_pce_cap->msd_h_encaps) {
+		tlv_body_buf[++i] = SRV6_MSD_TYPE_H_ENCAPS;
+		tlv_body_buf[++i] = srv6_pce_cap->msd_h_encaps;
+	}
+	if (srv6_pce_cap->msd_segs_left) {
+		tlv_body_buf[++i] = SRV6_MSD_TYPE_SL;
+		tlv_body_buf[++i] = srv6_pce_cap->msd_segs_left;
+	}
+	return 1 + i;
 }
 
 uint16_t pcep_encode_tlv_path_setup_type(struct pcep_object_tlv_header *tlv,
@@ -1087,6 +1133,35 @@ pcep_decode_tlv_sr_pce_capability(struct pcep_object_tlv_header *tlv_hdr,
 	tlv->max_sid_depth = tlv_body_buf[3];
 
 	return (struct pcep_object_tlv_header *)tlv;
+}
+
+struct pcep_object_tlv_header *
+pcep_decode_tlv_srv6_pce_capability(struct pcep_object_tlv_header *tlv_hdr,
+				    const uint8_t *tlv_body_buf)
+{
+	int i = 3;
+	struct pcep_object_tlv_srv6_pce_capability *tlv =
+		(struct pcep_object_tlv_srv6_pce_capability *)common_tlv_create(
+			tlv_hdr,
+			sizeof(struct pcep_object_tlv_srv6_pce_capability));
+
+	tlv->flag_n = (tlv_body_buf[i] & TLV_SRV6_PCE_CAP_FLAG_N);
+
+	do {
+		i++;
+		if (tlv_body_buf[i] == SRV6_MSD_TYPE_END_D)
+			tlv->msd_end_d = tlv_body_buf[++i];
+		else if (tlv_body_buf[i] == SRV6_MSD_TYPE_END_POP)
+			tlv->msd_end_pop = tlv_body_buf[++i];
+		else if (tlv_body_buf[i] == SRV6_MSD_TYPE_H_ENCAPS)
+			tlv->msd_h_encaps = tlv_body_buf[++i];
+		else if (tlv_body_buf[i] == SRV6_MSD_TYPE_SL)
+			tlv->msd_segs_left = tlv_body_buf[++i];
+		else
+			break;
+	} while(1);
+
+        return (struct pcep_object_tlv_header *)tlv;
 }
 
 struct pcep_object_tlv_header *

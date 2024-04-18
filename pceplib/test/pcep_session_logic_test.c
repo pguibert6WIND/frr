@@ -273,6 +273,7 @@ void test_create_pcep_session_open_tlvs()
 	 *   pcep_tlv_create_stateful_pce_capability()
 	 *   pcep_tlv_create_lsp_db_version()
 	 *   pcep_tlv_create_sr_pce_capability()
+	 *   pcep_tlv_create_srv6_pce_capability()
 	 *   pcep_tlv_create_path_setup_type_capability() */
 	reset_mock_socket_comm_info();
 	mock_info->send_message_save_message = true;
@@ -316,6 +317,7 @@ void test_create_pcep_session_open_tlvs()
 	 *   pcep_tlv_create_stateful_pce_capability()
 	 *   pcep_tlv_create_lsp_db_version()
 	 *   pcep_tlv_create_sr_pce_capability()
+	 *   pcep_tlv_create_srv6_pce_capability()
 	 *   pcep_tlv_create_path_setup_type_capability() */
 	reset_mock_socket_comm_info();
 	mock_info->send_message_save_message = true;
@@ -351,6 +353,9 @@ void test_create_pcep_session_open_tlvs()
 	tlv_node = tlv_node->next_node;
 	CU_ASSERT_EQUAL(((struct pcep_object_tlv_header *)tlv_node->data)->type,
 			PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY);
+	tlv_node = tlv_node->next_node;
+	CU_ASSERT_EQUAL(((struct pcep_object_tlv_header *)tlv_node->data)->type,
+			PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY);
 	tlv_node = tlv_node->next_node;
 	CU_ASSERT_EQUAL(((struct pcep_object_tlv_header *)tlv_node->data)->type,
 			PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY);

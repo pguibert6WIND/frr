@@ -167,6 +167,7 @@ pcep_lib_connect(struct ipaddr *src_addr, int src_port, struct ipaddr *dst_addr,
 	config->support_sr_te_pst = true;
 	config->support_srv6_te_pst = true;
 	config->pcc_can_resolve_nai_to_sid = false;
+	config->pcc_can_resolve_nai_to_ipv6_sid = false;
 
 	config->max_sid_depth = msd;
 	config->pcep_msg_versioning->draft_ietf_pce_segment_routing_07 =
@@ -849,6 +850,7 @@ void pcep_lib_parse_open(struct pcep_caps *caps, struct pcep_object_open *open)
 			pcep_lib_parse_open_pce_capability(caps, tlv_header);
 			break;
 		case PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY:
+		case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
 			break;
 		case PCEP_OBJ_TLV_TYPE_OBJECTIVE_FUNCTION_LIST:
 			pcep_lib_parse_open_objfun_list(caps, tlv_header);
@@ -941,6 +943,7 @@ void pcep_lib_parse_rp(struct path *path, struct pcep_object_rp *rp)
 		case PCEP_OBJ_TLV_TYPE_LSP_DB_VERSION:
 		case PCEP_OBJ_TLV_TYPE_SPEAKER_ENTITY_ID:
 		case PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY:
+		case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_POL_ID:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_POL_NAME:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_CPATH_ID:
@@ -992,6 +995,7 @@ void pcep_lib_parse_srp(struct path *path, struct pcep_object_srp *srp)
 		case PCEP_OBJ_TLV_TYPE_LSP_DB_VERSION:
 		case PCEP_OBJ_TLV_TYPE_SPEAKER_ENTITY_ID:
 		case PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY:
+		case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
 		case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_POL_ID:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_POL_NAME:
@@ -1055,6 +1059,7 @@ void pcep_lib_parse_lsp(struct path *path, struct pcep_object_lsp *lsp)
 		case PCEP_OBJ_TLV_TYPE_LSP_DB_VERSION:
 		case PCEP_OBJ_TLV_TYPE_SPEAKER_ENTITY_ID:
 		case PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY:
+		case PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY:
 		case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE:
 		case PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY:
 		case PCEP_OBJ_TLV_TYPE_SRPOLICY_POL_ID:

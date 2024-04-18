@@ -249,6 +249,9 @@ void create_session_counters(pcep_session *session)
 				PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY,
 				"TLV SR PCE Capability", "TLVSRPCECapability");
 	create_subgroup_counter(rx_tlv_subgroup,
+				PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY,
+				"TLV SRv6 PCE Capability", "TLVSRV6PCECapability");
+	create_subgroup_counter(rx_tlv_subgroup,
 				PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE,
 				"TLV Path Setup Type", "TLVPathSetupType");
 	create_subgroup_counter(rx_tlv_subgroup,

@@ -153,6 +153,27 @@ pcep_tlv_create_sr_pce_capability(bool flag_n, bool flag_x,
 	return tlv;
 }
 
+struct pcep_object_tlv_srv6_pce_capability *
+pcep_tlv_create_srv6_pce_capability(bool flag_n,
+                                    uint8_t max_end_d, uint8_t max_end_pop,
+                                    uint8_t max_h_encaps, uint8_t max_segs_left)
+{
+	struct pcep_object_tlv_srv6_pce_capability *tlv;
+
+	tlv = (struct pcep_object_tlv_srv6_pce_capability *)
+		pcep_tlv_common_create(
+				PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY,
+				sizeof(struct
+				       pcep_object_tlv_srv6_pce_capability));
+	tlv->flag_n = flag_n;
+	tlv->msd_end_d = max_end_d;
+	tlv->msd_end_pop = max_end_pop;
+	tlv->msd_h_encaps = max_h_encaps;
+	tlv->msd_segs_left = max_segs_left;
+
+	return tlv;
+}
+
 struct pcep_object_tlv_of_list *
 pcep_tlv_create_of_list(double_linked_list *of_list)
 {

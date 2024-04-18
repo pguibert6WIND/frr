@@ -638,8 +638,37 @@ struct pcep_message *create_pcep_open(pcep_session *session)
 	}
 
 	if (session->pcc_config.support_srv6_te_pst) {
+		bool flag_n = false;
 		uint8_t *pst =
 			pceplib_malloc(PCEPLIB_MESSAGES, sizeof(uint8_t));
+
+		if (session->pcc_config.pcep_msg_versioning
+			    ->draft_ietf_pce_segment_routing_07
+		    == false) {
+			flag_n = session->pcc_config.pcc_can_resolve_nai_to_ipv6_sid;
+		}
+
+		struct pcep_object_tlv_srv6_pce_capability *srv6_pce_cap_tlv =
+			pcep_tlv_create_srv6_pce_capability(
+					flag_n, session->pcc_config.max_sid_depth_srv6_end_d,
+					session->pcc_config.max_sid_depth_srv6_end_pop,
+					session->pcc_config.max_sid_depth_srv6_h_encaps,
+					session->pcc_config.max_sid_depth_srv6_segs_left);
+
+		if (session->pcc_config.pcep_msg_versioning
+			    ->draft_ietf_pce_segment_routing_07
+		    == true) {
+			/* With draft07, send the srv6_pce_cap_tlv as a normal TLV
+			 */
+			dll_append(tlv_list, srv6_pce_cap_tlv);
+		} else {
+			/* With draft16, send the srv6_pce_cap_tlv as a sub-TLV in
+			 * the path_setup_type_capability TLV */
+			if (!sub_tlv_list)
+				sub_tlv_list = dll_initialize();
+			dll_append(sub_tlv_list, srv6_pce_cap_tlv);
+		}
+
 		*pst = SRV6_TE_PST;
 		dll_append(pst_list, pst);
 	}

@@ -548,6 +548,11 @@ Only set the following fields if the **support_sr_te_pst** flag is true.
     - If this parameter is other than 0, then the X bit will be true,
       and the parameter value will be set in the MSD field.
 
+Only set the following fields if the **support_srv6_te_pst** flag is true.
+
+- **pcc_can_resolve_nai_to_ipv6_sid**
+    - Sets the N-flag true, indicating that the PCC is capable of resolving
+      a Node or Adjacency Identifier to an IPv6 SID
 
 PCEPlib PCC connections
 -----------------------

@@ -100,6 +100,10 @@ struct pcc_opts {
 	struct ipaddr addr;
 	short port;
 	short msd;
+	short msd_srv6_end_d;
+	short msd_srv6_end_pop;
+	short msd_srv6_h_encaps;
+	short msd_srv6_segs_left;
 };
 
 /* Encapsulate the pce_opts with needed CLI information */

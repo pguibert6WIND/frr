@@ -53,6 +53,8 @@ enum pcep_object_tlv_types {
 	PCEP_OBJ_TLV_TYPE_SPEAKER_ENTITY_ID = 24,       /* RFC 8232 */
 	PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY =
 		26, /* draft-ietf-pce-segment-routing-16 */
+	PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY =
+		27, /* draft-ietf-pce-segment-routing-ipv6-25 */
 	PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE = 28, /* RFC 8408 */
 	PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY =
 		34, /* RFC 8408, draft-ietf-pce-segment-routing-16 */
@@ -192,6 +194,20 @@ struct pcep_object_tlv_sr_pce_capability {
 	uint8_t max_sid_depth;
 };
 
+/* SRV6 PCE Capability sub-TLV, Used in Open Object. RFCs:
+ * draft-ietf-pce-segment-routing-ipv6
+ * MSD definitions for SRv6 are in rfc9352, 4.
+ */
+#define TLV_SRV6_PCE_CAP_FLAG_N 0x02
+
+struct pcep_object_tlv_srv6_pce_capability {
+	struct pcep_object_tlv_header header;
+	bool flag_n;
+	uint8_t msd_end_d;
+	uint8_t msd_end_pop;
+	uint8_t msd_h_encaps;
+	uint8_t msd_segs_left;
+};
 
 /* RSVP Error Spec TLV, Used in LSP Object. RFCs: 8231, 2205 */
 #define RSVP_ERROR_SPEC_IPV4_CTYPE 1
@@ -307,6 +323,10 @@ pcep_tlv_create_path_setup_type_capability(double_linked_list *pst_list,
 struct pcep_object_tlv_sr_pce_capability *
 pcep_tlv_create_sr_pce_capability(bool flag_n, bool flag_x,
 				  uint8_t max_sid_depth);
+struct pcep_object_tlv_srv6_pce_capability *
+pcep_tlv_create_srv6_pce_capability(bool flag_n,
+                                    uint8_t max_end_d, uint8_t max_end_pop,
+                                    uint8_t max_h_encaps, uint8_t max_segs_left);
 struct pcep_object_tlv_of_list *
 pcep_tlv_create_of_list(double_linked_list *of_list);
 

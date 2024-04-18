@@ -23,6 +23,7 @@
 
 #include <CUnit/CUnit.h>
 
+#include "lib/srv6.h"
 #include "pcep_msg_encoding.h"
 #include "pcep_msg_objects.h"
 #include "pcep_msg_tlvs.h"
@@ -199,7 +200,7 @@ void test_pcep_tlv_create_path_setup_type_capability(void)
 	uint8_t *pst2 = pceplib_malloc(PCEPLIB_MESSAGES, 1);
 	uint8_t *pst3 = pceplib_malloc(PCEPLIB_MESSAGES, 1);
 	*pst1 = SR_TE_PST;
-	*pst2 = 2;
+	*pst2 = SRV6_TE_PST;
 	*pst3 = 3;
 	dll_append(pst_list, pst1);
 	dll_append(pst_list, pst2);
@@ -221,20 +222,27 @@ void test_pcep_tlv_create_path_setup_type_capability(void)
 	CU_ASSERT_EQUAL(tlv->pst_list->num_entries, 3);
 	uint32_t *uint32_ptr = (uint32_t *)tlv->header.encoded_tlv;
 	CU_ASSERT_EQUAL(uint32_ptr[1], htonl(0x00000003));
-	CU_ASSERT_EQUAL(uint32_ptr[2], htonl(0x01020300));
+	CU_ASSERT_EQUAL(uint32_ptr[2], htonl(0x01030300));
 	pcep_obj_free_tlv(&tlv->header);
 
 	/* Now test populating both the pst_list and the sub_tlv_list */
 	reset_tlv_buffer();
-	struct pcep_object_tlv_header *sub_tlv =
+	struct pcep_object_tlv_header *sub_tlv1 =
 		(struct pcep_object_tlv_header *)
 			pcep_tlv_create_sr_pce_capability(true, true, 0);
+	struct pcep_object_tlv_header *sub_tlv2 =
+		(struct pcep_object_tlv_header *)
+			pcep_tlv_create_srv6_pce_capability(true, 3, 4, 5, 6);
 	pst_list = dll_initialize();
 	sub_tlv_list = dll_initialize();
 	pst1 = pceplib_malloc(PCEPLIB_MESSAGES, 1);
+	pst2 = pceplib_malloc(PCEPLIB_MESSAGES, 1);
 	*pst1 = SR_TE_PST;
+	*pst2 = SRV6_TE_PST;
 	dll_append(pst_list, pst1);
-	dll_append(sub_tlv_list, sub_tlv);
+	dll_append(pst_list, pst2);
+	dll_append(sub_tlv_list, sub_tlv1);
+	dll_append(sub_tlv_list, sub_tlv2);
 	tlv = pcep_tlv_create_path_setup_type_capability(pst_list,
 							 sub_tlv_list);
 	CU_ASSERT_PTR_NOT_NULL(tlv);
@@ -244,8 +252,9 @@ void test_pcep_tlv_create_path_setup_type_capability(void)
 	CU_ASSERT_EQUAL(tlv->header.type,
 			PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY);
 	CU_ASSERT_EQUAL(tlv->header.encoded_tlv_length,
-			sizeof(uint32_t) * 2 + TLV_HEADER_LENGTH
-				+ sub_tlv->encoded_tlv_length);
+			sizeof(uint32_t) * 3 + TLV_HEADER_LENGTH
+				+ sub_tlv1->encoded_tlv_length
+				+ sub_tlv2->encoded_tlv_length);
 	CU_ASSERT_PTR_NOT_NULL(tlv->pst_list);
 	CU_ASSERT_PTR_NOT_NULL(tlv->sub_tlv_list);
 	uint32_ptr = (uint32_t *)tlv->header.encoded_tlv;
@@ -253,15 +262,25 @@ void test_pcep_tlv_create_path_setup_type_capability(void)
 	CU_ASSERT_EQUAL(uint16_ptr[0],
 			htons(PCEP_OBJ_TLV_TYPE_PATH_SETUP_TYPE_CAPABILITY));
 	CU_ASSERT_EQUAL(uint16_ptr[1], htons(tlv->header.encoded_tlv_length));
-	CU_ASSERT_EQUAL(uint32_ptr[1], htonl(0x00000001));
-	CU_ASSERT_EQUAL(uint32_ptr[2], htonl(0x01000000));
-	/* Verify the Sub-TLV */
+	CU_ASSERT_EQUAL(uint32_ptr[1], htonl(0x00000002));
+	CU_ASSERT_EQUAL(uint32_ptr[2], htonl(0x01030000));
+	/* Verify the Sub-TLV SR_PCE */
 	uint16_ptr = (uint16_t *)(tlv->header.encoded_tlv + 12);
 	CU_ASSERT_EQUAL(uint16_ptr[0],
 			htons(PCEP_OBJ_TLV_TYPE_SR_PCE_CAPABILITY));
 	CU_ASSERT_EQUAL(uint16_ptr[1], htons(4));
 	CU_ASSERT_EQUAL(uint16_ptr[2], 0);
 	CU_ASSERT_EQUAL(uint16_ptr[3], htons(0x0300));
+	/* Verify the Sub-TLV SRV6_PCE */
+	uint16_ptr = (uint16_t *)(tlv->header.encoded_tlv + 20);
+	CU_ASSERT_EQUAL(uint16_ptr[0],
+			htons(PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY));
+	CU_ASSERT_EQUAL(uint16_ptr[1], htons(12)); /* length */
+	CU_ASSERT_EQUAL(uint16_ptr[3], htons(TLV_SRV6_PCE_CAP_FLAG_N));
+        CU_ASSERT_EQUAL(uint16_ptr[4], htons((SRV6_MSD_TYPE_END_D << 8) + 3));
+        CU_ASSERT_EQUAL(uint16_ptr[5], htons((SRV6_MSD_TYPE_END_POP << 8) + 4));
+        CU_ASSERT_EQUAL(uint16_ptr[6], htons((SRV6_MSD_TYPE_H_ENCAPS << 8) + 5));
+	CU_ASSERT_EQUAL(uint16_ptr[7], htons((SRV6_MSD_TYPE_SL << 8) + 6));
 
 	pcep_obj_free_tlv(&tlv->header);
 }
@@ -282,6 +301,29 @@ void test_pcep_tlv_create_sr_pce_capability(void)
 	CU_ASSERT_EQUAL(uint16_ptr[1], htons(tlv->header.encoded_tlv_length));
 	uint32_t *uint32_ptr = (uint32_t *)tlv->header.encoded_tlv;
 	CU_ASSERT_EQUAL(uint32_ptr[1], htonl(0x00000308));
+
+	pcep_obj_free_tlv(&tlv->header);
+}
+
+void test_pcep_tlv_create_srv6_pce_capability(void)
+{
+	struct pcep_object_tlv_srv6_pce_capability *tlv =
+		pcep_tlv_create_srv6_pce_capability(true, 3, 4, 5, 6);
+	CU_ASSERT_PTR_NOT_NULL(tlv);
+	assert(tlv != NULL);
+
+	pcep_encode_tlv(&tlv->header, versioning, tlv_buf);
+	CU_ASSERT_EQUAL(tlv->header.type, PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY);
+	CU_ASSERT_EQUAL(tlv->header.encoded_tlv_length, 12);
+	uint16_t *uint16_ptr = (uint16_t *)tlv->header.encoded_tlv;
+	CU_ASSERT_EQUAL(uint16_ptr[0],
+			htons(PCEP_OBJ_TLV_TYPE_SRV6_PCE_CAPABILITY));
+	CU_ASSERT_EQUAL(uint16_ptr[1], htons(tlv->header.encoded_tlv_length));
+	CU_ASSERT_EQUAL(uint16_ptr[3], htons(TLV_SRV6_PCE_CAP_FLAG_N));
+        CU_ASSERT_EQUAL(uint16_ptr[4], htons((SRV6_MSD_TYPE_END_D << 8) + 3));
+        CU_ASSERT_EQUAL(uint16_ptr[5], htons((SRV6_MSD_TYPE_END_POP << 8) + 4));
+        CU_ASSERT_EQUAL(uint16_ptr[6], htons((SRV6_MSD_TYPE_H_ENCAPS << 8) + 5));
+	CU_ASSERT_EQUAL(uint16_ptr[7], htons((SRV6_MSD_TYPE_SL << 8) + 6));
 
 	pcep_obj_free_tlv(&tlv->header);
 }
