@@ -29,6 +29,20 @@ extern "C" {
 #define sid2str(sid, str, size) \
 	inet_ntop(AF_INET6, sid, str, size)
 
+#define SRV6_DEFAULT_MSD_SEGS_LEFT       3
+#define SRV6_DEFAULT_MSD_END_POP         3
+#define SRV6_DEFAULT_MSD_H_ENCAPS        2
+#define SRV6_DEFAULT_MSD_END_D           5
+
+/* RFC 9352 section #4.1 */
+#define	SRV6_MSD_TYPE_SL 41
+/* RFC 9352 section #4.2 */
+#define	SRV6_MSD_TYPE_END_POP 42
+/* RFC 9352 section #4.3 */
+#define	SRV6_MSD_TYPE_H_ENCAPS 44
+/* RFC 9352 section #4.4 */
+#define	SRV6_MSD_TYPE_END_D 45
+
 /* SRv6 flavors manipulation macros */
 #define CHECK_SRV6_FLV_OP(OPS,OP)      ((OPS) & (1 << OP))
 #define SET_SRV6_FLV_OP(OPS,OP)        (OPS) |= (1 << OP)
