@@ -549,6 +549,29 @@ Only set the following fields if the **support_sr_te_pst** flag is true.
     - If this parameter is other than 0, then the X bit will be true,
       and the parameter value will be set in the MSD field.
 
+SR PCE Capability sub-TLV configuration parameters (rfc9603):
+
+- **support_srv6_te_pst**
+    - If this flag is true, then an SRv6 PCE Capability sub-TLV will be
+      added to a Path Setup type Capability TLV, which will be added
+      to the PCEP Open object.
+    - The PST used in the Path Setup type Capability will be 3,
+      indicating the Path is setup using SRv6 Traffic Engineering.
+
+Only set the following fields if the **support_srv6_te_pst** flag is true.
+
+- **pcc_can_resolve_nai_to_ipv6_sid**
+    - Sets the N-flag true, indicating that the PCC is capable of resolving
+      a Node or Adjacency Identifier to an IPv6 SID
+
+- **MSD-type-MSD-value** tuple list with MSD-type defined in rfc9352 and
+  MSD-value being a value defined in rfc8491.
+    - The MSD-type value can be **Maximum Segment Left** (41),
+      **Maximum End Pop** (42), **Maximum H.Encap** (44)
+      and **Maximum End D** (44).
+    - The MSD-value ranges between 0 (unset) and 255.
+  Note that those values are often found in link state information and are not
+  necessary to be transmitted via PCEP too.
 
 PCEPlib PCC connections
 -----------------------

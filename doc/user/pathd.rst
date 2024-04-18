@@ -480,6 +480,46 @@ Configuration Commands
 
    Default the maximum SID depth to 4.
 
+.. clicmd:: msd-srv6 end-d (1-255)
+
+   Specify the maximum number of SIDs present in an SRH when performing
+   decapsulation for SRv6.
+
+.. clicmd:: msd-srv6 end-pop (1-255)
+
+   Specify the maximum number of SIDs in the SRH to which the router can apply
+   PSP or USP behaviors.
+
+.. clicmd:: msd-srv6 h-encaps (1-255)
+
+   Specify the maximum number of SIDs in the SRH that can be added to SRH with
+   the H.Encaps behavior.
+
+.. clicmd:: msd-srv6 segs-left (1-255)
+
+   Specify the maximum number of SIDs in the SRH before applying the End
+   behavior.
+
+.. clicmd:: no msd-srv6 end-d
+
+   Reset the value and disable the sending of the maximum number of SIDs present
+   in an SRH when performing decapsulation for SRv6.
+
+.. clicmd:: no msd-srv6 end-pop
+
+   Reset the value and disable the sending of the maximum number of SIDs in the
+   SRH to which the router can apply PSP or USP behaviors.
+
+.. clicmd:: no msd-srv6 h-encaps
+
+   Reset the value and disable the sending of the maximum number of SIDs in the
+   SRH that can be added to SRH with the H.Encaps behavior.
+
+.. clicmd:: no msd-srv6 segs-left
+
+   Reset the value and disable the sending of the maximum number of SIDs in the
+   SRH before applying the End behavior.
+
 .. clicmd:: peer WORD [precedence (1-255)]
 
    Specify a peer and its precedence in a PCC definition.
