@@ -217,7 +217,7 @@ struct pcep_object_tlv_sr_pce_capability {
 };
 
 /* SRV6 PCE Capability sub-TLV, Used in Open Object. RFCs:
- * draft-ietf-pce-segment-routing-ipv6
+ * rfc9603
  * MSD definitions for SRv6 are in rfc9352, 4.
  */
 #define TLV_SRV6_PCE_CAP_FLAG_N 0x02
