@@ -1,0 +1,31 @@
+{
+  "::/0":[  
+    {
+      "prefix":"::/0",
+      "prefixLen":0,
+      "protocol":"static",
+      "vrfName":"default",
+      "distance":10,
+      "metric":0,
+      "table":254,
+      "nexthops":[
+        {   
+          "ip":"2001:db8:4::4",
+          "afi":"ipv6",
+          "active":true,
+          "recursive":true,
+          "weight":1
+        },  
+        {   
+          "fib":true,
+          "ip":"2001:db8:2::3",
+          "afi":"ipv6",
+          "interfaceName":"r1-eth1",
+          "resolver":true,
+          "active":true,
+          "weight":1
+        }   
+      ]
+    }
+  ]
+}
