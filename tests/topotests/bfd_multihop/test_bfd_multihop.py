@@ -12,6 +12,7 @@
 test_bfd_multihop.py:
 Test the FRR BFD daemon multi hop.
 Test the FRR BFD daemon multi hop with static routing
+Test the FRR BFD daemon auto hop with static routing
 """
 
 import os
@@ -345,6 +346,156 @@ def test_static_bfd_multihop_reuse_primary_path():
 
     logger.info(
         "Check that re-using the primary path triggers multi-hop BFD sessions to go up"
+    )
+    change_routing(secondary=False)
+    logger.info("test BFD configuration and state")
+    expect_bfd_configuration("r1", static=True)
+    expect_bfd_configuration("r4")
+    logger.info("test default route state")
+    expect_default_ip_route("r1", "ip")
+    expect_default_ip_route("r1", "ipv6")
+
+
+def test_static_bfd_autohop_init():
+    "Delete static BFD config, and re add static BFD config in auto mode"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+    router = tgen.gears["r1"]
+    logger.info("r1, deleting BFD peers")
+    router.vtysh_cmd(
+        """
+        configure terminal\n
+        bfd\n
+        no ip route 0.0.0.0/0 192.168.3.4 bfd multi-hop\n
+        no ip route 0.0.0.0/0 192.168.4.4 10 bfd multi-hop\n
+        no ipv6 route 0::0/0 2001:db8:3::4 bfd multi-hop\n
+        no ipv6 route 0::0/0 2001:db8:4::4 10 bfd multi-hop\n
+        """
+    )
+    expect_no_bfd_configuration("r1")
+
+    logger.info("r1, using static bfd autohop routes instead")
+    router.vtysh_cmd(
+        """
+        configure terminal\n
+        ip route 0.0.0.0/0 192.168.3.4 bfd auto-hop\n
+        ip route 0.0.0.0/0 192.168.4.4 10 bfd auto-hop\n
+        ipv6 route 0::0/0 2001:db8:3::4 bfd auto-hop\n
+        ipv6 route 0::0/0 2001:db8:4::4 10 bfd auto-hop\n
+        """
+    )
+    logger.info("test BFD configuration and state")
+    expect_bfd_configuration("r1", static=True)
+    expect_bfd_configuration("r4")
+    logger.info("test default route state")
+    expect_default_ip_route("r1", "ip")
+    expect_default_ip_route("r1", "ipv6")
+
+
+def test_static_bfd_autohop_use_secondary_path():
+    "Configure setup to forward BFD packet from primary link to the secondary link"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Check that using the secondary path triggers auto-hop BFD sessions to go up"
+    )
+    change_routing(secondary=True)
+    logger.info("test BFD configuration and state when half BFD sessions is down")
+    expect_bfd_configuration(
+        "r1", static=True, peer_down=["192.168.3.4", "2001:db8:3::4"]
+    )
+    expect_bfd_configuration("r4", peer_down=["192.168.1.1", "2001:db8:1::1"])
+    logger.info("test default route state when half BFD sessions is down")
+    expect_default_ip_route("r1", "ip", down=True)
+    expect_default_ip_route("r1", "ipv6", down=True)
+
+
+def test_static_bfd_autohop_reuse_primary_path():
+    "Configure setup to re-forward BFD packet to primary link only"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Check that re-using the primary path triggers auto-hop BFD sessions to go up"
+    )
+    change_routing(secondary=False)
+    logger.info("test BFD configuration and state")
+    expect_bfd_configuration("r1", static=True)
+    expect_bfd_configuration("r4")
+    logger.info("test default route state")
+    expect_default_ip_route("r1", "ip")
+    expect_default_ip_route("r1", "ipv6")
+
+
+def test_static_bfd_autohop_with_interface_init():
+    "Delete static BFD config, and re add static BFD config in auto mode with interfaces"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+    router = tgen.gears["r1"]
+    logger.info("r1, deleting BFD peers")
+    router.vtysh_cmd(
+        """
+        configure terminal\n
+        bfd\n
+        no ip route 0.0.0.0/0 192.168.3.4 bfd auto-hop\n
+        no ip route 0.0.0.0/0 192.168.4.4 10 bfd auto-hop\n
+        no ipv6 route 0::0/0 2001:db8:3::4 bfd auto-hop\n
+        no ipv6 route 0::0/0 2001:db8:4::4 10 bfd auto-hop\n
+        """
+    )
+    expect_no_bfd_configuration("r1")
+
+    logger.info("r1, using static bfd autohop with interface routes instead")
+    router.vtysh_cmd(
+        """
+        configure terminal\n
+        ip route 0.0.0.0/0 192.168.3.4 r1-eth0 bfd auto-hop\n
+        ip route 0.0.0.0/0 192.168.4.4 r1-eth1 10 bfd auto-hop\n
+        ipv6 route 0::0/0 2001:db8:3::4 r1-eth0 bfd auto-hop\n
+        ipv6 route 0::0/0 2001:db8:4::4 r1-eth1 10 bfd auto-hop\n
+        """
+    )
+    logger.info("test BFD configuration and state")
+    expect_bfd_configuration("r1", static=True)
+    expect_bfd_configuration("r4")
+    logger.info("test default route state")
+    expect_default_ip_route("r1", "ip")
+    expect_default_ip_route("r1", "ipv6")
+
+
+def test_static_bfd_autohop_with_interface_use_secondary_path():
+    "Configure setup to forward BFD packet from primary link to the secondary link"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Check that using the secondary path triggers auto-hop BFD sessions to go up"
+    )
+    change_routing(secondary=True)
+    logger.info("test BFD configuration and state when half BFD sessions is down")
+    expect_bfd_configuration(
+        "r1", static=True, peer_down=["192.168.3.4", "2001:db8:3::4"]
+    )
+    expect_bfd_configuration("r4", peer_down=["192.168.1.1", "2001:db8:1::1"])
+    logger.info("test default route state when half BFD sessions is down")
+    expect_default_ip_route("r1", "ip", down=True)
+    expect_default_ip_route("r1", "ipv6", down=True)
+
+
+def test_static_bfd_autohop_with_interface_reuse_primary_path():
+    "Configure setup to re-forward BFD packet to primary link only"
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    logger.info(
+        "Check that re-using the primary path triggers auto-hop BFD sessions to go up"
     )
     change_routing(secondary=False)
     logger.info("test BFD configuration and state")
