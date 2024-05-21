@@ -475,7 +475,8 @@ extern struct route_table *rib_tables_iter_next(rib_tables_iter_t *iter);
 extern uint8_t route_distance(int type);
 
 extern void zebra_rib_evaluate_rn_nexthops(struct route_node *rn, uint32_t seq,
-					   bool rt_delete);
+					   bool rt_delete, bool enqueue_to_list);
+extern void rib_process_nht_thread_loop(struct event *event);
 
 /*
  * rib_find_rn_from_ctx
@@ -628,6 +629,7 @@ extern int rib_add_gr_run(afi_t afi, vrf_id_t vrf_id, uint8_t proto,
 			  uint8_t instance);
 
 extern void zebra_vty_init(void);
+extern void zebra_rnh_job_list_display(struct vty *vty);
 
 extern pid_t pid;
 

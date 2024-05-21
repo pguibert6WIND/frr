@@ -4063,6 +4063,15 @@ DEFUN (show_dataplane,
 	return dplane_show_helper(vty, detailed);
 }
 
+/* Display dataplane info */
+DEFUN(show_rib_info, show_rib_info_cmd, "show rib info",
+      SHOW_STR "RIB information\n"
+	       "RIB information\n")
+{
+	zebra_rnh_job_list_display(vty);
+	return CMD_SUCCESS;
+}
+
 /* Display dataplane providers info */
 DEFUN (show_dataplane_providers,
        show_dataplane_providers_cmd,
@@ -4440,6 +4449,7 @@ void zebra_vty_init(void)
 	install_element(CONFIG_NODE, &zebra_dplane_queue_limit_cmd);
 	install_element(CONFIG_NODE, &no_zebra_dplane_queue_limit_cmd);
 
+	install_element(VIEW_NODE, &show_rib_info_cmd);
 #ifdef HAVE_NETLINK
 	install_element(CONFIG_NODE, &zebra_kernel_netlink_batch_tx_buf_cmd);
 	install_element(CONFIG_NODE, &no_zebra_kernel_netlink_batch_tx_buf_cmd);
