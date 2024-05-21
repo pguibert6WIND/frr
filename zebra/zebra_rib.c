@@ -59,6 +59,7 @@ DEFINE_MTYPE_STATIC(ZEBRA, WQ_WRAPPER, "WQ wrapper");
 DEFINE_MTYPE_STATIC(ZEBRA, ROUTE_NOTIFY_JOB_OWNER_CTX, "Route Notify Job Owner");
 DEFINE_MTYPE_STATIC(ZEBRA, PROCESS_NOTIFY_CLIENT_LIST,
 		    "Process Notify Client List");
+DEFINE_MTYPE_STATIC(ZEBRA, RNH_JOB_CTX, "Rnh Job context");
 
 /*
  * Event, list, and mutex for delivery of dataplane results
@@ -866,11 +867,80 @@ static int rib_can_delete_dest(rib_dest_t *dest)
 	return 1;
 }
 
+PREDECL_DLIST(zebra_rnh_job_list);
+struct zebra_rnh_job_list_head zebra_rnh_list;
+struct zebra_rnh_job_ctx {
+	vrf_id_t vrf_id;
+	struct prefix prefix;
+	safi_t safi;
+	/* Embedded list linkage */
+	struct zebra_rnh_job_list_item rnh_entries;
+};
+DECLARE_DLIST(zebra_rnh_job_list, struct zebra_rnh_job_ctx, rnh_entries);
+static uint32_t zebra_rnh_job_list_num;
+static uint32_t zebra_rnh_job_list_dup;
+static uint32_t zebra_rnh_job_list_processed;
+static uint32_t zebra_rnh_job_list_max_batch;
+static struct event *t_zebra_rnh_job_list;
+
+void zebra_rnh_job_list_display(struct vty *vty)
+{
+	vty_out(vty,
+		"RIB route evaluation count %u, dup %u, processed %u, max per batch %u\n",
+		zebra_rnh_job_list_num, zebra_rnh_job_list_dup,
+		zebra_rnh_job_list_processed, zebra_rnh_job_list_max_batch);
+}
+
+void rib_process_nht_thread_loop(struct event *event)
+{
+	struct zebra_rnh_job_list_head ctxlist;
+	struct zebra_rnh_job_ctx *ctx;
+	struct zebra_vrf *zvrf;
+	uint32_t count = 0;
+
+	do {
+		zebra_rnh_job_list_init(&ctxlist);
+
+		/* Dequeue list of context structs */
+		while ((ctx = zebra_rnh_job_list_pop(&zebra_rnh_list)) != NULL)
+			zebra_rnh_job_list_add_tail(&ctxlist, ctx);
+
+		/* Dequeue context block */
+		ctx = zebra_rnh_job_list_pop(&ctxlist);
+		/* If we've emptied the results queue, we're done */
+		if (ctx == NULL)
+			break;
+		while (ctx) {
+			zvrf = zebra_vrf_lookup_by_id(ctx->vrf_id);
+			if (zvrf) {
+				zebra_rnh_job_list_processed++;
+				count++;
+				zebra_evaluate_rnh(zvrf,
+						   family2afi(ctx->prefix.family),
+						   0, &ctx->prefix, ctx->safi);
+			}
+			XFREE(MTYPE_RNH_JOB_CTX, ctx);
+			ctx = zebra_rnh_job_list_pop(&ctxlist);
+		}
+	} while (1);
+
+	if (count > zebra_rnh_job_list_max_batch)
+		zebra_rnh_job_list_max_batch = count;
+}
+
+static void rib_process_nht(void)
+{
+	event_add_timer_msec(zrouter.master, rib_process_nht_thread_loop, NULL,
+			     5, &t_zebra_rnh_job_list);
+}
+
 void zebra_rib_evaluate_rn_nexthops(struct route_node *rn, uint32_t seq,
-				    bool rt_delete)
+				    bool rt_delete, bool enqueue_to_list)
 {
 	rib_dest_t *dest = rib_dest_from_rnode(rn);
 	struct rnh *rnh;
+	struct zebra_rnh_job_ctx *ctx;
+	bool found;
 
 	/*
 	 * We are storing the rnh's associated withb
@@ -937,8 +1007,31 @@ void zebra_rib_evaluate_rn_nexthops(struct route_node *rn, uint32_t seq,
 			}
 
 			rnh->seqno = seq;
-			zebra_evaluate_rnh(zvrf, family2afi(p->family), 0, p,
-					   rnh->safi);
+			if (enqueue_to_list) {
+				zebra_rnh_job_list_num++;
+				found = false;
+				frr_each_safe (zebra_rnh_job_list,
+					       &zebra_rnh_list, ctx) {
+					if (rnh->safi == ctx->safi &&
+					    zvrf->vrf->vrf_id == ctx->vrf_id &&
+					    prefix_same(&ctx->prefix, p)) {
+						found = true;
+						zebra_rnh_job_list_dup++;
+						break;
+					}
+				}
+				if (!found) {
+					ctx = XCALLOC(MTYPE_RNH_JOB_CTX,
+						      sizeof(struct zebra_rnh_job_ctx));
+					ctx->vrf_id = zvrf->vrf->vrf_id;
+					ctx->safi = rnh->safi;
+					prefix_copy(&ctx->prefix, p);
+					zebra_rnh_job_list_add_tail(&zebra_rnh_list,
+								    ctx);
+				}
+			} else
+				zebra_evaluate_rnh(zvrf, family2afi(p->family),
+						   0, p, rnh->safi);
 		}
 
 		rn = rn->parent;
@@ -974,7 +1067,7 @@ int rib_gc_dest(struct route_node *rn)
 	}
 
 	zebra_rib_evaluate_rn_nexthops(rn, zebra_router_get_next_sequence(),
-				       true);
+				       true, false);
 
 	dest->rnode = NULL;
 	rnh_list_fini(&dest->nht);
@@ -2057,7 +2150,7 @@ static void zebra_rib_evaluate_prefix_nhg(struct hash_bucket *b, void *data)
 			redistribute_update(rn, re, re);
 		zebra_rib_evaluate_rn_nexthops(rn,
 					       zebra_router_get_next_sequence(),
-					       false);
+					       false, false);
 		zebra_rib_evaluate_mpls(rn);
 	}
 }
@@ -2393,7 +2486,7 @@ static void rib_process_result(struct zebra_dplane_ctx *ctx)
 			zebra_rib_fixup_system(rn);
 	}
 
-	zebra_rib_evaluate_rn_nexthops(rn, seq, rt_delete);
+	zebra_rib_evaluate_rn_nexthops(rn, seq, rt_delete, true);
 	zebra_rib_evaluate_mpls(rn);
 done:
 
@@ -2655,7 +2748,7 @@ static void rib_process_dplane_notify(struct zebra_dplane_ctx *ctx)
 
 	/* Make any changes visible for lsp and nexthop-tracking processing */
 	zebra_rib_evaluate_rn_nexthops(rn, zebra_router_get_next_sequence(),
-				       false);
+				       false, false);
 
 	zebra_rib_evaluate_mpls(rn);
 
@@ -5381,6 +5474,7 @@ static void rib_process_dplane_results(struct event *thread)
 	} while (1);
 
 	zebra_route_process_notify();
+	rib_process_nht();
 
 #ifdef HAVE_SCRIPTING
 	if (fs)
@@ -5446,6 +5540,7 @@ void zebra_rib_init(void)
 	check_route_info();
 
 	zebra_route_notify_job_owner_list_init(&zebra_route_notify_owner_list);
+	zebra_rnh_job_list_init(&zebra_rnh_list);
 
 	rib_queue_init();
 
@@ -5461,6 +5556,7 @@ void zebra_rib_terminate(void)
 
 	EVENT_OFF(t_dplane);
 	EVENT_OFF(t_zebra_route_notify_job_owner_list);
+	EVENT_OFF(t_zebra_rnh_job_list);
 
 	ctx = dplane_ctx_dequeue(&rib_dplane_q);
 	while (ctx) {

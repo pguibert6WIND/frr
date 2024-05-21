@@ -477,7 +477,8 @@ extern struct route_table *rib_tables_iter_next(rib_tables_iter_t *iter);
 extern uint8_t route_distance(int type);
 
 extern void zebra_rib_evaluate_rn_nexthops(struct route_node *rn, uint32_t seq,
-					   bool rt_delete);
+					   bool rt_delete, bool enqueue_to_list);
+extern void rib_process_nht_thread_loop(struct event *event);
 
 extern void rib_update_handle_vrf_all(enum rib_update_event event, int rtype);
 
@@ -638,6 +639,7 @@ zebra_route_notify_job_owner_list_enqueue(struct route_node *rn,
 					  const struct zebra_dplane_ctx *ctx,
 					  enum zapi_route_notify_owner note);
 extern void zebra_route_notification_information_display(struct vty *vty);
+extern void zebra_rnh_job_list_display(struct vty *vty);
 
 extern pid_t pid;
 
