@@ -59,8 +59,10 @@ from lib.topolog import logger
 pytestmark = [pytest.mark.bgpd]
 
 nhg_id = 0
+nhg_id_18 = 0
+nhg_id_22 = 0
 route_count = 0
-route_exact_number = 2001
+route_exact_number = 6001
 
 
 def build_topo(tgen):
@@ -305,6 +307,106 @@ def check_ipv4_prefix_with_multiple_nexthops(
     assert result is None, f"Failed to check that {prefix} uses the IGP label 16055"
 
 
+def check_ipv4_prefix_recursive_with_multiple_nexthops(
+    prefix, recursive_nexthop, r5_path=True, r6_path=True, r8_path=False
+):
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+    logger.info(
+        f"Check that {prefix} unicast entry is correctly recursive via {recursive_nexthop} with paths for r5 {r5_path}, r6 {r6_path}, r8 {r8_path}"
+    )
+
+    r5_nh = [
+        {
+            "ip": "172.31.0.3",
+            "interfaceName": "r1-eth1",
+            "active": True,
+            "labels": [
+                16055,
+            ],
+        },
+        {
+            "ip": "172.31.2.4",
+            "interfaceName": "r1-eth2",
+            "active": True,
+            "labels": [
+                16055,
+            ],
+        },
+    ]
+
+    r6_nh = [
+        {
+            "ip": "172.31.0.3",
+            "interfaceName": "r1-eth1",
+            "active": True,
+            "labels": [
+                16006,
+            ],
+        },
+        {
+            "ip": "172.31.2.4",
+            "interfaceName": "r1-eth2",
+            "active": True,
+            "labels": [
+                16006,
+            ],
+        },
+    ]
+
+    r8_nh = [
+        {
+            "ip": "172.31.8.7",
+            "interfaceName": "r1-eth4",
+            "active": True,
+            "labels": [
+                16008,
+            ],
+        },
+    ]
+
+    expected = {
+        prefix: [
+            {
+                "prefix": prefix,
+                "protocol": "bgp",
+                "metric": 0,
+                "table": 254,
+                "nexthops": [],
+            }
+        ]
+    }
+
+    recursive_nh = [
+        {
+            "ip": recursive_nexthop,
+            "active": True,
+            "recursive": True,
+        },
+    ]
+    for nh in recursive_nh:
+        expected[prefix][0]["nexthops"].append(nh)
+
+    if r5_path:
+        for nh in r5_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+    if r6_path:
+        for nh in r6_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+    if r8_path:
+        for nh in r8_nh:
+            expected[prefix][0]["nexthops"].append(nh)
+
+    test_func = functools.partial(
+        ip_check_path_selection, tgen.gears["r1"], prefix, expected
+    )
+    _, result = topotest.run_and_expect(test_func, None, count=60, wait=0.5)
+    assert (
+        result is None
+    ), f"Failed to check that {prefix} is correctly recursive via {recursive_nexthop}"
+
+
 def check_ipv4_prefix_with_multiple_nexthops_linux(
     prefix, nhg_id, r5_path=True, r6_path=True, r8_path=False
 ):
@@ -410,7 +512,7 @@ def _get_bgp_route_count(router, add_routes=True):
     if add_routes:
         return int(
             router.cmd(
-                "vtysh -c 'show zebra client' | grep -e 'Client: bgp$' -A 40 | grep IPv4 | awk -F ' ' '{print $2}' | awk -F\, '$1 > 2000'"
+                "vtysh -c 'show zebra client' | grep -e 'Client: bgp$' -A 40 | grep IPv4 | awk -F ' ' '{print $2}' | awk -F\, '$1 > 6000'"
             )
         )
     # IS-IS may have counter to update, lets filter only on BGP clients
@@ -444,7 +546,7 @@ def test_bgp_ipv4_multiple_routes():
     Check that R1 has received 2 of those routesprefix from R5, and R8
     Check that the number of RIB routes in ZEBRA is 2001
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count, route_exact_number
 
     tgen = get_topogen()
@@ -460,13 +562,46 @@ def test_bgp_ipv4_multiple_routes():
     tgen.gears["r8"].vtysh_cmd(
         "sharp install routes 172.16.0.100 nexthop 192.0.2.8 2000\n"
     )
+    tgen.gears["r5"].vtysh_cmd(
+        "sharp install routes 172.18.1.100 nexthop 172.16.0.200 2000\n"
+    )
+    tgen.gears["r6"].vtysh_cmd(
+        "sharp install routes 172.18.1.100 nexthop 172.16.0.200 2000\n"
+    )
+    tgen.gears["r6"].vtysh_cmd(
+        "sharp install routes 172.18.1.100 nexthop 172.16.0.200 2000\n"
+    )
+    tgen.gears["r5"].vtysh_cmd(
+        "sharp install routes 172.22.1.100 nexthop 172.18.1.200 2000\n"
+    )
+    tgen.gears["r6"].vtysh_cmd(
+        "sharp install routes 172.22.1.100 nexthop 172.18.1.200 2000\n"
+    )
+    tgen.gears["r8"].vtysh_cmd(
+        "sharp install routes 172.22.1.100 nexthop 172.18.1.200 2000\n"
+    )
 
     check_ipv4_prefix_with_multiple_nexthops("172.16.5.150/32", r8_path=True)
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r8_path=True
+    )
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r8_path=True
+    )
 
     step("Check that 192.0.2.9/32 unicast entry has 1 BGP NHG")
     nhg_id = route_check_nhg_id_is_protocol("172.16.5.150/32", "r1")
 
     check_ipv4_prefix_with_multiple_nexthops_linux("172.16.5.150", nhg_id=nhg_id)
+
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_18 = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux("172.18.1.100/32", nhg_id=nhg_id_18)
+
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_22 = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux("172.22.1.100/32", nhg_id=nhg_id_22)
 
     step(f"Check that the ipv4 zebra RIB count reaches {route_exact_number}")
     test_func = functools.partial(
@@ -485,7 +620,7 @@ def test_bgp_ipv4_simulate_r5_machine_going_down():
     Check that R5 failure did not change the NHG (EDGE implementation needed)
     Check that the number of zclient messages did not move
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -512,6 +647,12 @@ def test_bgp_ipv4_simulate_r5_machine_going_down():
     check_ipv4_prefix_with_multiple_nexthops(
         "172.16.5.150/32", r5_path=False, r8_path=True
     )
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=False, r8_path=True
+    )
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=False, r8_path=True
+    )
 
     step("Check that 172.16.5.150/32 unicast entry has 1 BGP NHG")
     local_nhg_id = route_check_nhg_id_is_protocol("172.16.5.150/32", "r1")
@@ -524,6 +665,28 @@ def test_bgp_ipv4_simulate_r5_machine_going_down():
     assert local_nhg_id == nhg_id, (
         "The same NHG %d is not used after R5 shutdown, EDGE implementation missing"
         % nhg_id
+    )
+
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=False, r8_path=True
+    )
+    step("Check that other NHG is used by 172.18.1.100/32 unicast routes")
+    assert local_nhg_id == nhg_id_18, (
+        "The same NHG %d is not used after R5 shutdown, EDGE implementation missing"
+        % nhg_id_18
+    )
+
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r5_path=False, r8_path=True
+    )
+    step("Check that other NHG is used by 172.22.1.150/32 unicast routes")
+    assert local_nhg_id == nhg_id_22, (
+        "The same NHG %d is not used after R5 shutdown, EDGE implementation missing"
+        % nhg_id_22
     )
 
     step(
@@ -588,6 +751,26 @@ def test_bgp_ipv4_simulate_r5_machine_going_up():
         local_nhg_id
     )
 
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r8_path=True
+    )
+
     step("Check that the number of route ADD messages between BGP and ZEBRA did move")
     local_route_count_add = _get_bgp_route_count(tgen.net["r1"])
     logger.info(
@@ -628,6 +811,26 @@ def test_bgp_ipv4_unpeering_with_r5():
         "172.16.5.150", nhg_id=local_nhg_id, r5_path=False, r6_path=True, r8_path=True
     )
 
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=False, r6_path=True, r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=False, r6_path=True, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=False, r6_path=True, r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r5_path=False, r6_path=True, r8_path=True
+    )
+
     # debug
     tgen.gears["r1"].vtysh_cmd("show zebra client")
     tgen.gears["r1"].vtysh_cmd("show bgp nexthop-group")
@@ -640,7 +843,7 @@ def test_bgp_ipv4_direct_peering_with_r5():
     On R1, we configure a peering with R5
     Check that routes from R5 are re-added
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -711,6 +914,26 @@ def test_bgp_ipv4_direct_peering_with_r5():
         "172.16.5.150", nhg_id=nhg_id, r8_path=True
     )
 
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_18 = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=nhg_id, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_22 = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=nhg_id, r8_path=True
+    )
+
     route_count = _get_bgp_route_count(tgen.net["r1"])
     logger.info(f"Get the route count messages between BGP and ZEBRA: {route_count}")
 
@@ -721,7 +944,7 @@ def test_bgp_ipv4_simulate_r5_peering_going_down():
     Check that R8 is selected
     Check that R5 failure did not change the NHG (EDGE implementation needed)
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -756,15 +979,57 @@ def test_bgp_ipv4_simulate_r5_peering_going_down():
         % nhg_id
     )
 
-    step(
-        "Check that the number of route ADD messages between BGP and ZEBRA did not move"
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=False, r6_path=True, r8_path=True
     )
-    local_route_count_add = _get_bgp_route_count(tgen.net["r1"])
-    logger.info(f"Number of route messages ADD: {local_route_count_add}")
-    assert route_count == local_route_count_add, (
-        "The number of route messages increased when r5 machine goes down : %d, expected %d"
-        % (local_route_count_add, route_count)
+
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=False, r6_path=True, r8_path=True
     )
+
+    recursive_nh_changed = False
+    step("Check that same NHG is used by 172.18.1.100/32 unicast routes")
+    if local_nhg_id != nhg_id_18:
+        print(
+            "Warning: BFD event, recursive nexthop 172.18.1.100/32, NHG_ID changed : %d -> %d"
+            % (nhg_id_18, local_nhg_id)
+        )
+        nhg_id_18 = local_nhg_id
+        recursive_nh_changed = True
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=False, r6_path=True, r8_path=True
+    )
+
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r5_path=False, r6_path=True, r8_path=True
+    )
+
+    step("Check that same NHG is used by 172.22.1.100/32 unicast routes")
+    if local_nhg_id != nhg_id_22:
+        print(
+            "Warning: BFD event, recursive nexthop 172.22.1.100/32, NHG_ID changed : %d -> %d"
+            % (nhg_id_22, local_nhg_id)
+        )
+        nhg_id_22 = local_nhg_id
+        recursive_nh_changed = True
+
+    if not recursive_nh_changed:
+        step(
+            "Check that the number of route ADD messages between BGP and ZEBRA did not move"
+        )
+        local_route_count_add = _get_bgp_route_count(tgen.net["r1"])
+        logger.info(f"Number of route messages ADD: {local_route_count_add}")
+        assert route_count == local_route_count_add, (
+            "The number of route messages increased when r5 machine goes down : %d, expected %d"
+            % (local_route_count_add, route_count)
+        )
 
     step("Check that the number of route DEL messages between BGP and ZEBRA is zero")
     local_route_count_del = _get_bgp_route_count(tgen.net["r1"], add_routes=False)
@@ -787,7 +1052,7 @@ def test_bgp_ipv4_simulate_r5_peering_going_up_again():
     On R5, we un-shutdown the interface
     Check that R5 routes are re-added
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -811,6 +1076,26 @@ def test_bgp_ipv4_simulate_r5_peering_going_up_again():
         "172.16.5.150", nhg_id=nhg_id, r5_path=True, r6_path=True, r8_path=True
     )
 
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_18 = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=nhg_id_18, r5_path=True, r6_path=True, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_22 = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=nhg_id_22, r5_path=True, r6_path=True, r8_path=True
+    )
+
     step("Check that the number of route ADD messages between BGP and ZEBRA did move")
     local_route_count_add = _get_bgp_route_count(tgen.net["r1"])
     logger.info(f"Number of route messages ADD: {local_route_count_add}")
@@ -826,7 +1111,7 @@ def test_bgp_ipv4_lower_preference_value_on_r5_and_r8_configured():
     On R5, and R8, we add a route-map to lower local-preference
     Check that only R6 is selected
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -862,6 +1147,46 @@ def test_bgp_ipv4_lower_preference_value_on_r5_and_r8_configured():
         % (local_nhg_id)
     )
 
+    step("Check that 172.18.1.100/32 unicast entry is installed with one endpoints")
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32",
+        "172.16.0.200",
+        r5_path=False,
+    )
+
+    step("Check that 172.18.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=False
+    )
+
+    step("Check that other NHG is used by 172.18.1.100/32 unicast routes")
+    assert local_nhg_id != nhg_id_18, (
+        "The same NHG %d is used after R5 and R8 updates use a different preference value. The NHG_ID should be different"
+        % (local_nhg_id)
+    )
+
+    step("Check that 172.22.1.100/32 unicast entry is installed with one endpoints")
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32",
+        "172.18.1.200",
+        r5_path=False,
+    )
+
+    step("Check that 172.22.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r5_path=False
+    )
+
+    step("Check that other NHG is used by 172.22.0.100/32 unicast routes")
+    assert local_nhg_id != nhg_id_22, (
+        "The same NHG %d is used after R5 and R8 updates use a different preference value. The NHG_ID should be different"
+        % (local_nhg_id)
+    )
+
     step(
         "Check that the number of route ADD messages between BGP and ZEBRA did not move"
     )
@@ -881,7 +1206,7 @@ def test_bgp_ipv4_reset_preference_value():
     On R5 and R8, we reset the route-map preference value
     Check that R5 routes are re-added
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -908,6 +1233,26 @@ def test_bgp_ipv4_reset_preference_value():
         "172.16.5.150", nhg_id=nhg_id, r5_path=True, r6_path=True, r8_path=True
     )
 
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_18 = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=nhg_id_18, r5_path=True, r6_path=True, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry has 1 BGP NHG")
+    nhg_id_22 = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=nhg_id_22, r5_path=True, r6_path=True, r8_path=True
+    )
+
     step("Check that the number of route ADD messages between BGP and ZEBRA did move")
     local_route_count_add = _get_bgp_route_count(tgen.net["r1"])
     logger.info(f"Number of route messages ADD: {local_route_count_add}")
@@ -925,7 +1270,7 @@ def test_bgp_ipv4_change_igp_on_r8_removed():
     Consequently, BGP NHT will tell the path to R8 lo interface is invalid
     Check that only R5, and R6 are selected, and use the same NHG_ID
     """
-    global nhg_id
+    global nhg_id, nhg_id_18, nhg_id_22
     global route_count
 
     tgen = get_topogen()
@@ -956,7 +1301,16 @@ def test_bgp_ipv4_change_igp_on_r8_removed():
         "172.16.5.150/32", r5_path=True, r6_path=True, r8_path=True
     )
     nhg_id = route_check_nhg_id_is_protocol("172.16.5.150/32", "r1")
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    nhg_id_18 = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    nhg_id_22 = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
 
+    step("Get the number of route ADD messages between BGP and ZEBRA")
     route_count = _get_bgp_route_count(tgen.net["r1"])
 
     step("Reconfigure R8 to remove the lo interface from the IGP")
@@ -980,6 +1334,40 @@ def test_bgp_ipv4_change_igp_on_r8_removed():
     assert local_nhg_id == nhg_id, (
         "A different NHG %d is used after IGP on R7 changed. The NHG_ID should be same (expected %d)"
         % (local_nhg_id, nhg_id)
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=True, r6_path=True, r8_path=False
+    )
+
+    step("Check that 172.18.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=True, r6_path=True, r8_path=False
+    )
+
+    step("Check that same NHG is used by 172.18.1.100/32 unicast routes")
+    assert local_nhg_id == nhg_id_18, (
+        "A different NHG %d is used after IGP on R7 changed. The NHG_ID should be same (expected %d)"
+        % (local_nhg_id, nhg_id_18)
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=True, r6_path=True, r8_path=False
+    )
+
+    step("Check that 172.22.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.22.1.100", nhg_id=local_nhg_id, r5_path=True, r6_path=True, r8_path=False
+    )
+
+    step("Check that same NHG is used by 172.22.1.100/32 unicast routes")
+    assert local_nhg_id == nhg_id_22, (
+        "A different NHG %d is used after IGP on R7 changed. The NHG_ID should be same (expected %d)"
+        % (local_nhg_id, nhg_id_22)
     )
 
     step(
@@ -1017,6 +1405,24 @@ def test_bgp_ipv4_change_igp_on_r8_readded():
 
     check_ipv4_prefix_with_multiple_nexthops_linux(
         "172.16.5.150", nhg_id=local_nhg_id, r5_path=True, r6_path=True, r8_path=True
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.18.1.100/32", "172.16.0.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.18.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.18.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=True, r6_path=True, r8_path=False
+    )
+
+    check_ipv4_prefix_recursive_with_multiple_nexthops(
+        "172.22.1.100/32", "172.18.1.200", r5_path=True, r6_path=True, r8_path=True
+    )
+    step("Check that 172.22.1.100/32 unicast entry uses a BGP NHG")
+    local_nhg_id = route_check_nhg_id_is_protocol("172.22.1.100/32", "r1")
+    check_ipv4_prefix_with_multiple_nexthops_linux(
+        "172.18.1.100", nhg_id=local_nhg_id, r5_path=True, r6_path=True, r8_path=False
     )
 
 
