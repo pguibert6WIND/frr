@@ -1135,6 +1135,17 @@ DEFPY(debug_path_policy, debug_path_policy_cmd, "[no] debug pathd policy",
 	return CMD_SUCCESS;
 }
 
+DEFPY(debug_path_zebra, debug_path_zebra_cmd, "[no] debug pathd zebra",
+      NO_STR DEBUG_STR
+      "path debugging\n"
+      "zebra debugging\n")
+{
+	uint32_t mode = DEBUG_NODE2MODE(vty->node);
+
+	DEBUG_MODE_SET(&path_zebra_debug, mode, !no);
+	return CMD_SUCCESS;
+}
+
 static const char *metric_type_name(enum srte_candidate_metric_type type)
 {
 	switch (type) {
@@ -1346,6 +1357,7 @@ int config_write_segment_routing(struct vty *vty)
 void path_cli_init(void)
 {
 	debug_install(&path_policy_debug);
+	debug_install(&path_zebra_debug);
 
 	install_node(&segment_routing_node);
 	install_node(&sr_traffic_eng_node);
@@ -1364,6 +1376,8 @@ void path_cli_init(void)
 
 	install_element(ENABLE_NODE, &debug_path_policy_cmd);
 	install_element(CONFIG_NODE, &debug_path_policy_cmd);
+	install_element(ENABLE_NODE, &debug_path_zebra_cmd);
+	install_element(CONFIG_NODE, &debug_path_zebra_cmd);
 
 	install_element(CONFIG_NODE, &segment_routing_cmd);
 	install_element(SEGMENT_ROUTING_NODE, &sr_traffic_eng_cmd);

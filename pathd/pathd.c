@@ -38,9 +38,7 @@ struct debug path_policy_debug = {
 	.desc = "Pathd policy",
 };
 
-#define PATH_POLICY_DEBUG(fmt, ...)                                            \
-	DEBUGD(&path_policy_debug, "policy: " fmt, ##__VA_ARGS__)
-
+#define PATH_POLICY_DEBUG(fmt, ...) DEBUGD(&path_policy_debug, "policy: " fmt, ##__VA_ARGS__)
 
 static void trigger_pathd_candidate_created(struct srte_candidate *candidate);
 static void trigger_pathd_candidate_created_timer(struct event *event);

@@ -40,6 +40,7 @@ enum srte_protocol_origin {
 };
 
 extern struct debug path_policy_debug;
+extern struct debug path_zebra_debug;
 
 enum srte_policy_status {
 	SRTE_POLICY_STATUS_UNKNOWN = 0,

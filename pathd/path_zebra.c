@@ -30,6 +30,13 @@ static int path_zebra_opaque_msg_handler(ZAPI_CALLBACK_ARGS);
 struct zclient *pathd_zclient;
 static struct zclient *zclient_sync;
 
+struct debug path_zebra_debug = {
+	.conf = "debug pathd zebra",
+	.desc = "Pathd zebra",
+};
+
+#define PATH_ZEBRA_DEBUG(fmt, ...) DEBUGD(&path_policy_debug, "zebra: " fmt, ##__VA_ARGS__)
+
 /* Event to retry synch zapi setup for label-manager */
 static struct event *t_sync_connect;
 
@@ -233,9 +240,9 @@ static void path_zebra_add_srv6_policy_internal(struct srte_policy *policy)
 		nhtd = path_nht_hash_getref(&lookup);
 
 		if (nhtd->refcount > 1)
-			zlog_debug("Reusing registered nexthop(%pFX) for candidate %s pref %u (num %d)",
-				   &lookup.nh, candidate->name, candidate->preference,
-				   nhtd->nh_num);
+			PATH_ZEBRA_DEBUG("Reusing registered nexthop(%pFX) for candidate %s pref %u (num %d)",
+					 &lookup.nh, candidate->name, candidate->preference,
+					 nhtd->nh_num);
 	}
 
 	SET_FLAG(segment_list->flags, F_SEGMENT_LIST_NHT_REGISTERED);
@@ -251,8 +258,8 @@ static void path_zebra_add_srv6_policy_internal(struct srte_policy *policy)
 		return;
 
 	cmd = ZEBRA_NEXTHOP_REGISTER;
-	zlog_debug("Registering nexthop(%pFX) for candidate %s pref %u", &lookup.nh,
-		   candidate->name, candidate->preference);
+	PATH_ZEBRA_DEBUG("Registering nexthop(%pFX) for candidate %s pref %u", &lookup.nh,
+			 candidate->name, candidate->preference);
 
 	if (zclient_send_rnh(pathd_zclient, cmd, &lookup.nh, SAFI_UNICAST, false, false,
 			     VRF_DEFAULT) == ZCLIENT_SEND_FAILURE)
