@@ -1487,6 +1487,8 @@ static bool alloc_srv6_sid_func_dynamic(struct zebra_srv6_sid_block *block,
  * @param sid_value specific SRv6 SID value (i.e. IPv6 address) to be
  * allocated explicitly
  *
+ * return @param locator_name specific locator name where SID has been allocated from
+ * allocated explicitly
  * @return 0 if the function returned an existing SID and SID value has not changed,
  * 1 if a new SID has been allocated or the existing SID value has changed, -1 if an error occurred
  */
@@ -2274,7 +2276,7 @@ static int srv6_manager_get_sid_internal(struct zebra_srv6_sid **sid,
 			  sid_value ? sid_value : &in6addr_any, locator_name);
 
 		/* Notify client about SID alloc failure */
-		zsend_srv6_sid_notify(client, ctx, sid_value, 0, 0,
+		zsend_srv6_sid_notify(client, ctx, sid_value, 0, 0, NULL,
 				      ZAPI_SRV6_SID_FAIL_ALLOC);
 	} else if (ret == 0) {
 		if (IS_ZEBRA_DEBUG_PACKET)
@@ -2288,6 +2290,8 @@ static int srv6_manager_get_sid_internal(struct zebra_srv6_sid **sid,
 
 		zsend_srv6_sid_notify(client, ctx, &(*sid)->value, (*sid)->func,
 				      (*sid)->wide_func,
+				      (*sid)->locator ? (*sid)->locator->name
+						      : NULL,
 				      ZAPI_SRV6_SID_ALLOCATED);
 	} else {
 		if (IS_ZEBRA_DEBUG_PACKET)
@@ -2302,6 +2306,9 @@ static int srv6_manager_get_sid_internal(struct zebra_srv6_sid **sid,
 		for (ALL_LIST_ELEMENTS_RO((*sid)->client_list, node, c))
 			zsend_srv6_sid_notify(c, ctx, &(*sid)->value,
 					      (*sid)->func, (*sid)->wide_func,
+					      (*sid)->locator
+						      ? (*sid)->locator->name
+						      : NULL,
 					      ZAPI_SRV6_SID_ALLOCATED);
 	}
 
@@ -2360,6 +2367,7 @@ static int srv6_manager_release_sid_internal(struct zserv *client,
 	struct zebra_srv6_sid_ctx *zctx;
 	struct listnode *node, *nnode;
 	char buf[256];
+	const char *locator_name = NULL;
 
 	if (IS_ZEBRA_DEBUG_PACKET)
 		zlog_debug("%s: releasing SRv6 SID associated with ctx %s",
@@ -2368,6 +2376,9 @@ static int srv6_manager_release_sid_internal(struct zserv *client,
 	/* Lookup Zebra SID context and release it */
 	for (ALL_LIST_ELEMENTS(srv6->sids, node, nnode, zctx))
 		if (memcmp(&zctx->ctx, ctx, sizeof(struct srv6_sid_ctx)) == 0) {
+			if (zctx->sid && zctx->sid->locator)
+				locator_name =
+					(const char *)zctx->sid->locator->name;
 			ret = release_srv6_sid(client, zctx);
 			break;
 		}
@@ -2377,10 +2388,10 @@ static int srv6_manager_release_sid_internal(struct zserv *client,
 			   srv6_sid_ctx2str(buf, sizeof(buf), ctx));
 
 	if (ret == 0)
-		zsend_srv6_sid_notify(client, ctx, NULL, 0, 0,
+		zsend_srv6_sid_notify(client, ctx, NULL, 0, 0, locator_name,
 				      ZAPI_SRV6_SID_RELEASED);
 	else
-		zsend_srv6_sid_notify(client, ctx, NULL, 0, 0,
+		zsend_srv6_sid_notify(client, ctx, NULL, 0, 0, locator_name,
 				      ZAPI_SRV6_SID_FAIL_RELEASE);
 
 	return ret;
