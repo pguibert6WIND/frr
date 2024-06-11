@@ -104,6 +104,15 @@ DEFPY (show_srv6_manager,
 	json_object *json_parameters = NULL;
 	json_object *json_encapsulation = NULL;
 	json_object *json_source_address = NULL;
+	json_object *json_sid_entry = NULL;
+	json_object *json_behavior_attributes = NULL;
+	json_object *json_sid_list = NULL;
+	json_object *json_sid_client_list = NULL;
+	struct listnode *node, *cnode;
+	struct zebra_srv6_sid_ctx *s = NULL;
+	struct vrf *vrf;
+	struct zserv *c;
+	bool first = false;
 
 	if (uj) {
 		json = json_object_new_object();
@@ -117,13 +126,97 @@ DEFPY (show_srv6_manager,
 				       json_source_address);
 		json_object_string_addf(json_source_address, "configured",
 					"%pI6", &srv6->encap_src_addr);
-		vty_json(vty, json);
 	} else {
 		vty_out(vty, "Parameters:\n");
 		vty_out(vty, "  Encapsulation:\n");
 		vty_out(vty, "    Source Address:\n");
 		vty_out(vty, "      Configured: %pI6\n", &srv6->encap_src_addr);
 	}
+	if (uj) {
+		json_sid_list = json_object_new_array();
+		json_object_object_add(json, "sidList", json_sid_list);
+	} else
+		vty_out(vty, "Allocated SID List:\n");
+	for (ALL_LIST_ELEMENTS_RO(srv6->sids, node, s)) {
+		if (!s->sid)
+			continue;
+		vrf = vrf_lookup_by_id(s->ctx.vrf_id);
+		if (uj) {
+			json_sid_entry = json_object_new_object();
+
+			json_object_string_addf(json_sid_entry, "sidValue",
+						"%pI6", &s->sid->value);
+			if (s->sid->locator)
+				json_object_string_add(json_sid_entry, "locator",
+						       (const char *)&s->sid
+							       ->locator->name);
+			json_object_string_add(json_sid_entry, "behavior",
+					       seg6local_action2str(
+						       s->ctx.behavior));
+			json_behavior_attributes = json_object_new_object();
+			json_object_object_add(json_sid_entry,
+					       "behaviorAttributes",
+					       json_behavior_attributes);
+			if (!IPV6_ADDR_SAME(&s->ctx.nh6, &in6addr_any))
+				json_object_string_addf(json_behavior_attributes,
+							"nexthopIpv6", "%pI6",
+							&s->ctx.nh6);
+
+			if (s->ctx.nh4.s_addr)
+				json_object_string_addf(json_behavior_attributes,
+							"nexthopIpv4", "%pI4",
+							&s->ctx.nh4);
+
+			if (vrf)
+				json_object_string_add(json_behavior_attributes,
+						       "vrfName", vrf->name);
+
+			if (listcount(s->sid->client_list)) {
+				json_sid_client_list = json_object_new_array();
+				json_object_object_add(json_sid_entry,
+						       "owner(s)",
+						       json_sid_client_list);
+
+				for (ALL_LIST_ELEMENTS_RO(s->sid->client_list,
+							  cnode, c)) {
+					json_object_array_add(
+						json_sid_client_list,
+						json_object_new_stringf(
+							"%s",
+							zebra_route_string(
+								c->proto)));
+				}
+			}
+			json_object_array_add(json_sid_list, json_sid_entry);
+		} else {
+			vty_out(vty,
+				"  Sid Address: %pI6, behavior %s (locator %s)\n",
+				&s->sid->value,
+				seg6local_action2str(s->ctx.behavior),
+				(char *)(s->sid->locator ? s->sid->locator->name
+							 : "<unknown>"));
+			vty_out(vty, "    behavior attributes: vrf %s",
+				vrf ? vrf->name : "<unknown>");
+			if (!IPV6_ADDR_SAME(&s->ctx.nh6, &in6addr_any))
+				vty_out(vty, ", nexthop %pI6", &s->ctx.nh6);
+			if (s->ctx.nh4.s_addr)
+				vty_out(vty, ", nexthop %pI4", &s->ctx.nh4);
+			vty_out(vty, "\n");
+			if (listcount(s->sid->client_list)) {
+				first = true;
+				vty_out(vty, "    owner(s): ");
+				for (ALL_LIST_ELEMENTS_RO(s->sid->client_list,
+							  cnode, c)) {
+					vty_out(vty, "%s%s", first ? "" : ", ",
+						zebra_route_string(c->proto));
+					first = false;
+				}
+				vty_out(vty, "\n");
+			}
+		}
+	}
+	if (json)
+		vty_json(vty, json);
 
 	return CMD_SUCCESS;
 }
