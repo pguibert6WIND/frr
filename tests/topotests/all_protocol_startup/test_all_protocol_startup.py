@@ -511,7 +511,7 @@ def test_nexthop_groups():
 
     # Create a lib nexthop-group
     net["r1"].cmd(
-        'vtysh -c "c t" -c "nexthop-group basic" -c "nexthop 1.1.1.1" -c "nexthop 1.1.1.2"'
+        'vtysh -c "c t" -c "nexthop-group basic" -c "allow-recursion" -c "nexthop 1.1.1.1" -c "nexthop 1.1.1.2"'
     )
 
     # Create with sharpd using nexthop-group
@@ -542,7 +542,7 @@ def test_nexthop_groups():
     ## Duplicate
 
     net["r1"].cmd(
-        'vtysh -c "c t" -c "nexthop-group duplicate" -c "nexthop 2.2.2.1" -c "nexthop 1.1.1.1"'
+        'vtysh -c "c t" -c "nexthop-group duplicate" -c "allow-recursion" -c "nexthop 2.2.2.1" -c "nexthop 1.1.1.1"'
     )
 
     net["r1"].cmd('vtysh -c "sharp install routes 3.3.3.2 nexthop-group duplicate 1"')
@@ -552,7 +552,7 @@ def test_nexthop_groups():
     ## Two 4-Way ECMP
 
     net["r1"].cmd(
-        'vtysh -c "c t" -c "nexthop-group fourA" -c "nexthop 1.1.1.1" -c "nexthop 1.1.1.2" \
+        'vtysh -c "c t" -c "nexthop-group fourA" -c "allow-recursion" -c "nexthop 1.1.1.1" -c "nexthop 1.1.1.2" \
             -c "nexthop 1.1.1.3" -c "nexthop 1.1.1.4"'
     )
 
@@ -561,7 +561,7 @@ def test_nexthop_groups():
     verify_route_nexthop_group("4.4.4.1/32")
 
     net["r1"].cmd(
-        'vtysh -c "c t" -c "nexthop-group fourB" -c "nexthop 1.1.1.5" -c "nexthop 1.1.1.6" \
+        'vtysh -c "c t" -c "nexthop-group fourB" -c "allow-recursion" -c "nexthop 1.1.1.5" -c "nexthop 1.1.1.6" \
             -c "nexthop 1.1.1.7" -c "nexthop 1.1.1.8"'
     )
 
@@ -572,7 +572,7 @@ def test_nexthop_groups():
     ## Recursive to 8-Way ECMP
 
     net["r1"].cmd(
-        'vtysh -c "c t" -c "nexthop-group eight-recursive" -c "nexthop 4.4.4.1" -c "nexthop 4.4.4.2"'
+        'vtysh -c "c t" -c "nexthop-group eight-recursive" -c "allow-recursion" -c "nexthop 4.4.4.1" -c "nexthop 4.4.4.2"'
     )
 
     net["r1"].cmd(
