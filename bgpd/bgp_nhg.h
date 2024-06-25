@@ -15,6 +15,11 @@ PREDECL_RBTREE_UNIQ(bgp_nhg_connected_tree);
 
 extern struct bgp_nhg_cache_head nhg_cache_table;
 
+struct bgp_nhg_nexthop_cache {
+	uint16_t nexthop_num;
+	struct zapi_nexthop nexthops[MULTIPATH_NUM];
+};
+
 struct bgp_nhg_cache {
 	struct bgp_nhg_cache_item entry;
 
@@ -31,8 +36,9 @@ struct bgp_nhg_cache {
 #define BGP_NHG_STATE_REMOVED	(1 << 1)
 	uint16_t state;
 
-	uint16_t nexthop_num;
-	struct zapi_nexthop nexthops[MULTIPATH_NUM];
+	union {
+		struct bgp_nhg_nexthop_cache nexthops;
+	};
 
 	LIST_HEAD(nhg_path_list, bgp_path_info) paths;
 
