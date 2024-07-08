@@ -26,6 +26,9 @@ struct bgp_nhg_cache {
 #define BGP_NHG_FLAG_IBGP	     (1 << 1)
 #define BGP_NHG_FLAG_SRTE_PRESENCE   (1 << 2)
 	uint16_t flags;
+#define BGP_NHG_STATE_INSTALLED (1 << 0)
+#define BGP_NHG_STATE_REMOVED	(1 << 1)
+	uint16_t state;
 
 	uint16_t nexthop_num;
 	struct zapi_nexthop nexthops[MULTIPATH_NUM];
@@ -54,5 +57,7 @@ extern void bgp_nhg_path_unlink(struct bgp_path_info *pi);
 
 extern struct bgp_nhg_cache *bgp_nhg_new(uint32_t flags, uint16_t nexthop_num,
 					 struct zapi_nexthop api_nh[]);
+extern void bgp_nhg_id_set_installed(uint32_t id);
+extern void bgp_nhg_id_set_removed(uint32_t id);
 
 #endif /* _BGP_NHG_H */
