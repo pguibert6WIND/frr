@@ -1281,7 +1281,7 @@ static void bgp_zebra_nexthop_group_configure(
 		 */
 		if (api->nexthops[i].type == NEXTHOP_TYPE_IFINDEX ||
 		    api->nexthops[i].type == NEXTHOP_TYPE_BLACKHOLE) {
-			bgp_nhg_path_unlink(info);
+			bgp_nhg_dest_unlink(info->net);
 			return;
 		}
 		/* disallow IPv4 Mapped IPv6 addresses
@@ -1289,7 +1289,7 @@ static void bgp_zebra_nexthop_group_configure(
 		 */
 		if (api->nexthops[i].type == NEXTHOP_TYPE_IPV6 &&
 		    IS_MAPPED_IPV6(&api->nexthops[i].gate.ipv6)) {
-			bgp_nhg_path_unlink(info);
+			bgp_nhg_dest_unlink(info->net);
 			return;
 		}
 		/* disallow routes which resolve over blackhole routes
@@ -1298,7 +1298,7 @@ static void bgp_zebra_nexthop_group_configure(
 		    p_mpinfo[i]->nexthop->nexthop &&
 		    p_mpinfo[i]->nexthop->nexthop->type ==
 			    NEXTHOP_TYPE_BLACKHOLE) {
-			bgp_nhg_path_unlink(info);
+			bgp_nhg_dest_unlink(info->net);
 			return;
 		}
 
@@ -1311,7 +1311,7 @@ static void bgp_zebra_nexthop_group_configure(
 			if (BGP_DEBUG(nexthop_group, NEXTHOP_GROUP_DETAIL))
 				zlog_debug("        :%s: %pFX Resolved against default route",
 					   __func__, p);
-			bgp_nhg_path_unlink(info);
+			bgp_nhg_dest_unlink(info->net);
 			return;
 		}
 		if (prefix_same(p, &p_mpinfo[i]->nexthop->resolved_prefix) &&
@@ -1321,7 +1321,7 @@ static void bgp_zebra_nexthop_group_configure(
 			if (BGP_DEBUG(nexthop_group, NEXTHOP_GROUP_DETAIL))
 				zlog_debug("        %s: %pFX, Matched against ourself and prefix length is not max bit length",
 					   __func__, p);
-			bgp_nhg_path_unlink(info);
+			bgp_nhg_dest_unlink(info->net);
 			return;
 		}
 	}
@@ -1590,7 +1590,7 @@ static void bgp_zebra_announce_parse_nexthop(
 
 	if (info->sub_type == BGP_ROUTE_AGGREGATE || do_wt_ecmp ||
 	    is_evpn_path || (*valid_nh_count) != 1) {
-		bgp_nhg_path_unlink(info);
+		bgp_nhg_dest_unlink(info->net);
 		return;
 	}
 

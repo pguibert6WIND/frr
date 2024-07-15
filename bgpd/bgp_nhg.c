@@ -553,6 +553,14 @@ void bgp_nhg_path_unlink(struct bgp_path_info *pi)
 	return bgp_nhg_path_unlink_internal(pi, true);
 }
 
+void bgp_nhg_dest_unlink(struct bgp_dest *dest)
+{
+	struct bgp_path_info *pi;
+
+	for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next)
+		bgp_nhg_path_unlink(pi);
+}
+
 /* called when ZEBRA notified the BGP NHG id is installed */
 void bgp_nhg_id_set_installed(uint32_t id)
 {
@@ -727,7 +735,7 @@ void bgp_nhg_refresh_by_nexthop(struct bgp_nexthop_cache *bnc)
 			    bnc->nexthop->type == NEXTHOP_TYPE_BLACKHOLE) {
 				LIST_FOREACH_SAFE (path, &(nhg->paths),
 						   nhg_cache_thread, safe) {
-					bgp_nhg_path_unlink(path);
+					bgp_nhg_dest_unlink(path->net);
 					table = bgp_dest_table(path->net);
 					if (table)
 						bgp_zebra_announce_dest(table->bgp, path->net, true);
