@@ -4163,17 +4163,6 @@ DEFUN(show_debugging_route_notification,
 	return CMD_SUCCESS;
 }
 
-/* Display dataplane info */
-DEFUN(show_debugging_rib_info, show_debugging_rib_info_cmd,
-      "show debugging rib-information",
-      SHOW_STR
-      DEBUG_STR
-      "RIB information\n")
-{
-	zebra_rnh_job_list_display(vty);
-	return CMD_SUCCESS;
-}
-
 /* Table configuration write function. */
 static int config_write_table(struct vty *vty)
 {
@@ -4485,7 +4474,6 @@ void zebra_vty_init(void)
 	install_element(CONFIG_NODE, &zebra_dplane_queue_limit_cmd);
 	install_element(CONFIG_NODE, &no_zebra_dplane_queue_limit_cmd);
 
-	install_element(VIEW_NODE, &show_debugging_rib_info_cmd);
 #ifdef HAVE_NETLINK
 	install_element(CONFIG_NODE, &zebra_kernel_netlink_batch_tx_buf_cmd);
 	install_element(CONFIG_NODE, &no_zebra_kernel_netlink_batch_tx_buf_cmd);
