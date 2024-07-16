@@ -22,7 +22,6 @@
 #include "mpls.h"
 #include "srcdest_table.h"
 #include "zebra/zebra_nhg.h"
-#include "zclient.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -633,10 +632,6 @@ extern int rib_add_gr_run(afi_t afi, vrf_id_t vrf_id, uint8_t proto,
 
 extern void zebra_vty_init(void);
 extern uint32_t zebra_rib_dplane_results_count(void);
-extern void
-zebra_route_notify_job_owner_list_enqueue(struct route_node *rn,
-					  const struct zebra_dplane_ctx *ctx,
-					  enum zapi_route_notify_owner note);
 
 extern pid_t pid;
 
