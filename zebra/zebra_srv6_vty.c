@@ -517,7 +517,8 @@ DEFPY (show_srv6_sid,
 	if (locator_name) {
 		locator = zebra_srv6_locator_lookup(locator_name);
 		if (!locator) {
-			vty_out(vty, "%% Can't find the SRv6 locator\n");
+			if (uj == false)
+				vty_out(vty, "%% Can't find the SRv6 locator\n");
 			return CMD_WARNING;
 		}
 	}
@@ -532,15 +533,17 @@ DEFPY (show_srv6_sid,
 		}
 
 		if (!sid_ctx) {
-			vty_out(vty, "%% Can't find the SRv6 SID\n");
+			if (uj == false)
+				vty_out(vty, "%% Can't find the SRv6 SID\n");
 			return CMD_WARNING;
 		}
 	}
 
 	if (locator && sid_ctx)
 		if (!sid_ctx->sid || sid_ctx->sid->locator != locator) {
-			vty_out(vty,
-				"%% Can't find the SRv6 SID in the provided locator\n");
+			if (uj == false)
+				vty_out(vty,
+					"%% Can't find the SRv6 SID in the provided locator\n");
 			return CMD_WARNING;
 		}
 
