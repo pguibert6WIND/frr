@@ -1779,6 +1779,8 @@ int get_srv6_sid(struct zebra_srv6_sid **sid, struct srv6_sid_ctx *ctx,
 		ret = get_srv6_sid_dynamic(sid, ctx, locator);
 
 		break;
+	case SRV6_SID_ALLOC_MODE_UNSPEC:
+	case SRV6_SID_ALLOC_MODE_MAX:
 	default:
 		flog_err(EC_ZEBRA_SM_CANNOT_ASSIGN_SID,
 			 "%s: SRv6 Manager: Unrecognized alloc mode %u",
