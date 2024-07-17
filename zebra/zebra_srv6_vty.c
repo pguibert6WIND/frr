@@ -260,13 +260,16 @@ DEFUN (show_srv6_locator_detail,
 	return CMD_SUCCESS;
 }
 
-static void do_show_srv6_sid_line(struct ttable *tt, struct zebra_srv6_sid *sid)
+static void do_show_srv6_sid_line(struct ttable *tt, struct zebra_srv6_sid *sid,
+				  bool detail)
 {
 	struct listnode *node;
 	struct zserv *client;
 	char clients[256];
 	char ctx[256] = {};
 	char behavior[256] = {};
+	char alloc_mode_str[10] = {};
+	char locator_name[SRV6_LOCNAME_SIZE];
 	struct vrf *vrf;
 	struct interface *ifp;
 	int ret;
@@ -381,18 +384,43 @@ static void do_show_srv6_sid_line(struct ttable *tt, struct zebra_srv6_sid *sid)
 	if (strlen(ctx) == 0)
 		snprintf(ctx, sizeof(ctx), "-");
 
-	ttable_add_row(tt, "%pI6|%s|%s|%s", &sid->value, behavior, ctx, clients);
+	if (detail == false) {
+		ttable_add_row(tt, "%pI6|%s|%s|%s", &sid->value, behavior, ctx,
+			       clients);
+		return;
+	}
+
+	if (sid->locator)
+		snprintf(locator_name, sizeof(locator_name), "%s",
+			 sid->locator->name);
+	else
+		snprintf(locator_name, sizeof(locator_name), "-");
+
+	snprintf(alloc_mode_str, sizeof(alloc_mode_str), "%s",
+		 srv6_sid_alloc_mode2str(sid->alloc_mode));
+
+	ttable_add_row(tt, "%pI6|%s|%s|%s|%s|%s", &sid->value, behavior, ctx,
+		       clients, locator_name, alloc_mode_str);
 }
 
-static void do_show_srv6_sid_detail(struct vty *vty, json_object **json,
-				    struct srv6_locator *locator,
-				    struct zebra_srv6_sid_ctx *sid_ctx)
+static void do_show_srv6_sid_specific(struct vty *vty, json_object **json,
+				      struct srv6_locator *locator,
+				      struct zebra_srv6_sid_ctx *sid_ctx,
+				      bool detail)
 {
 	struct ttable *tt;
+	bool use_detail = false;
 
 	/* Prepare table. */
 	tt = ttable_new(&ttable_styles[TTSTYLE_BLANK]);
-	ttable_add_row(tt, "SID|Behavior|Context|Daemon/Instance");
+	if (detail && json)
+		use_detail = true;
+
+	if (use_detail)
+		ttable_add_row(tt,
+			       "SID|Behavior|Context|Daemon/Instance|Locator|AllocationType");
+	else
+		ttable_add_row(tt, "SID|Behavior|Context|Daemon/Instance");
 	tt->style.cell.rpad = 2;
 	tt->style.corner = ' ';
 	ttable_restyle(tt);
@@ -404,7 +432,7 @@ static void do_show_srv6_sid_detail(struct vty *vty, json_object **json,
 	if (locator && sid_ctx->sid->locator != locator)
 		return;
 
-	do_show_srv6_sid_line(tt, sid_ctx->sid);
+	do_show_srv6_sid_line(tt, sid_ctx->sid, use_detail);
 
 	ttable_colseps(tt, 0, RIGHT, true, ' ');
 	ttable_colseps(tt, 1, LEFT, true, ' ');
@@ -416,8 +444,14 @@ static void do_show_srv6_sid_detail(struct vty *vty, json_object **json,
 	/* Dump the generated table. */
 	if (tt->nrows > 1) {
 		if (json) {
-			*json = ttable_json_with_json_text(tt, "ssss",
-							   "sid|behavior|context|daemons");
+			if (detail)
+				*json = ttable_json_with_json_text(
+					tt, "ssssss",
+					"sid|behavior|context|daemons|locator|allocationType");
+			else
+				*json = ttable_json_with_json_text(
+					tt, "ssss",
+					"sid|behavior|context|daemons");
 		} else {
 			char *table;
 
@@ -428,7 +462,7 @@ static void do_show_srv6_sid_detail(struct vty *vty, json_object **json,
 	}
 	ttable_del(tt);
 
-	if (!json) {
+	if (!json && detail) {
 		vty_out(vty, "  Locator: %s\n",
 			sid_ctx->sid->locator ? sid_ctx->sid->locator->name
 					      : "-");
@@ -437,9 +471,8 @@ static void do_show_srv6_sid_detail(struct vty *vty, json_object **json,
 	}
 }
 
-static void do_show_srv6_sid(struct vty *vty, json_object **json,
-			     struct srv6_locator *locator,
-			     struct zebra_srv6_sid_ctx *sid_ctx)
+static void do_show_srv6_sid_all(struct vty *vty, json_object **json,
+				 struct srv6_locator *locator, bool detail)
 {
 	struct zebra_srv6 *srv6 = zebra_srv6_get_default();
 	struct zebra_srv6_sid_ctx *ctx;
@@ -448,7 +481,11 @@ static void do_show_srv6_sid(struct vty *vty, json_object **json,
 
 	/* Prepare table. */
 	tt = ttable_new(&ttable_styles[TTSTYLE_BLANK]);
-	ttable_add_row(tt, "SID|Behavior|Context|Daemon/Instance");
+	if (detail)
+		ttable_add_row(tt,
+			       "SID|Behavior|Context|Daemon/Instance|Locator|AllocationType");
+	else
+		ttable_add_row(tt, "SID|Behavior|Context|Daemon/Instance");
 	tt->style.cell.rpad = 2;
 	tt->style.corner = ' ';
 	ttable_restyle(tt);
@@ -463,11 +500,7 @@ static void do_show_srv6_sid(struct vty *vty, json_object **json,
 		if (locator && ctx->sid->locator != locator)
 			continue;
 
-		/* Skip SIDs we are not interested in */
-		if (sid_ctx && sid_ctx != ctx)
-			continue;
-
-		do_show_srv6_sid_line(tt, ctx->sid);
+		do_show_srv6_sid_line(tt, ctx->sid, detail);
 	}
 
 	ttable_colseps(tt, 0, RIGHT, true, ' ');
@@ -480,8 +513,14 @@ static void do_show_srv6_sid(struct vty *vty, json_object **json,
 	/* Dump the generated table. */
 	if (tt->nrows > 1) {
 		if (json) {
-			*json = ttable_json_with_json_text(tt, "ssss",
-							   "sid|behavior|context|daemons");
+			if (detail)
+				*json = ttable_json_with_json_text(
+					tt, "ssssss",
+					"sid|behavior|context|daemons|locator|allocationType");
+			else
+				*json = ttable_json_with_json_text(
+					tt, "ssss",
+					"sid|behavior|context|daemons");
 		} else {
 			char *table;
 
@@ -495,7 +534,7 @@ static void do_show_srv6_sid(struct vty *vty, json_object **json,
 
 DEFPY (show_srv6_sid,
        show_srv6_sid_cmd,
-       "show segment-routing srv6 [locator NAME$locator_name] sid [X:X::X:X$sid_value [detail$detail]] [json]",
+       "show segment-routing srv6 [locator NAME$locator_name] sid [X:X::X:X$sid_value] [detail$detail] [json]",
        SHOW_STR
        "Segment Routing\n"
        "Segment Routing SRv6\n"
@@ -512,7 +551,6 @@ DEFPY (show_srv6_sid,
 	struct zebra_srv6_sid_ctx *sid_ctx = NULL, *c;
 	struct listnode *node;
 	json_object *json = NULL;
-
 
 	if (locator_name) {
 		locator = zebra_srv6_locator_lookup(locator_name);
@@ -550,11 +588,11 @@ DEFPY (show_srv6_sid,
 	if (uj)
 		json = json_object_new_object();
 
-	if (detail)
-		do_show_srv6_sid_detail(vty, uj ? &json : NULL, locator,
-					sid_ctx);
+	if (sid_ctx)
+		do_show_srv6_sid_specific(vty, uj ? &json : NULL, locator,
+					  sid_ctx, detail);
 	else
-		do_show_srv6_sid(vty, uj ? &json : NULL, locator, sid_ctx);
+		do_show_srv6_sid_all(vty, uj ? &json : NULL, locator, detail);
 
 	if (uj)
 		vty_json(vty, json);
