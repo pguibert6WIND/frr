@@ -59,6 +59,12 @@ module frr-pathd {
       description
         "Segment Routing TE properties";
 
+      leaf use-srv6-sid-manager {
+          type boolean;
+          default false;
+          description "Set it to true if SID manager should be used.";
+      }
+
       list segment-list {
         key "name";
         description "Segment-list properties";
