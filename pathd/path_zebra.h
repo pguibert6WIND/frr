@@ -25,6 +25,7 @@ void path_zebra_send_bsid(const struct in6_addr *bsid, ifindex_t oif,
 void path_zebra_srv6_manager_release_sid(struct srv6_sid_ctx *ctx, const char *locator_name);
 void path_zebra_srv6_manager_get_sid(struct srv6_sid_ctx *ctx, struct in6_addr *sid_addr);
 struct path_locator_ctx *path_zebra_locator_ctx_lookup_by_name(const char *locator_name);
+void path_zebra_process_srv6_bsid(bool allocate);
 
 
 #endif /* _FRR_PATH_MPLS_H_ */

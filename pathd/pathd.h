@@ -393,6 +393,8 @@ extern struct zebra_privs_t pathd_privs;
 /* master thread, defined in path_main.c */
 extern struct event_loop *master;
 
+extern bool srv6_use_sid_manager;
+
 /* pathd.c */
 struct srte_segment_list *srte_segment_list_add(const char *name);
 void srte_segment_list_del(struct srte_segment_list *segment_list);
@@ -462,6 +464,9 @@ void pathd_shutdown(void);
 
 /* path_cli.c */
 void path_cli_init(void);
+
+/* srv6 */
+void path_srv6_init(void);
 
 
 /**
