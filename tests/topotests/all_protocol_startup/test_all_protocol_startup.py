@@ -820,6 +820,7 @@ def test_nexthop_groups():
         -c "nexthop-group ECMP2" \
         -c "nexthop 192.168.0.205 r1-eth0"'
     )
+    sleep(1)
     net["r1"].cmd('vtysh -c "sharp install routes 8.8.8.8 nexthop-group GROUP1 1\n"')
     verify_route_nexthop_group("8.8.8.8/32", "r1", ecmp=2)
 
