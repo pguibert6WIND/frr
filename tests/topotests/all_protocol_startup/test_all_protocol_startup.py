@@ -856,6 +856,7 @@ def test_nexthop_groups():
         -c "allow-recursion" \
         -c "nexthop 192.0.2.110"'
     )
+    sleep(1)
     net["r1"].cmd(
         'vtysh -c "sharp install routes 12.12.12.12 nexthop-group GROUP2 1\n"'
     )
