@@ -91,6 +91,9 @@ struct route_entry {
 	uint32_t nhe_id;
 	uint32_t nhe_installed_id;
 
+	uint32_t pic_nhe_id;
+	uint32_t pic_nhe_installed_id;
+
 	/* Type of this route. */
 	int type;
 
