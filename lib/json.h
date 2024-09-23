@@ -16,6 +16,10 @@ extern "C" {
 #include <json-c/printbuf.h>
 #include <json-c/json_object.h>
 
+#ifndef printbuf_strappend
+#define printbuf_strappend(pb, str) \
+	printbuf_memappend((pb), _printbuf_check_literal(str), sizeof(str) - 1)
+#endif
 /*
  * FRR style JSON iteration.
  * Usage: JSON_FOREACH(...) { ... }
