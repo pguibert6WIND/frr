@@ -14,6 +14,7 @@ extern "C" {
 #include "printfrr.h"
 #include <json-c/json.h>
 #include <json-c/printbuf.h>
+#include <json-c/json_object.h>
 
 /*
  * FRR style JSON iteration.
