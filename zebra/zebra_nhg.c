@@ -730,9 +730,15 @@ static struct nhg_hash_entry *handle_recursive_depend(struct nhg_hash_entry *nhe
 			   __func__, nh, depend,
 			   depend ? depend->id : 0);
 
-	if (depend)
+	if (depend) {
+		if (depend->id == nhe->id) {
+			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
+				zlog_debug("%s: NHE %d resolved against itself",
+					   __func__, nhe->id);
+			return NULL;
+		}
 		depends_add(nhg_depends, depend);
-
+	}
 	return depend;
 }
 
@@ -1682,9 +1688,15 @@ static struct nhg_hash_entry *depends_find_add(struct nhg_hash_entry *nhe,
 		zlog_debug("%s: nh %pNHv => %p",
 			   __func__, nh, depend);
 
-	if (depend)
+	if (depend) {
+		if (depend->id == nhe->id) {
+			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
+				zlog_debug("%s: NHE %d resolved against itself",
+					   __func__, nhe->id);
+			return NULL;
+		}
 		depends_add(head, depend);
-
+	}
 	return depend;
 }
 
