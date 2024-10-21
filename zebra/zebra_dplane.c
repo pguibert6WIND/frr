@@ -579,6 +579,9 @@ static struct zebra_dplane_globals {
 	_Atomic uint32_t dg_nexthops_in;
 	_Atomic uint32_t dg_nexthop_errors;
 
+	_Atomic uint32_t dg_pic_nexthops_in;
+	_Atomic uint32_t dg_pic_nexthop_errors;
+
 	_Atomic uint32_t dg_lsps_in;
 	_Atomic uint32_t dg_lsp_errors;
 
@@ -4569,9 +4572,13 @@ dplane_nexthop_update_internal(struct nhg_hash_entry *nhe, enum dplane_op_e op)
 			SET_FLAG(nhe->flags, NEXTHOP_GROUP_INSTALLED);
 
 			dplane_ctx_free(&ctx);
-			atomic_fetch_add_explicit(&zdplane_info.dg_nexthops_in,
-						  1, memory_order_relaxed);
-
+			if (op == DPLANE_OP_PIC_CONTEXT_INSTALL || op == DPLANE_OP_PIC_CONTEXT_UPDATE ||
+			    op == DPLANE_OP_PIC_CONTEXT_DELETE)
+				atomic_fetch_add_explicit(&zdplane_info.dg_pic_nexthops_in,
+							  1, memory_order_relaxed);
+			else
+				atomic_fetch_add_explicit(&zdplane_info.dg_nexthops_in,
+							  1, memory_order_relaxed);
 			return ZEBRA_DPLANE_REQUEST_SUCCESS;
 		}
 
@@ -4579,14 +4586,24 @@ dplane_nexthop_update_internal(struct nhg_hash_entry *nhe, enum dplane_op_e op)
 	}
 
 	/* Update counter */
-	atomic_fetch_add_explicit(&zdplane_info.dg_nexthops_in, 1,
+	if (op == DPLANE_OP_PIC_CONTEXT_INSTALL || op == DPLANE_OP_PIC_CONTEXT_UPDATE ||
+            op == DPLANE_OP_PIC_CONTEXT_DELETE)
+		atomic_fetch_add_explicit(&zdplane_info.dg_pic_nexthops_in,
+					  1, memory_order_relaxed);
+	else
+		atomic_fetch_add_explicit(&zdplane_info.dg_nexthops_in, 1,
 				  memory_order_relaxed);
 
 	if (ret == AOK)
 		result = ZEBRA_DPLANE_REQUEST_QUEUED;
 	else {
-		atomic_fetch_add_explicit(&zdplane_info.dg_nexthop_errors, 1,
-					  memory_order_relaxed);
+		if (op == DPLANE_OP_PIC_CONTEXT_INSTALL || op == DPLANE_OP_PIC_CONTEXT_UPDATE ||
+		    op == DPLANE_OP_PIC_CONTEXT_DELETE)
+			atomic_fetch_add_explicit(&zdplane_info.dg_pic_nexthop_errors, 1,
+						  memory_order_relaxed);
+		else
+			atomic_fetch_add_explicit(&zdplane_info.dg_nexthop_errors, 1,
+						  memory_order_relaxed);
 		if (ctx)
 			dplane_ctx_free(&ctx);
 	}
@@ -6105,6 +6122,13 @@ int dplane_show_helper(struct vty *vty, bool detailed)
 	vty_out(vty, "Nexthop updates:          %" PRIu64 "\n", incoming);
 	vty_out(vty, "Nexthop update errors:    %" PRIu64 "\n", errs);
 
+	incoming = atomic_load_explicit(&zdplane_info.dg_pic_nexthops_in,
+					memory_order_relaxed);
+	errs = atomic_load_explicit(&zdplane_info.dg_pic_nexthop_errors,
+				    memory_order_relaxed);
+	vty_out(vty, "PIC Nexthop updates:          %" PRIu64 "\n", incoming);
+	vty_out(vty, "PIC Nexthop update errors:    %" PRIu64 "\n", errs);
+
 	vty_out(vty, "Other errors       :      %"PRIu64"\n", other_errs);
 	vty_out(vty, "Route update queue limit: %"PRIu64"\n", limit);
 	vty_out(vty, "Route update queue depth: %"PRIu64"\n", queued);
@@ -6818,9 +6842,9 @@ static void kernel_dplane_log_detail(struct zebra_dplane_ctx *ctx)
 static void kernel_dplane_handle_result(struct zebra_dplane_ctx *ctx)
 {
 	enum zebra_dplane_result res = dplane_ctx_get_status(ctx);
+	enum dplane_op_e op = dplane_ctx_get_op(ctx);
 
 	switch (dplane_ctx_get_op(ctx)) {
-
 	case DPLANE_OP_ROUTE_INSTALL:
 	case DPLANE_OP_ROUTE_UPDATE:
 	case DPLANE_OP_ROUTE_DELETE:
@@ -6856,10 +6880,15 @@ static void kernel_dplane_handle_result(struct zebra_dplane_ctx *ctx)
 	case DPLANE_OP_PIC_CONTEXT_INSTALL:
 	case DPLANE_OP_PIC_CONTEXT_UPDATE:
 	case DPLANE_OP_PIC_CONTEXT_DELETE:
-		if (res != ZEBRA_DPLANE_REQUEST_SUCCESS)
-			atomic_fetch_add_explicit(
-				&zdplane_info.dg_nexthop_errors, 1,
-				memory_order_relaxed);
+		if (res != ZEBRA_DPLANE_REQUEST_SUCCESS) {
+			if (op == DPLANE_OP_PIC_CONTEXT_INSTALL || op == DPLANE_OP_PIC_CONTEXT_UPDATE
+			    || op == DPLANE_OP_PIC_CONTEXT_DELETE)
+				atomic_fetch_add_explicit(&zdplane_info.dg_pic_nexthop_errors, 1,
+							  memory_order_relaxed);
+			else
+				atomic_fetch_add_explicit(&zdplane_info.dg_nexthop_errors, 1,
+							  memory_order_relaxed);
+		}
 		break;
 
 	case DPLANE_OP_LSP_INSTALL:
