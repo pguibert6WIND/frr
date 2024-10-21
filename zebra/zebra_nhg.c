@@ -56,8 +56,8 @@ static struct nhg_hash_entry *depends_find(const struct nexthop *nh, afi_t afi, 
 					   bool from_dplane, bool pic);
 static void depends_add(struct nhg_connected_tree_head *head,
 			struct nhg_hash_entry *depend);
-static struct nhg_hash_entry *depends_find_add(struct nhg_connected_tree_head *head,
-					       struct nexthop *nh, afi_t afi, int type,
+static struct nhg_hash_entry *depends_find_add(struct nhg_hash_entry *nhe,
+					       struct nexthop *nh, afi_t afi,
 					       bool from_dplane, bool pic);
 static struct nhg_hash_entry *
 depends_find_id_add(struct nhg_connected_tree_head *head, uint32_t id);
@@ -709,11 +709,13 @@ static int zebra_nhg_process_grp(struct nexthop_group *nhg, struct nhg_connected
 	return 0;
 }
 
-static void handle_recursive_depend(struct nhg_connected_tree_head *nhg_depends, struct nexthop *nh,
-				    afi_t afi, int type, bool pic)
+static struct nhg_hash_entry *handle_recursive_depend(struct nhg_hash_entry *nhe,
+						      struct nexthop *nh, afi_t afi, bool pic)
 {
 	struct nhg_hash_entry *depend = NULL;
 	struct nexthop_group resolved_ng = {};
+	struct nhg_connected_tree_head *nhg_depends = &nhe->nhg_depends;
+	int type = nhe->type;
 
 	resolved_ng.nexthop = nh;
 
@@ -730,6 +732,8 @@ static void handle_recursive_depend(struct nhg_connected_tree_head *nhg_depends,
 
 	if (depend)
 		depends_add(nhg_depends, depend);
+
+	return depend;
 }
 
 static bool zebra_need_to_create_pic(struct nexthop *nh)
@@ -840,8 +844,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 	if (nh->next == NULL && newnhe->id < ZEBRA_NHG_PROTO_LOWER) {
 		if (CHECK_FLAG(nh->flags, NEXTHOP_FLAG_RECURSIVE)) {
 			/* Single recursive nexthop */
-			handle_recursive_depend(&newnhe->nhg_depends, nh->resolved, afi,
-						newnhe->type, pic);
+                    handle_recursive_depend(newnhe, nh->resolved, afi, pic);
 			recursive = true;
 		}
 	} else {
@@ -855,8 +858,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
 
-			depends_find_add(&newnhe->nhg_depends, nh, afi, newnhe->type, from_dplane,
-					 pic);
+			depends_find_add(newnhe, nh, afi, from_dplane, pic);
 		}
 	}
 
@@ -890,8 +892,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 				   __func__, nh);
 
 		/* Single recursive nexthop */
-		handle_recursive_depend(&backup_nhe->nhg_depends, nh->resolved, afi,
-					backup_nhe->type, pic);
+		handle_recursive_depend(backup_nhe, nh->resolved, afi, pic);
 		recursive = true;
 	} else {
 		/* One or more backup NHs */
@@ -903,8 +904,7 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
 
-			depends_find_add(&backup_nhe->nhg_depends, nh, afi, backup_nhe->type,
-					 from_dplane, pic);
+			depends_find_add(backup_nhe, nh, afi, from_dplane, pic);
 		}
 	}
 
@@ -1668,11 +1668,13 @@ static void depends_add(struct nhg_connected_tree_head *head,
 		zebra_nhg_increment_ref(depend);
 }
 
-static struct nhg_hash_entry *depends_find_add(struct nhg_connected_tree_head *head,
-					       struct nexthop *nh, afi_t afi, int type,
+static struct nhg_hash_entry *depends_find_add(struct nhg_hash_entry *nhe,
+					       struct nexthop *nh, afi_t afi,
 					       bool from_dplane, bool pic)
 {
 	struct nhg_hash_entry *depend = NULL;
+	struct nhg_connected_tree_head *head = &nhe->nhg_depends;
+	int type = nhe->type;
 
 	depend = depends_find(nh, afi, type, from_dplane, pic);
 
