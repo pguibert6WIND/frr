@@ -226,6 +226,8 @@ int netlink_config_write_helper(struct vty *vty)
 			if_netlink_get_frr_protodown_r_bit());
 	if (zebra_is_pic_nexthop() == false)
 		vty_out(vty, "no zebra pic\n");
+	if (zebra_is_pic_kernel())
+		vty_out(vty, "zebra pic-kernel\n");
 
 	return 0;
 }

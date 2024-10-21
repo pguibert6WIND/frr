@@ -3671,7 +3671,8 @@ static void dplane_ctx_nexthop_fill_routeinfo(struct zebra_dplane_ctx *ctx,
 	struct nhg_connected *rb_node_dep = NULL;
 
 	nh = nhe->nhg.nexthop;
-	if (CHECK_FLAG(nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE))
+	if (CHECK_FLAG(nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE) &&
+	    zebra_is_pic_kernel() == false)
 		SET_FLAG(flags, ZEBRA_FLAG_KERNEL_BYPASS);
 
 	nexthop_group_copy(&(ctx->u.rinfo.nhe.ng), &(nhe->nhg));
@@ -4305,7 +4306,8 @@ dplane_route_update_internal(struct route_node *rn,
 	ret = dplane_ctx_route_init(ctx, op, rn, re);
 	if (ret == AOK) {
 		flags = re->flags;
-		if (CHECK_FLAG(re->nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE)) {
+		if (CHECK_FLAG(re->nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE) &&
+		    zebra_is_pic_kernel() == false) {
 			/* all nhe having nhe bypass kernel */
 			SET_FLAG(flags, ZEBRA_FLAG_KERNEL_BYPASS);
 		}
