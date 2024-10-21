@@ -686,7 +686,7 @@ static struct nhg_hash_entry *handle_recursive_depend(struct nhg_hash_entry *nhe
 			   depend ? depend->id : 0);
 
 	if (depend) {
-		if (depend->id == nhe->id) {
+		if (pic && depend->id == nhe->id) {
 			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 				zlog_debug("%s: NHE %d resolved against itself",
 					   __func__, nhe->id);
@@ -716,9 +716,9 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 	bool created = false;
 	bool createdPic = false;
 	bool recursive = false;
-	struct nhg_hash_entry *newnhe, *backup_nhe, *pic_nhe;
+	struct nhg_hash_entry *newnhe, *backup_nhe, *pic_nhe = NULL,
+						    *temp_nhe = NULL;
 	struct nexthop *nh = NULL;
-
 
 	if (lookup->id)
 		(*nhe) = zebra_nhg_lookup_id(lookup->id);
@@ -799,7 +799,14 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 	if (nh->next == NULL && newnhe->id < ZEBRA_NHG_PROTO_LOWER) {
 		if (CHECK_FLAG(nh->flags, NEXTHOP_FLAG_RECURSIVE)) {
 			/* Single recursive nexthop */
-			handle_recursive_depend(newnhe, nh->resolved, afi, pic);
+			temp_nhe = handle_recursive_depend(newnhe, nh->resolved,
+							   afi, pic);
+			if (pic && temp_nhe == NULL) {
+				/* recursive dependency failed */
+				zebra_nhg_free(newnhe);
+				*nhe = NULL;
+				return 0;
+			}
 			recursive = true;
 		}
 	} else {
@@ -813,10 +820,16 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
 
-			depends_find_add(newnhe, nh, afi, from_dplane, pic);
+			temp_nhe = depends_find_add(newnhe, nh, afi,
+						    from_dplane, pic);
+			if (pic && temp_nhe == NULL) {
+				/* recursive dependency failed */
+				zebra_nhg_free(newnhe);
+				*nhe = NULL;
+				return 0;
+			}
 		}
 	}
-
 	if (recursive)
 		SET_FLAG(newnhe->flags, NEXTHOP_GROUP_RECURSIVE);
 
@@ -847,7 +860,8 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 				   __func__, nh);
 
 		/* Single recursive nexthop */
-		handle_recursive_depend(backup_nhe, nh->resolved, afi, pic);
+		temp_nhe = handle_recursive_depend(backup_nhe, nh->resolved,
+						   afi, pic);
 		recursive = true;
 	} else {
 		/* One or more backup NHs */
@@ -859,7 +873,14 @@ static bool zebra_nhe_find(struct nhg_hash_entry **nhe, /* return value */
 						      NEXTHOP_FLAG_RECURSIVE) ?
 					   "(R)" : "");
 
-			depends_find_add(backup_nhe, nh, afi, from_dplane, pic);
+			temp_nhe = depends_find_add(backup_nhe, nh, afi,
+						    from_dplane, pic);
+			if (pic && temp_nhe == NULL) {
+				/* recursive dependency failed */
+				zebra_nhg_free(newnhe);
+				*nhe = NULL;
+				return 0;
+			}
 		}
 	}
 
@@ -954,6 +975,16 @@ bool zebra_pic_nhe_find(struct nhg_hash_entry **pic_nhe, /* return value */
 	created = zebra_nhe_find(&picnhe, &pic_nh_lookup, NULL, afi,
 				 from_dplane, true);
 
+	if (created == false && (picnhe == NULL || picnhe->id == nhe->id)) {
+		if (IS_ZEBRA_DEBUG_NHG_DETAIL) {
+			zlog_debug("%s: nhe %u failed to find a PIC NHE (recursive loop?)",
+				   __func__, nhe->id);
+			*pic_nhe = NULL;
+		}
+		if (pic_nh_lookup.nhg.nexthop)
+			nexthops_free(pic_nh_lookup.nhg.nexthop);
+		return false;
+	}
 	*pic_nhe = picnhe;
 	if (pic_nh_lookup.nhg.nexthop)
 		nexthops_free(pic_nh_lookup.nhg.nexthop);
@@ -1616,7 +1647,7 @@ static struct nhg_hash_entry *depends_find_add(struct nhg_hash_entry *nhe,
 			   __func__, nh, depend);
 
 	if (depend) {
-		if (depend->id == nhe->id) {
+		if (pic && depend->id == nhe->id) {
 			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 				zlog_debug("%s: NHE %d resolved against itself",
 					   __func__, nhe->id);
