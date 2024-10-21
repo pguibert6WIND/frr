@@ -686,7 +686,7 @@ static struct nhg_hash_entry *handle_recursive_depend(struct nhg_hash_entry *nhe
 			   depend ? depend->id : 0);
 
 	if (depend) {
-		if (pic && depend->id == nhe->id) {
+		if (depend->id == nhe->id) {
 			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 				zlog_debug("%s: NHE %d resolved against itself",
 					   __func__, nhe->id);
@@ -1067,7 +1067,7 @@ static struct nhg_hash_entry *zebra_nhg_find_nexthop(uint32_t id,
 	zebra_nhg_find(&nhe, id, &nhg, NULL, vrf_id, afi, type, from_dplane,
 		       pic);
 
-	if (nhe && IS_ZEBRA_DEBUG_NHG_DETAIL)
+	if (IS_ZEBRA_DEBUG_NHG_DETAIL)
 		zlog_debug("%s: nh %pNHv => %p (%pNG)", __func__, nh, nhe, nhe);
 
 	return nhe;
@@ -1605,7 +1605,7 @@ static struct nhg_hash_entry *depends_find(const struct nexthop *nh, afi_t afi,
 		nhe = depends_find_singleton(nh, afi, type, from_dplane, pic);
 
 
-	if (nhe && IS_ZEBRA_DEBUG_NHG_DETAIL) {
+	if (IS_ZEBRA_DEBUG_NHG_DETAIL) {
 		zlog_debug("%s: nh %pNHv %s => %p (%pNG)", __func__, nh,
 			   CHECK_FLAG(nh->flags, NEXTHOP_FLAG_RECURSIVE) ? "(R)"
 									 : "",
@@ -1647,7 +1647,7 @@ static struct nhg_hash_entry *depends_find_add(struct nhg_hash_entry *nhe,
 			   __func__, nh, depend);
 
 	if (depend) {
-		if (pic && depend->id == nhe->id) {
+		if (depend->id == nhe->id) {
 			if (IS_ZEBRA_DEBUG_RIB_DETAILED)
 				zlog_debug("%s: NHE %d resolved against itself",
 					   __func__, nhe->id);
