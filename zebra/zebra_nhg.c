@@ -699,7 +699,7 @@ static struct nhg_hash_entry *handle_recursive_depend(struct nhg_hash_entry *nhe
 
 static bool zebra_need_to_create_pic(struct nexthop *nh)
 {
-	if (nh && nh->nh_srv6 && !sid_zero(nh->nh_srv6->seg6_segs))
+	if (nh)
 		return true;
 	return false;
 }

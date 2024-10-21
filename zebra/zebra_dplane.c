@@ -3671,8 +3671,6 @@ static void dplane_ctx_nexthop_fill_routeinfo(struct zebra_dplane_ctx *ctx,
 	struct nhg_connected *rb_node_dep = NULL;
 
 	nh = nhe->nhg.nexthop;
-	if (nh->nh_srv6)
-		SET_FLAG(flags, ZEBRA_FLAG_KERNEL_BYPASS);
 	if (CHECK_FLAG(nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE))
 		SET_FLAG(flags, ZEBRA_FLAG_KERNEL_BYPASS);
 
@@ -4298,7 +4296,6 @@ dplane_route_update_internal(struct route_node *rn,
 	enum zebra_dplane_result result = ZEBRA_DPLANE_REQUEST_FAILURE;
 	int ret = EINVAL;
 	struct zebra_dplane_ctx *ctx = NULL;
-	struct nexthop *nexthop;
 	uint32_t flags = 0;
 
 	/* Obtain context block */
@@ -4307,9 +4304,9 @@ dplane_route_update_internal(struct route_node *rn,
 	/* Init context with info from zebra data structs */
 	ret = dplane_ctx_route_init(ctx, op, rn, re);
 	if (ret == AOK) {
-		nexthop = re->nhe->nhg.nexthop;
 		flags = re->flags;
-		if (nexthop && nexthop->nh_srv6) {
+		if (CHECK_FLAG(re->nhe->flags, NEXTHOP_GROUP_PIC_NON_RECURSIVE)) {
+			/* all nhe having nhe bypass kernel */
 			SET_FLAG(flags, ZEBRA_FLAG_KERNEL_BYPASS);
 		}
 		dplane_ctx_set_flags(ctx, flags);
