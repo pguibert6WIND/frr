@@ -4312,6 +4312,16 @@ DEFUN(zebra_on_rib_process_script, zebra_on_rib_process_script_cmd,
 
 #endif /* HAVE_SCRIPTING */
 
+DEFPY(zebra_pic_nexthop, zebra_pic_nexthop_cmd,
+      "[no$no] zebra pic",
+      NO_STR
+      ZEBRA_STR
+      "Prefix Independent Convergence\n")
+{
+	zrouter.pic_nexthop = !no;
+	return CMD_SUCCESS;
+}
+
 /* IP node for static routes. */
 static int zebra_ip_config(struct vty *vty);
 static struct cmd_node ip_node = {
@@ -4458,5 +4468,6 @@ void zebra_vty_init(void)
 	install_element(CONFIG_NODE, &zebra_on_rib_process_script_cmd);
 #endif /* HAVE_SCRIPTING */
 
+	install_element(CONFIG_NODE, &zebra_pic_nexthop_cmd);
 	install_element(VIEW_NODE, &zebra_show_routing_tables_summary_cmd);
 }

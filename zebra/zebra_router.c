@@ -345,6 +345,8 @@ void zebra_router_init(bool asic_offload, bool notify_on_ack,
 
 	zrouter.nexthop_weight_scale_value = 254;
 
+	zrouter.pic_nexthop = true;
+
 #ifdef HAVE_SCRIPTING
 	zebra_script_init();
 #endif

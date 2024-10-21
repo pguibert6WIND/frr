@@ -241,6 +241,8 @@ struct zebra_router {
 	uint8_t protodown_r_bit;
 
 	uint64_t nexthop_weight_scale_value;
+
+	bool pic_nexthop;
 };
 
 #define GRACEFUL_RESTART_TIME 60
@@ -327,6 +329,11 @@ static inline bool if_netlink_frr_protodown_r_bit_is_set(void)
 static inline uint8_t if_netlink_get_frr_protodown_r_bit(void)
 {
 	return zrouter.protodown_r_bit;
+}
+
+static inline bool zebra_is_pic_nexthop(void)
+{
+	return zrouter.pic_nexthop;
 }
 
 /* zebra_northbound.c */
