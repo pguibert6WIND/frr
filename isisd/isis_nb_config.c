@@ -3559,6 +3559,45 @@ int isis_instance_segment_routing_srv6_locator_destroy(
 	return NB_OK;
 }
 
+
+/*
+ * XPath: /frr-isisd:isis/instance/segment-routing-srv6/algorithm-locators/algorithm-locator
+ */
+int isis_instance_segment_routing_srv6_locator_algo_entry_create(struct nb_cb_create_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return NB_OK;
+}
+
+int isis_instance_segment_routing_srv6_locator_algo_entry_destroy(struct nb_cb_destroy_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-isisd:isis/instance/segment-routing-srv6/algorithm-locators/algorithm-locator/locator
+ */
+int isis_instance_segment_routing_srv6_locator_algo_locator_modify(struct nb_cb_modify_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return NB_OK;
+}
+
+int isis_instance_segment_routing_srv6_locator_algo_locator_destroy(struct nb_cb_destroy_args *args)
+{
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	return NB_OK;
+}
+
 /*
  * XPath: /frr-isisd:isis/instance/segment-routing-srv6/msd/node-msd/max-segs-left
  */

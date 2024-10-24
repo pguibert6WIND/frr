@@ -2041,6 +2041,54 @@ void cli_show_isis_prefix_sid_algorithm(struct vty *vty,
 	vty_out(vty, "\n");
 }
 
+#ifndef FABRICD
+/*
+ * XPath: /frr-isisd:isis/instance/segment-routing-srv6/algorithm-locators
+ */
+DEFPY_YANG (isis_srv6_locator_flex_algo,
+       isis_srv6_locator_flex_algo_cmd,
+       "locator NAME$loc_name algorithm (128-255)$algorithm",
+       "Specify SRv6 locator\n"
+       "Specify SRv6 locator\n"
+       "Associate locator to a Flex-algo nodes\n"
+       "Algorithm number\n")
+{
+	nb_cli_enqueue_change(vty, ".", NB_OP_CREATE, NULL);
+	nb_cli_enqueue_change(vty, "./locator", NB_OP_MODIFY, loc_name);
+
+	return nb_cli_apply_changes(vty, "./algorithm-locators/algorithm-locator[algo='%s']",
+				    algorithm_str);
+}
+
+DEFPY_YANG (isis_no_srv6_locator_flex_algo,
+       isis_no_srv6_locator_flex_algo_cmd,
+       "no locator [NAME$loc_name] algorithm (128-255)$algorithm",
+       NO_STR
+       "Specify SRv6 locator\n"
+       "Specify SRv6 locator\n"
+       "Associate locator to a Flex-algo nodes\n"
+       "Algorithm number\n")
+{
+	nb_cli_enqueue_change(vty, ".", NB_OP_DESTROY, NULL);
+
+	return nb_cli_apply_changes(vty, "./algorithm-locators/algorithm-locator[algo='%s']",
+				    algorithm_str);
+}
+
+void cli_show_isis_srv6_locator_algo(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults)
+{
+	vty_out(vty, "  locator %s algorithm %s\n", yang_dnode_get_string(dnode, "./locator"),
+		yang_dnode_get_string(dnode, "./algo"));
+}
+
+void cli_show_isis_srv6_locator_algo_end(struct vty *vty, const struct lyd_node *dnode)
+{
+	vty_out(vty, "  exit\n");
+}
+
+#endif /* ifndef FABRICD */
+
 /*
  * XPath: /frr-isisd:isis/instance/segment-routing-srv6/locator
  */
@@ -4049,6 +4097,10 @@ void isis_cli_init(void)
 	install_element(ISIS_SRV6_NODE, &isis_srv6_locator_cmd);
 	install_element(ISIS_SRV6_NODE, &isis_srv6_node_msd_cmd);
 	install_element(ISIS_SRV6_NODE, &isis_srv6_interface_cmd);
+#ifndef FABRICD
+	install_element(ISIS_SRV6_NODE, &isis_no_srv6_locator_flex_algo_cmd);
+	install_element(ISIS_SRV6_NODE, &isis_srv6_locator_flex_algo_cmd);
+#endif /* ifndef FABRICD */
 	install_element(ISIS_SRV6_NODE_MSD_NODE,
 			&isis_srv6_node_msd_max_segs_left_cmd);
 	install_element(ISIS_SRV6_NODE_MSD_NODE,

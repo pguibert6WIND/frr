@@ -330,10 +330,17 @@ int isis_instance_segment_routing_srv6_locator_modify(
 	struct nb_cb_modify_args *args);
 int isis_instance_segment_routing_srv6_locator_destroy(
 	struct nb_cb_destroy_args *args);
+int isis_instance_segment_routing_srv6_locator_algo_entry_create(struct nb_cb_create_args *args);
+int isis_instance_segment_routing_srv6_locator_algo_entry_destroy(struct nb_cb_destroy_args *args);
+int isis_instance_segment_routing_srv6_locator_algo_locator_modify(struct nb_cb_modify_args *args);
+int isis_instance_segment_routing_srv6_locator_algo_locator_destroy(struct nb_cb_destroy_args *args);
 void cli_show_isis_srv6_locator(struct vty *vty, const struct lyd_node *dnode,
 				bool show_defaults);
 void cli_show_isis_srv6_locator_end(struct vty *vty,
 				    const struct lyd_node *dnode);
+void cli_show_isis_srv6_locator_algo(struct vty *vty, const struct lyd_node *dnode,
+				     bool show_defaults);
+void cli_show_isis_srv6_locator_algo_end(struct vty *vty, const struct lyd_node *dnode);
 int isis_instance_segment_routing_srv6_msd_node_msd_max_segs_left_modify(
 	struct nb_cb_modify_args *args);
 int isis_instance_segment_routing_srv6_msd_node_msd_max_end_pop_modify(

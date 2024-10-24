@@ -877,6 +877,22 @@ const struct frr_yang_module_info frr_isisd_info = {
 			},
 		},
 		{
+			.xpath = "/frr-isisd:isis/instance/segment-routing-srv6/algorithm-locators/algorithm-locator",
+			.cbs = {
+				.create = isis_instance_segment_routing_srv6_locator_algo_entry_create,
+				.destroy = isis_instance_segment_routing_srv6_locator_algo_entry_destroy,
+				.cli_show = cli_show_isis_srv6_locator_algo,
+				.cli_show_end = cli_show_isis_srv6_locator_algo_end,
+			},
+		},
+		{
+			.xpath = "/frr-isisd:isis/instance/segment-routing-srv6/algorithm-locators/algorithm-locator/locator",
+			.cbs = {
+				.modify = isis_instance_segment_routing_srv6_locator_algo_locator_modify,
+				.destroy = isis_instance_segment_routing_srv6_locator_algo_locator_destroy,
+			},
+		},
+		{
 			.xpath = "/frr-isisd:isis/instance/segment-routing-srv6/msd/node-msd/max-segs-left",
 			.cbs = {
 				.modify = isis_instance_segment_routing_srv6_msd_node_msd_max_segs_left_modify,
