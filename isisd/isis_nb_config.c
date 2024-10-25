@@ -3242,7 +3242,7 @@ static int isis_instance_flex_algo_dplane_set(struct nb_cb_create_args *args,
 		lsp_regenerate_schedule(area, area->is_type, 0);
 		break;
 	case NB_EV_VALIDATE:
-		if (type == FLEX_ALGO_SRV6 || type == FLEX_ALGO_IP) {
+		if (type == FLEX_ALGO_IP) {
 			snprintf(args->errmsg, args->errmsg_len,
 				 "%s Flex-algo dataplane is not yet supported.",
 				 type == FLEX_ALGO_SRV6 ? "SRv6" : "IP");

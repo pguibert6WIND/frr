@@ -117,10 +117,11 @@ _isis_flex_algo_elected(int algorithm, const struct isis_area *area,
 		return NULL;
 
 	/* No elected FAD if no data-plane is enabled
-	 * Currently, only Segment-Routing MPLS is supported.
-	 * Segment-Routing SRv6 and IP will be configured in the future.
+	 * Currently, only Segment-Routing MPLS and SRv6 are supported.
+	 * Segment-Routing IP will be configured in the future.
 	 */
-	if (!CHECK_FLAG(flex_ago->dataplanes, FLEX_ALGO_SR_MPLS))
+	if (CHECK_FLAG(flex_ago->dataplanes, FLEX_ALGO_SR_MPLS) ||
+	    CHECK_FLAG(flex_ago->dataplanes, FLEX_ALGO_SRV6))
 		return NULL;
 
 	/*
