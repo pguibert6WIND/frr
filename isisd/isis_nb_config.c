@@ -3565,16 +3565,45 @@ int isis_instance_segment_routing_srv6_locator_destroy(
  */
 int isis_instance_segment_routing_srv6_locator_algo_entry_create(struct nb_cb_create_args *args)
 {
+	struct isis_area *area;
+	const char *loc_name;
+	uint8_t algorithm;
+	struct srv6_locator_cfg *pcfg;
+
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
 
+	area = nb_running_get_entry(lyd_parent(lyd_parent(args->dnode)), NULL, true);
+	algorithm = yang_dnode_get_uint8(args->dnode, "./algo");
+
+	pcfg = isis_srv6_cfg_locator_find(area, algorithm);
+
+	loc_name = yang_dnode_get_string(args->dnode, "./locator");
+
+	if (loc_name == NULL)
+		return NB_OK;
+	if (pcfg) {
+		strlcpy(pcfg->locator_name, loc_name, sizeof(pcfg->locator_name));
+		return NB_OK;
+	}
+	pcfg = isis_srv6_cfg_locator_add(area, loc_name, algorithm);
+	nb_running_set_entry(args->dnode, pcfg);
+	lsp_regenerate_schedule(area, area->is_type, 0);
 	return NB_OK;
 }
 
 int isis_instance_segment_routing_srv6_locator_algo_entry_destroy(struct nb_cb_destroy_args *args)
 {
+	struct isis_area *area;
+	struct srv6_locator_cfg *pcfg;
+
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
+
+	pcfg = nb_running_unset_entry(args->dnode);
+	area = pcfg->area;
+	isis_srv6_cfg_locator_del(pcfg);
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }
@@ -3584,16 +3613,36 @@ int isis_instance_segment_routing_srv6_locator_algo_entry_destroy(struct nb_cb_d
  */
 int isis_instance_segment_routing_srv6_locator_algo_locator_modify(struct nb_cb_modify_args *args)
 {
+	struct srv6_locator_cfg *pcfg;
+	const char *loc_name;
+
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
+
+	pcfg = nb_running_get_entry(args->dnode, NULL, true);
+	loc_name = yang_dnode_get_string(args->dnode, NULL);
+
+	/* update locator name */
+	if (strncmp(loc_name, pcfg->locator_name, sizeof(pcfg->locator_name))) {
+		strlcpy(pcfg->locator_name, loc_name, sizeof(pcfg->locator_name));
+		lsp_regenerate_schedule(pcfg->area, pcfg->area->is_type, 0);
+	}
 
 	return NB_OK;
 }
 
 int isis_instance_segment_routing_srv6_locator_algo_locator_destroy(struct nb_cb_destroy_args *args)
 {
+	struct isis_area *area;
+	struct srv6_locator_cfg *pcfg;
+
 	if (args->event != NB_EV_APPLY)
 		return NB_OK;
+
+	pcfg = nb_running_unset_entry(args->dnode);
+	area = pcfg->area;
+	isis_srv6_cfg_locator_del(pcfg);
+	lsp_regenerate_schedule(area, area->is_type, 0);
 
 	return NB_OK;
 }

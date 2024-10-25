@@ -23,6 +23,30 @@
 /* Local variables and functions */
 DEFINE_MTYPE_STATIC(ISISD, ISIS_SRV6_SID, "ISIS SRv6 Segment ID");
 DEFINE_MTYPE_STATIC(ISISD, ISIS_SRV6_INFO, "ISIS SRv6 information");
+DEFINE_MTYPE_STATIC(ISISD, ISIS_SRV6_LOCATOR, "ISIS SRv6 locator");
+
+/* --- RB-Tree Management functions ----------------------------------------- */
+
+/**
+ * Configured SRv6 Locator comparison for RB-Tree.
+ *
+ * @param a	First SRv6 locator
+ * @param b	Second SRv6 locator
+ *
+ * @return	-1 (a < b), 0 (a == b) or +1 (a > b)
+ */
+static inline int srv6_locator_cfg_compare(const struct srv6_locator_cfg *a,
+					   const struct srv6_locator_cfg *b)
+{
+	int ret;
+
+	ret = a->algorithm - b->algorithm;
+	if (ret != 0)
+		return ret;
+
+	return 0;
+}
+DECLARE_RBTREE_UNIQ(srv6db_locator_cfg, struct srv6_locator_cfg, entry, srv6_locator_cfg_compare);
 
 /**
  * Fill in SRv6 SID Structure Sub-Sub-TLV with information from an SRv6 SID.
@@ -707,6 +731,7 @@ void isis_srv6_area_init(struct isis_area *area)
 	/* Initialize SRv6 SIDs list */
 	srv6db->srv6_sids = list_new();
 	srv6db->srv6_sids->del = (void (*)(void *))isis_srv6_sid_free;
+	srv6db_locator_cfg_init(&srv6db->config.algorithm_locators);
 }
 
 /**
@@ -740,6 +765,74 @@ void isis_srv6_area_term(struct isis_area *area)
 	/* Free SRv6 SIDs list */
 	list_delete(&srv6db->srv6_sids);
 	list_delete(&srv6db->srv6_endx_sids);
+
+	/* Clear Prefix-SID configuration. */
+	while (srv6db_locator_cfg_count(&srv6db->config.algorithm_locators) > 0) {
+		struct srv6_locator_cfg *pcfg;
+
+		pcfg = srv6db_locator_cfg_first(&srv6db->config.algorithm_locators);
+		isis_srv6_cfg_locator_del(pcfg);
+	}
+}
+
+/**
+ * Add new Locator configuration to the SRv6DB.
+ *
+ * @param area	  IS-IS area
+ * @param locator  Locator to be added
+ * @param algorithm  algorithm number
+ *
+ * @return	  Newly added Locator configuration structure
+ */
+struct srv6_locator_cfg *isis_srv6_cfg_locator_add(struct isis_area *area, const char *loc_name,
+						   uint8_t algorithm)
+{
+	struct srv6_locator_cfg *pcfg;
+
+	sr_debug("ISIS-Sr (%s): Add locator %s algorithm %d", area->area_tag, loc_name, algorithm);
+
+	pcfg = XCALLOC(MTYPE_ISIS_SRV6_LOCATOR, sizeof(*pcfg));
+	pcfg->area = area;
+	pcfg->algorithm = algorithm;
+
+	strlcpy(pcfg->locator_name, loc_name, sizeof(pcfg->locator_name));
+
+	/* Save prefix-sid configuration. */
+	srv6db_locator_cfg_add(&area->srv6db.config.algorithm_locators, pcfg);
+
+	return pcfg;
+}
+
+/**
+ * Removal of locally configured Prefix-SID.
+ *
+ * @param pcfg	Configured Srv6 Locator Algorithm
+ */
+void isis_srv6_cfg_locator_del(struct srv6_locator_cfg *pcfg)
+{
+	struct isis_area *area = pcfg->area;
+
+	sr_debug("ISIS-Sr (%s): Add locator %s algorithm %d", area->area_tag, pcfg->locator_name,
+		 pcfg->algorithm);
+
+	srv6db_locator_cfg_del(&area->srv6db.config.algorithm_locators, pcfg);
+	XFREE(MTYPE_ISIS_SRV6_LOCATOR, pcfg);
+}
+
+/**
+ * Lookup for Prefix-SID in the local configuration.
+ *
+ * @param area	  IS-IS area
+ * @param uint8_t algorithm
+ *
+ * @return	  Configured Prefix-SID structure if found, NULL otherwise
+ */
+struct srv6_locator_cfg *isis_srv6_cfg_locator_find(struct isis_area *area, uint8_t algorithm)
+{
+	struct srv6_locator_cfg pcfg = {};
+
+	pcfg.algorithm = algorithm;
+	return srv6db_locator_cfg_find(&area->srv6db.config.algorithm_locators, &pcfg);
 }
 
 /**

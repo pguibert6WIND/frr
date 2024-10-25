@@ -19,6 +19,9 @@
 #define ISIS_DEFAULT_SRV6_MAX_END_D_MSD           5
 #define ISIS_DEFAULT_SRV6_IFNAME                 "sr0"
 
+/* Segment Routing locator (SRDB) RB-Tree structure */
+PREDECL_RBTREE_UNIQ(srv6db_locator_cfg);
+
 /* SRv6 SID structure */
 struct isis_srv6_sid_structure {
 	uint8_t loc_block_len;
@@ -48,6 +51,20 @@ struct isis_srv6_sid {
 
 	/* Backpointer to IS-IS area */
 	struct isis_area *area;
+};
+
+struct srv6_locator_cfg {
+	/* SRDB RB-tree entry. */
+	struct srv6db_locator_cfg_item entry;
+
+	/* SR Algorithm number */
+	uint8_t algorithm;
+
+	/* Backpointer to IS-IS area. */
+	struct isis_area *area;
+
+	/* Name of the SRv6 Locator */
+	char locator_name[SRV6_LOCNAME_SIZE];
 };
 
 /* SRv6 Locator */
@@ -143,6 +160,9 @@ struct isis_srv6_db {
 
 		/* Interface used for installing SRv6 SIDs into the data plane */
 		char srv6_ifname[IF_NAMESIZE];
+
+		/* Prefix-SID mappings. */
+		struct srv6db_locator_cfg_head algorithm_locators;
 	} config;
 };
 
@@ -180,4 +200,8 @@ void isis_area_delete_backup_srv6_endx_sids(struct isis_area *area, int level);
 
 int isis_srv6_ifp_up_notify(struct interface *ifp);
 
+struct srv6_locator_cfg *isis_srv6_cfg_locator_add(struct isis_area *area, const char *loc_name,
+						   uint8_t algorithm);
+void isis_srv6_cfg_locator_del(struct srv6_locator_cfg *pcfg);
+struct srv6_locator_cfg *isis_srv6_cfg_locator_find(struct isis_area *area, uint8_t algorithm);
 #endif /* _FRR_ISIS_SRV6_H */
