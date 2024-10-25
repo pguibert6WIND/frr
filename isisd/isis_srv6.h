@@ -65,6 +65,9 @@ struct srv6_locator_cfg {
 
 	/* Name of the SRv6 Locator */
 	char locator_name[SRV6_LOCNAME_SIZE];
+
+	/* List of SRv6 Locator */
+	struct srv6_locator *srv6_locator;
 };
 
 /* SRv6 Locator */
@@ -204,4 +207,6 @@ struct srv6_locator_cfg *isis_srv6_cfg_locator_add(struct isis_area *area, const
 						   uint8_t algorithm);
 void isis_srv6_cfg_locator_del(struct srv6_locator_cfg *pcfg);
 struct srv6_locator_cfg *isis_srv6_cfg_locator_find(struct isis_area *area, uint8_t algorithm);
+bool isis_srv6_locator_flex_algo_handle(struct isis_area *area, struct srv6_locator *locator,
+					bool add);
 #endif /* _FRR_ISIS_SRV6_H */

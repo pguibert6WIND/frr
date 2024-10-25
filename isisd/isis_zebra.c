@@ -43,6 +43,7 @@
 #include "isisd/isis_adjacency.h"
 #include "isisd/isis_te.h"
 #include "isisd/isis_sr.h"
+#include "isisd/isis_srv6.h"
 #include "isisd/isis_ldp_sync.h"
 
 struct zclient *zclient;
@@ -1221,13 +1222,13 @@ static int isis_zebra_process_srv6_locator_internal(struct srv6_locator *locator
 		 * locator
 		 */
 		if (strncmp(area->srv6db.config.srv6_locator_name, locator->name,
-			    sizeof(area->srv6db.config.srv6_locator_name)) != 0) {
-			zlog_err("%s: SRv6 Locator name unmatch %s:%s",
-				 __func__, area->srv6db.config.srv6_locator_name,
-				 locator->name);
+			    sizeof(area->srv6db.config.srv6_locator_name)) == 0) {
+			isis_zebra_srv6_locator_add(area, locator);
 			continue;
 		}
-		isis_zebra_srv6_locator_add(area, locator);
+		if (!isis_srv6_locator_flex_algo_handle(area, locator, true))
+			zlog_err("%s: SRv6 Locator name unmatch %s:%s", __func__,
+				 area->srv6db.config.srv6_locator_name, locator->name);
 	}
 
 	return 0;
@@ -1319,10 +1320,10 @@ static int isis_zebra_process_srv6_locator_delete(ZAPI_CALLBACK_ARGS)
 	/* Walk through all areas of the ISIS instance */
 	for (ALL_LIST_ELEMENTS_RO(isis->area_list, node, area)) {
 		if (strncmp(area->srv6db.config.srv6_locator_name, loc.name,
-			    sizeof(area->srv6db.config.srv6_locator_name)) != 0)
-			continue;
-
-		isis_zebra_srv6_locator_delete(area, &loc);
+			    sizeof(area->srv6db.config.srv6_locator_name)) == 0)
+			isis_zebra_srv6_locator_delete(area, &loc);
+		else
+			isis_srv6_locator_flex_algo_handle(area, &loc, false);
 
 		/* Regenerate LSPs to advertise that the locator no longer
 		 * exists */

@@ -820,6 +820,36 @@ void isis_srv6_cfg_locator_del(struct srv6_locator_cfg *pcfg)
 }
 
 /**
+ * Submit locator changes to the list of supported algorithms
+ *
+ * @param area	  IS-IS area
+ * @param locator Locator to be added or removed
+ * @param add	  Boolean that tells if locator is to be added or removed
+ */
+bool isis_srv6_locator_flex_algo_handle(struct isis_area *area, struct srv6_locator *locator,
+					bool add)
+{
+	struct srv6_locator_cfg *pcfg;
+
+	frr_each (srv6db_locator_cfg, &area->srv6db.config.algorithm_locators, pcfg) {
+		if (strncmp(pcfg->locator_name, locator->name, sizeof(pcfg->locator_name)))
+			continue;
+		if (add) {
+			/* Store the locator in the IS-IS area algorithm */
+			pcfg->srv6_locator = srv6_locator_alloc(locator->name);
+			srv6_locator_copy(pcfg->srv6_locator, locator);
+			/* XXX request srv6 sids */
+		} else {
+			/* XXX free srv6 sids */
+			srv6_locator_free(pcfg->srv6_locator);
+			pcfg->srv6_locator = NULL;
+		}
+		return true;
+	}
+	return false;
+}
+
+/**
  * Lookup for Prefix-SID in the local configuration.
  *
  * @param area	  IS-IS area
