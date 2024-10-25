@@ -53,6 +53,17 @@ struct isis_srv6_sid {
 	struct isis_area *area;
 };
 
+struct isis_end_sid_info {
+	/* SID value */
+	struct in6_addr sid;
+
+	/* SR Algorithm number */
+	uint8_t algorithm;
+
+	/* Indicates whether the Prefix-SID is present or not. */
+	bool present;
+};
+
 struct srv6_locator_cfg {
 	/* SRDB RB-tree entry. */
 	struct srv6db_locator_cfg_item entry;

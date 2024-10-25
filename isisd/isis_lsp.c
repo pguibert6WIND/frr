@@ -2437,6 +2437,10 @@ int isis_lsp_iterate_ip_reach(struct isis_lsp *lsp, int family, uint16_t mtid,
 		if (!pseudo_lsp && family == AF_INET6) {
 			struct isis_item_list *ipv6_reachs;
 			struct isis_ipv6_reach *r;
+			struct isis_srv6_locator_tlv *l;
+			struct isis_item_list *srv6_locators;
+			bool loc_is_in_ipv6_reach;
+			struct prefix_pair ip_info;
 
 			if (mtid == ISIS_MT_IPV4_UNICAST)
 				ipv6_reachs = &lsp->tlvs->ipv6_reach;
@@ -2448,10 +2452,56 @@ int isis_lsp_iterate_ip_reach(struct isis_lsp *lsp, int family, uint16_t mtid,
 						       ipv6_reachs->head
 					     : NULL;
 			     r; r = r->next) {
-				if ((*cb)((struct prefix *)&r->prefix,
-					  r->metric, r->external, r->subtlvs,
-					  arg)
-				    == LSP_ITER_STOP)
+				/* Process SRv6 Locator TLVs to check if there is a End SID sub-tlv available */
+				srv6_locators = isis_lookup_mt_items(&lsp->tlvs->srv6_locator, mtid);
+
+				for (l = srv6_locators
+						 ? (struct isis_srv6_locator_tlv *)srv6_locators->head
+						 : NULL;
+				     l; l = l->next) {
+					if (prefix_same(&l->prefix, &r->prefix))
+						break;
+				}
+
+				if ((*cb)((struct prefix *)&r->prefix, r->metric, r->external,
+					  r->subtlvs, l, arg) == LSP_ITER_STOP)
+					return LSP_ITER_STOP;
+			}
+
+			srv6_locators = isis_lookup_mt_items(&lsp->tlvs->srv6_locator, mtid);
+
+			for (l = srv6_locators ? (struct isis_srv6_locator_tlv *)srv6_locators->head
+					       : NULL;
+			     l; l = l->next) {
+				memset(&ip_info, 0, sizeof(ip_info));
+				ip_info.dest.family = AF_INET6;
+				ip_info.dest.u.prefix6 = l->prefix.prefix;
+				ip_info.dest.prefixlen = l->prefix.prefixlen;
+
+				/* An SRv6 Locator can be received in both a Prefix
+				Reachability TLV and an SRv6 Locator TLV (as per RFC
+				9352 section #5). We go through the Prefix Reachability
+				TLVs and check if the SRv6 Locator is present in some of
+				them. If we find the SRv6 Locator in some Prefix
+				Reachbility TLV then it means that we have already
+				processed it before and we can skip it. */
+				loc_is_in_ipv6_reach = false;
+				for (r = ipv6_reachs ? (struct isis_ipv6_reach *)ipv6_reachs->head
+						     : NULL;
+				     r; r = r->next) {
+					if (prefix_same((struct prefix *)&r->prefix,
+							(struct prefix *)&l->prefix)) {
+						loc_is_in_ipv6_reach = true;
+						break;
+					}
+				}
+
+				if (loc_is_in_ipv6_reach)
+					continue;
+				/* SRv6 locator not present in Prefix Reachability TLV,
+				 * let's process it */
+				if ((*cb)((struct prefix *)&r->prefix, r->metric, r->external,
+					  l->subtlvs, l, arg) == LSP_ITER_STOP)
 					return LSP_ITER_STOP;
 			}
 		}

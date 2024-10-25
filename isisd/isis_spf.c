@@ -209,6 +209,31 @@ struct isis_vertex *isis_spf_prefix_sid_lookup(struct isis_spftree *spftree,
 	return hash_lookup(spftree->prefix_sids, &lookup);
 }
 
+static bool end_sid_cmp(const void *value1, const void *value2)
+{
+	const struct isis_vertex *c1 = value1;
+	const struct isis_vertex *c2 = value2;
+
+	return IPV6_ADDR_SAME(&c1->N.ip.srv6.sid, &c2->N.ip.srv6.sid);
+}
+
+static unsigned int end_sid_key_make(const void *value)
+{
+	const struct isis_vertex *vertex = value;
+
+	return jhash(&vertex->N.ip.srv6.sid, sizeof(vertex->N.ip.srv6.sid), 0);
+}
+
+struct isis_vertex *isis_spf_srv6_end_sid_lookup(struct isis_spftree *spftree,
+						 struct isis_end_sid_info *end_sid_info)
+{
+	struct isis_vertex lookup = {};
+
+	memcpy(&lookup.N.ip.srv6.sid, &end_sid_info->sid, sizeof(struct in6_addr));
+
+	return hash_lookup(spftree->srv6_end_sids, &lookup);
+}
+
 void isis_vertex_adj_free(void *arg)
 {
 	struct isis_vertex_adj *vadj = arg;
@@ -249,10 +274,10 @@ void isis_vertex_del(struct isis_vertex *vertex)
 	XFREE(MTYPE_ISIS_VERTEX, vertex);
 }
 
-struct isis_vertex_adj *
-isis_vertex_adj_add(struct isis_spftree *spftree, struct isis_vertex *vertex,
-		    struct list *vadj_list, struct isis_spf_adj *sadj,
-		    struct isis_prefix_sid *psid, bool last_hop)
+struct isis_vertex_adj *isis_vertex_adj_add(struct isis_spftree *spftree,
+					    struct isis_vertex *vertex, struct list *vadj_list,
+					    struct isis_spf_adj *sadj, struct isis_prefix_sid *psid,
+					    struct isis_end_sid_info *end_sid_info, bool last_hop)
 {
 	struct isis_vertex_adj *vadj;
 
@@ -337,6 +362,7 @@ static void _isis_spftree_init(struct isis_spftree *tree)
 	tree->route_table_backup->cleanup = isis_route_node_cleanup;
 	tree->prefix_sids = hash_create(prefix_sid_key_make, prefix_sid_cmp,
 					"SR Prefix-SID Entries");
+	tree->srv6_end_sids = hash_create(end_sid_key_make, end_sid_cmp, "SRv6 End-SID Entries");
 	tree->sadj_list = list_new();
 	tree->sadj_list->del = isis_spf_adj_free;
 	isis_rlfa_list_init(tree);
@@ -381,6 +407,7 @@ static void _isis_spftree_del(struct isis_spftree *spftree)
 	void *info, *backup_info;
 
 	hash_clean_and_free(&spftree->prefix_sids, NULL);
+	hash_clean_and_free(&spftree->srv6_end_sids, NULL);
 	isis_zebra_rlfa_unregister_all(spftree);
 	isis_rlfa_list_clear(spftree);
 	list_delete(&spftree->lfa.remote.pc_spftrees);
@@ -559,9 +586,9 @@ static void vertex_update_firsthops(struct isis_vertex *vertex,
  * Add a vertex to TENT sorted by cost and by vertextype on tie break situation
  */
 static struct isis_vertex *
-isis_spf_add2tent(struct isis_spftree *spftree, enum vertextype vtype, void *id,
-		  uint32_t cost, int depth, struct isis_spf_adj *sadj,
-		  struct isis_prefix_sid *psid, struct isis_vertex *parent)
+isis_spf_add2tent(struct isis_spftree *spftree, enum vertextype vtype, void *id, uint32_t cost,
+		  int depth, struct isis_spf_adj *sadj, struct isis_prefix_sid *psid,
+		  struct isis_end_sid_info *end_sid_info, struct isis_vertex *parent)
 {
 	struct isis_vertex *vertex;
 	struct listnode *node;
@@ -634,6 +661,40 @@ isis_spf_add2tent(struct isis_spftree *spftree, enum vertextype vtype, void *id,
 				       hash_alloc_intern);
 		}
 	}
+	if (VTYPE_IP(vtype) && spftree->area->srv6db.config.enabled && end_sid_info) {
+		struct isis_area *area = spftree->area;
+		struct isis_vertex *vertex_psid;
+
+		/*
+		 * Check if the End-SID is already in use by another prefix.
+		 */
+		vertex_psid = isis_spf_srv6_end_sid_lookup(spftree, end_sid_info);
+		if (vertex_psid && !prefix_same(&vertex_psid->N.ip.p.dest, &vertex->N.ip.p.dest)) {
+			flog_warn(EC_ISIS_SID_COLLISION,
+				  "ISIS-Sr (%s): collision detected, prefixes %pFX and %pFX share the same SID (%pI6)",
+				  area->area_tag, &vertex->N.ip.p.dest, &vertex_psid->N.ip.p.dest,
+				  &end_sid_info->sid);
+			end_sid_info = NULL;
+		} else {
+			/* XXX do we have to do something with local SIDs */
+			vertex->N.ip.srv6.sid = end_sid_info->sid;
+			vertex->N.ip.srv6.algorithm = end_sid_info->algorithm;
+
+			if (0 == IPV6_ADDR_SAME(&vertex->N.ip.srv6.sid, &in6addr_any))
+				vertex->N.ip.srv6.present = true;
+
+#ifndef FABRICD
+			if (flex_algo_id_valid(spftree->algorithm) &&
+			    !isis_flex_algo_elected_supported(spftree->algorithm, spftree->area)) {
+				vertex->N.ip.srv6.present = false;
+				memcpy(&vertex->N.ip.srv6.sid, &in6addr_any,
+				       sizeof(struct in6_addr));
+			}
+#endif /* ifndef FABRICD */
+
+			(void)hash_get(spftree->srv6_end_sids, vertex, hash_alloc_intern);
+		}
+	}
 
 	if (parent) {
 		listnode_add(vertex->parents, parent);
@@ -647,10 +708,10 @@ isis_spf_add2tent(struct isis_spftree *spftree, enum vertextype vtype, void *id,
 		struct isis_vertex_adj *parent_vadj;
 
 		for (ALL_LIST_ELEMENTS_RO(parent->Adj_N, node, parent_vadj))
-			isis_vertex_adj_add(spftree, vertex, vertex->Adj_N,
-					    parent_vadj->sadj, psid, last_hop);
+			isis_vertex_adj_add(spftree, vertex, vertex->Adj_N, parent_vadj->sadj, psid,
+					    end_sid_info, last_hop);
 	} else if (sadj) {
-		isis_vertex_adj_add(spftree, vertex, vertex->Adj_N, sadj, psid,
+		isis_vertex_adj_add(spftree, vertex, vertex->Adj_N, sadj, psid, end_sid_info,
 				    last_hop);
 	}
 
@@ -668,10 +729,9 @@ isis_spf_add2tent(struct isis_spftree *spftree, enum vertextype vtype, void *id,
 	return vertex;
 }
 
-static void isis_spf_add_local(struct isis_spftree *spftree,
-			       enum vertextype vtype, void *id,
+static void isis_spf_add_local(struct isis_spftree *spftree, enum vertextype vtype, void *id,
 			       struct isis_spf_adj *sadj, uint32_t cost,
-			       struct isis_prefix_sid *psid,
+			       struct isis_prefix_sid *psid, struct isis_end_sid_info *end_sid_info,
 			       struct isis_vertex *parent)
 {
 	struct isis_vertex *vertex;
@@ -684,9 +744,8 @@ static void isis_spf_add_local(struct isis_spftree *spftree,
 			if (sadj) {
 				bool last_hop = (vertex->depth == 2);
 
-				isis_vertex_adj_add(spftree, vertex,
-						    vertex->Adj_N, sadj, psid,
-						    last_hop);
+				isis_vertex_adj_add(spftree, vertex, vertex->Adj_N, sadj, psid,
+						    end_sid_info, last_hop);
 			}
 			/*       d) */
 			if (!CHECK_FLAG(spftree->flags,
@@ -704,17 +763,18 @@ static void isis_spf_add_local(struct isis_spftree *spftree,
 			/*         f) */
 			isis_vertex_queue_delete(&spftree->tents, vertex);
 			hash_release(spftree->prefix_sids, vertex);
+			hash_release(spftree->srv6_end_sids, vertex);
 			isis_vertex_del(vertex);
 		}
 	}
 
-	isis_spf_add2tent(spftree, vtype, id, cost, 1, sadj, psid, parent);
+	isis_spf_add2tent(spftree, vtype, id, cost, 1, sadj, psid, end_sid_info, parent);
 	return;
 }
 
-static void process_N(struct isis_spftree *spftree, enum vertextype vtype,
-		      void *id, uint32_t dist, uint16_t depth,
-		      struct isis_prefix_sid *psid, struct isis_vertex *parent)
+static void process_N(struct isis_spftree *spftree, enum vertextype vtype, void *id, uint32_t dist,
+		      uint16_t depth, struct isis_prefix_sid *psid,
+		      struct isis_end_sid_info *end_sid_info, struct isis_vertex *parent)
 {
 	struct isis_vertex *vertex;
 #ifdef EXTREME_DEBUG
@@ -788,10 +848,9 @@ static void process_N(struct isis_spftree *spftree, enum vertextype vtype,
 					    parent_vadj->sadj)) {
 					bool last_hop = (vertex->depth == 2);
 
-					isis_vertex_adj_add(spftree, vertex,
-							    vertex->Adj_N,
-							    parent_vadj->sadj,
-							    psid, last_hop);
+					isis_vertex_adj_add(spftree, vertex, vertex->Adj_N,
+							    parent_vadj->sadj, psid, end_sid_info,
+							    last_hop);
 				}
 			if (CHECK_FLAG(spftree->flags,
 				       F_SPFTREE_HOPCOUNT_METRIC))
@@ -810,6 +869,7 @@ static void process_N(struct isis_spftree *spftree, enum vertextype vtype,
 		} else {
 			isis_vertex_queue_delete(&spftree->tents, vertex);
 			hash_release(spftree->prefix_sids, vertex);
+			hash_release(spftree->srv6_end_sids, vertex);
 			isis_vertex_del(vertex);
 		}
 	}
@@ -823,7 +883,7 @@ static void process_N(struct isis_spftree *spftree, enum vertextype vtype,
 			(parent ? print_sys_hostname(parent->N.id) : "null"));
 #endif /* EXTREME_DEBUG */
 
-	isis_spf_add2tent(spftree, vtype, id, dist, depth, NULL, psid, parent);
+	isis_spf_add2tent(spftree, vtype, id, dist, depth, NULL, psid, end_sid_info, parent);
 	return;
 }
 
@@ -842,7 +902,7 @@ static int isis_spf_process_lsp(struct isis_spftree *spftree,
 	static const uint8_t null_sysid[ISIS_SYS_ID_LEN];
 	struct isis_mt_router_info *mt_router_info = NULL;
 	struct prefix_pair ip_info;
-	bool has_valid_psid;
+	bool has_valid_psid, has_valid_srv6_endsid;
 	bool loc_is_in_ipv6_reach = false;
 
 	if (isis_lfa_excise_node_check(spftree, lsp->hdr.lsp_id)) {
@@ -910,11 +970,9 @@ lspfragloop:
 					continue;
 				dist = cost + r->metric;
 				process_N(spftree,
-					  LSP_PSEUDO_ID(r->id)
-						  ? VTYPE_PSEUDO_IS
-						  : VTYPE_NONPSEUDO_IS,
-					  (void *)r->id, dist, depth + 1, NULL,
-					  parent);
+					  LSP_PSEUDO_ID(r->id) ? VTYPE_PSEUDO_IS
+							       : VTYPE_NONPSEUDO_IS,
+					  (void *)r->id, dist, depth + 1, NULL, NULL, parent);
 			}
 		}
 
@@ -957,11 +1015,9 @@ lspfragloop:
 						  ? 1
 						  : er->metric);
 				process_N(spftree,
-					  LSP_PSEUDO_ID(er->id)
-						  ? VTYPE_PSEUDO_TE_IS
-						  : VTYPE_NONPSEUDO_TE_IS,
-					  (void *)er->id, dist, depth + 1, NULL,
-					  parent);
+					  LSP_PSEUDO_ID(er->id) ? VTYPE_PSEUDO_TE_IS
+								: VTYPE_NONPSEUDO_TE_IS,
+					  (void *)er->id, dist, depth + 1, NULL, NULL, parent);
 			}
 		}
 	}
@@ -987,8 +1043,8 @@ lspfragloop:
 				dist = cost + r->metric;
 				ip_info.dest.u.prefix4 = r->prefix.prefix;
 				ip_info.dest.prefixlen = r->prefix.prefixlen;
-				process_N(spftree, vtype, &ip_info,
-					  dist, depth + 1, NULL, parent);
+				process_N(spftree, vtype, &ip_info, dist, depth + 1, NULL, NULL,
+					  parent);
 			}
 		}
 	}
@@ -1043,9 +1099,8 @@ lspfragloop:
 #endif /* ifndef FABRICD */
 
 					has_valid_psid = true;
-					process_N(spftree, VTYPE_IPREACH_TE,
-						  &ip_info, dist, depth + 1,
-						  psid, parent);
+					process_N(spftree, VTYPE_IPREACH_TE, &ip_info, dist,
+						  depth + 1, psid, NULL, parent);
 					/*
 					 * Stop the Prefix-SID iteration since
 					 * we only support the SPF algorithm for
@@ -1055,8 +1110,8 @@ lspfragloop:
 				}
 			}
 			if (!has_valid_psid)
-				process_N(spftree, VTYPE_IPREACH_TE, &ip_info,
-					  dist, depth + 1, NULL, parent);
+				process_N(spftree, VTYPE_IPREACH_TE, &ip_info, dist, depth + 1,
+					  NULL, NULL, parent);
 		}
 	}
 
@@ -1069,6 +1124,11 @@ lspfragloop:
 				&lsp->tlvs->mt_ipv6_reach, spftree->mtid);
 
 		struct isis_ipv6_reach *r;
+		struct isis_srv6_locator_tlv *l;
+		struct isis_item_list *srv6_locators;
+		struct isis_srv6_end_sid_subtlv *endsid;
+		struct isis_end_sid_info sid_info;
+
 		for (r = ipv6_reachs
 				 ? (struct isis_ipv6_reach *)ipv6_reachs->head
 				 : NULL;
@@ -1100,6 +1160,7 @@ lspfragloop:
 
 			/* Parse list of Prefix-SID subTLVs */
 			has_valid_psid = false;
+			has_valid_srv6_endsid = false;
 			if (r->subtlvs) {
 				for (struct isis_item *i =
 					     r->subtlvs->prefix_sids.head;
@@ -1123,9 +1184,8 @@ lspfragloop:
 #endif /* ifndef FABRICD */
 
 					has_valid_psid = true;
-					process_N(spftree, vtype, &ip_info,
-						  dist, depth + 1, psid,
-						  parent);
+					process_N(spftree, vtype, &ip_info, dist, depth + 1, psid,
+						  NULL, parent);
 					/*
 					 * Stop the Prefix-SID iteration since
 					 * we only support the SPF algorithm for
@@ -1134,31 +1194,68 @@ lspfragloop:
 					break;
 				}
 			}
-			if (!has_valid_psid)
-				process_N(spftree, vtype, &ip_info, dist,
-					  depth + 1, NULL, parent);
+
+			/* Process SRv6 Locator TLVs to check if there is a End SID sub-tlv available */
+			srv6_locators = isis_lookup_mt_items(&lsp->tlvs->srv6_locator,
+							     spftree->mtid);
+
+			for (l = srv6_locators ? (struct isis_srv6_locator_tlv *)srv6_locators->head
+					       : NULL;
+			     l; l = l->next) {
+				if (!prefix_same(&l->prefix, &r->prefix))
+					continue;
+
+				if (l->algorithm != spftree->algorithm)
+					continue;
+
+#ifndef FABRICD
+				if (flex_algo_id_valid(spftree->algorithm) &&
+				    (!sr_algorithm_participated(lsp, spftree->algorithm) ||
+				     !isis_flex_algo_elected_supported(spftree->algorithm,
+								       spftree->area)))
+					continue;
+#endif /* ifndef FABRICD */
+
+				for (struct isis_item *i = r->subtlvs->srv6_end_sids.head; i;
+				     i = i->next) {
+					endsid = (struct isis_srv6_end_sid_subtlv *)i;
+					memset(&sid_info, 0, sizeof(sid_info));
+					sid_info.algorithm = l->algorithm;
+					memcpy(&sid_info.sid, &endsid->sid, sizeof(struct in6_addr));
+
+					has_valid_srv6_endsid = true;
+					process_N(spftree, vtype, &ip_info, dist, depth + 1, NULL,
+						  &sid_info, parent);
+					/*
+					 * Stop the Srv6 End-SID iteration since
+					 * we only support one End SID per SPF algorithm for
+					 * now.
+					 */
+					break;
+				}
+				if (has_valid_srv6_endsid)
+					break;
+			}
+			if (!has_valid_psid && !has_valid_srv6_endsid)
+				process_N(spftree, vtype, &ip_info, dist, depth + 1, NULL, NULL,
+					  parent);
 		}
 
-		/* Process SRv6 Locator TLVs */
+		/* Process SRv6 Locator TLVs that are not duplicate from ip_reachs */
 
-		struct isis_item_list *srv6_locators = isis_lookup_mt_items(
-			&lsp->tlvs->srv6_locator, spftree->mtid);
+		srv6_locators = isis_lookup_mt_items(&lsp->tlvs->srv6_locator, spftree->mtid);
 
-		struct isis_srv6_locator_tlv *loc;
-		for (loc = srv6_locators ? (struct isis_srv6_locator_tlv *)
-						   srv6_locators->head
-					 : NULL;
-		     loc; loc = loc->next) {
-
-			if (loc->algorithm != SR_ALGORITHM_SPF)
+		for (l = srv6_locators ? (struct isis_srv6_locator_tlv *)srv6_locators->head : NULL;
+		     l; l = l->next) {
+			if (l->algorithm != SR_ALGORITHM_SPF)
 				continue;
 
-			dist = cost + loc->metric;
+			dist = cost + l->metric;
 			vtype = VTYPE_IP6REACH_INTERNAL;
 			memset(&ip_info, 0, sizeof(ip_info));
 			ip_info.dest.family = AF_INET6;
-			ip_info.dest.u.prefix6 = loc->prefix.prefix;
-			ip_info.dest.prefixlen = loc->prefix.prefixlen;
+			ip_info.dest.u.prefix6 = l->prefix.prefix;
+			ip_info.dest.prefixlen = l->prefix.prefixlen;
 
 			/* An SRv6 Locator can be received in both a Prefix
 			Reachability TLV and an SRv6 Locator TLV (as per RFC
@@ -1172,15 +1269,37 @@ lspfragloop:
 					     : NULL;
 			     r; r = r->next) {
 				if (prefix_same((struct prefix *)&r->prefix,
-						(struct prefix *)&loc->prefix))
+						(struct prefix *)&l->prefix)) {
 					loc_is_in_ipv6_reach = true;
+					break;
+				}
 			}
 
 			/* SRv6 locator not present in Prefix Reachability TLV,
 			 * let's process it */
-			if (!loc_is_in_ipv6_reach)
-				process_N(spftree, vtype, &ip_info, dist,
-					  depth + 1, NULL, parent);
+			if (!loc_is_in_ipv6_reach) {
+				has_valid_srv6_endsid = false;
+				for (struct isis_item *i = l->subtlvs->srv6_end_sids.head; i;
+				     i = i->next) {
+					endsid = (struct isis_srv6_end_sid_subtlv *)i;
+					memset(&sid_info, 0, sizeof(sid_info));
+					sid_info.algorithm = l->algorithm;
+					memcpy(&sid_info.sid, &endsid->sid, sizeof(struct in6_addr));
+
+					has_valid_srv6_endsid = true;
+					process_N(spftree, vtype, &ip_info, dist, depth + 1, NULL,
+						  &sid_info, parent);
+					/*
+					 * Stop the Srv6 End-SID iteration since
+					 * we only support one End SID per SPF algorithm for
+					 * now.
+					 */
+					break;
+				}
+				if (!has_valid_srv6_endsid)
+					process_N(spftree, vtype, &ip_info, dist, depth + 1, NULL,
+						  NULL, parent);
+			}
 		}
 	}
 
@@ -1209,8 +1328,7 @@ end:
 			ip_info.dest.family = AF_INET6;
 			vtype = VTYPE_IP6REACH_INTERNAL;
 		}
-		process_N(spftree, vtype, &ip_info, cost, depth + 1, NULL,
-			  parent);
+		process_N(spftree, vtype, &ip_info, cost, depth + 1, NULL, NULL, parent);
 	}
 
 	if (fragnode == NULL)
@@ -1265,7 +1383,7 @@ static int isis_spf_preload_tent_ip_reach_cb(const struct prefix *prefix,
 	struct isis_vertex *parent = args->parent;
 	struct prefix_pair ip_info;
 	enum vertextype vtype;
-	bool has_valid_psid = false;
+	bool has_valid_psid = false, has_valid_srv6_endsid = false;
 
 	if (external)
 		return LSP_ITER_CONTINUE;
@@ -1281,7 +1399,7 @@ static int isis_spf_preload_tent_ip_reach_cb(const struct prefix *prefix,
 		vtype = VTYPE_IP6REACH_INTERNAL;
 
 	/* Parse list of Prefix-SID subTLVs if SR is enabled */
-	if (spftree->area->srdb.enabled && subtlvs) {
+	if (locator == NULL && spftree->area->srdb.enabled && subtlvs) {
 		for (struct isis_item *i = subtlvs->prefix_sids.head; i;
 		     i = i->next) {
 			struct isis_prefix_sid *psid =
@@ -1291,8 +1409,7 @@ static int isis_spf_preload_tent_ip_reach_cb(const struct prefix *prefix,
 				continue;
 
 			has_valid_psid = true;
-			isis_spf_add_local(spftree, vtype, &ip_info, NULL, 0,
-					   psid, parent);
+			isis_spf_add_local(spftree, vtype, &ip_info, NULL, 0, psid, NULL, parent);
 
 			/*
 			 * Stop the Prefix-SID iteration since we only support
@@ -1301,9 +1418,33 @@ static int isis_spf_preload_tent_ip_reach_cb(const struct prefix *prefix,
 			break;
 		}
 	}
-	if (!has_valid_psid)
-		isis_spf_add_local(spftree, vtype, &ip_info, NULL, 0, NULL,
-				   parent);
+	/* Parse list of Prefix-SID subTLVs if SRv6 is enabled */
+	if (locator && spftree->area->srv6db.config.enabled && subtlvs) {
+		for (struct isis_item *i = locator->subtlvs->srv6_end_sids.head; i; i = i->next) {
+			struct isis_srv6_end_sid_subtlv *endsid =
+				(struct isis_srv6_end_sid_subtlv *)i;
+			struct isis_end_sid_info sid_info;
+
+			if (locator->algorithm != spftree->algorithm)
+				continue;
+
+			memset(&sid_info, 0, sizeof(sid_info));
+			sid_info.algorithm = locator->algorithm;
+			memcpy(&sid_info.sid, &endsid->sid, sizeof(struct in6_addr));
+
+			has_valid_srv6_endsid = true;
+			isis_spf_add_local(spftree, vtype, &ip_info, NULL, 0, NULL, &sid_info,
+					   parent);
+
+			/*
+			 * Stop the Prefix-SID iteration since we only support
+			 * the SPF algorithm for now.
+			 */
+			break;
+		}
+	}
+	if (!has_valid_psid && !has_valid_srv6_endsid)
+		isis_spf_add_local(spftree, vtype, &ip_info, NULL, 0, NULL, NULL, parent);
 
 	return LSP_ITER_CONTINUE;
 }
@@ -1347,12 +1488,10 @@ static void isis_spf_preload_tent(struct isis_spftree *spftree,
 				 : sadj->metric;
 		if (!LSP_PSEUDO_ID(sadj->id)) {
 			isis_spf_add_local(spftree,
-					   CHECK_FLAG(sadj->flags,
-						      F_ISIS_SPF_ADJ_OLDMETRIC)
+					   CHECK_FLAG(sadj->flags, F_ISIS_SPF_ADJ_OLDMETRIC)
 						   ? VTYPE_NONPSEUDO_IS
 						   : VTYPE_NONPSEUDO_TE_IS,
-					   sadj->id, sadj, metric, NULL,
-					   parent);
+					   sadj->id, sadj, metric, NULL, NULL, parent);
 		} else if (sadj->lsp) {
 			isis_spf_process_lsp(spftree, sadj->lsp, metric, 0,
 					     spftree->sysid, parent);
@@ -1631,6 +1770,7 @@ static void init_spt(struct isis_spftree *spftree, int mtid)
 {
 	/* Clear data from previous run. */
 	hash_clean(spftree->prefix_sids, NULL);
+	hash_clean(spftree->srv6_end_sids, NULL);
 	isis_spf_node_list_clear(&spftree->adj_nodes);
 	list_delete_all_node(spftree->sadj_list);
 	isis_vertex_queue_clear(&spftree->tents);

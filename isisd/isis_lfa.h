@@ -52,6 +52,7 @@ struct isis_tilfa_sid {
 	union {
 		struct {
 			uint32_t value;
+			/* XXX TODO */
 			bool remote;
 			uint8_t remote_sysid[ISIS_SYS_ID_LEN];
 		} index;

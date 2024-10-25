@@ -49,6 +49,8 @@ isis_spftree_new(struct isis_area *area, struct lspdb_head *lspdb,
 		 enum spf_type type, uint8_t flags, uint8_t algorithm);
 struct isis_vertex *isis_spf_prefix_sid_lookup(struct isis_spftree *spftree,
 					       struct isis_prefix_sid *psid);
+struct isis_vertex *isis_spf_srv6_end_sid_lookup(struct isis_spftree *spftree,
+						 struct isis_end_sid_info *end_sid_info);
 void isis_spf_invalidate_routes(struct isis_spftree *tree);
 void isis_spf_verify_routes(struct isis_area *area, struct isis_spftree **trees,
 			    int tree);

@@ -2218,8 +2218,9 @@ void isis_lfa_compute(struct isis_area *area, struct isis_circuit *circuit,
 				if (path_metric == sadj_N->metric)
 					last_hop = true;
 			}
-			lfa = isis_vertex_adj_add(spftree, vertex, lfa_list,
-						  sadj_N, psid, last_hop);
+			/* XXX TODO */
+			lfa = isis_vertex_adj_add(spftree, vertex, lfa_list, sadj_N, psid, NULL,
+						  last_hop);
 			lfa->lfa_metric = lfa_metric;
 		}
 
