@@ -1247,7 +1247,7 @@ static int lsp_to_edge_cb(const uint8_t *id, uint32_t metric, bool old_metric,
  */
 static int lsp_to_subnet_cb(const struct prefix *prefix, uint32_t metric,
 			    bool external, struct isis_subtlvs *subtlvs,
-			    void *arg)
+			    struct isis_srv6_locator_tlv *loc, void *arg)
 {
 	struct isis_te_args *args = (struct isis_te_args *)arg;
 	struct ls_vertex *vertex;

@@ -2353,7 +2353,7 @@ int isis_lsp_iterate_srv6_locator(struct isis_lsp *lsp, uint16_t mtid,
 			     r; r = r->next) {
 				if ((*cb)((struct prefix *)&r->prefix,
 					  r->metric, false /* ignore */,
-					  r->subtlvs, arg) == LSP_ITER_STOP)
+					  r->subtlvs, NULL, arg) == LSP_ITER_STOP)
 					return LSP_ITER_STOP;
 			}
 		}
@@ -2406,7 +2406,7 @@ int isis_lsp_iterate_ip_reach(struct isis_lsp *lsp, int family, uint16_t mtid,
 
 					if ((*cb)((struct prefix *)&r->prefix,
 						  r->metric, external, NULL,
-						  arg)
+						  NULL, arg)
 					    == LSP_ITER_STOP)
 						return LSP_ITER_STOP;
 				}
@@ -2428,7 +2428,7 @@ int isis_lsp_iterate_ip_reach(struct isis_lsp *lsp, int family, uint16_t mtid,
 					     : NULL;
 			     r; r = r->next) {
 				if ((*cb)((struct prefix *)&r->prefix,
-					  r->metric, false, r->subtlvs, arg)
+					  r->metric, false, r->subtlvs, NULL, arg)
 				    == LSP_ITER_STOP)
 					return LSP_ITER_STOP;
 			}

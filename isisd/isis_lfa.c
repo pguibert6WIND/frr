@@ -361,6 +361,7 @@ struct tilfa_find_pnode_prefix_sid_args {
 static int tilfa_find_pnode_prefix_sid_cb(const struct prefix *prefix,
 					  uint32_t metric, bool external,
 					  struct isis_subtlvs *subtlvs,
+					  struct isis_srv6_locator_tlv *loc,
 					  void *arg)
 {
 	struct tilfa_find_pnode_prefix_sid_args *args = arg;

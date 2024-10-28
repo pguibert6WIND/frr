@@ -127,11 +127,14 @@ void lsp_set_all_srmflags(struct isis_lsp *lsp, bool set);
 #define LSP_ITER_CONTINUE 0
 #define LSP_ITER_STOP -1
 
+struct isis_srv6_locator_tlv;
+
 /* Callback used by isis_lsp_iterate_ip_reach() function. */
 struct isis_subtlvs;
 typedef int (*lsp_ip_reach_iter_cb)(const struct prefix *prefix,
 				    uint32_t metric, bool external,
-				    struct isis_subtlvs *subtlvs, void *arg);
+				    struct isis_subtlvs *subtlvs,
+				    struct isis_srv6_locator_tlv *loc, void *arg);
 
 /* Callback used by isis_lsp_iterate_is_reach() function. */
 typedef int (*lsp_is_reach_iter_cb)(const uint8_t *id, uint32_t metric,

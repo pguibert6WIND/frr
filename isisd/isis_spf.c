@@ -1258,7 +1258,7 @@ struct spf_preload_tent_ip_reach_args {
 static int isis_spf_preload_tent_ip_reach_cb(const struct prefix *prefix,
 					     uint32_t metric, bool external,
 					     struct isis_subtlvs *subtlvs,
-					     void *arg)
+					     struct isis_srv6_locator_tlv *locator, void *arg)
 {
 	struct spf_preload_tent_ip_reach_args *args = arg;
 	struct isis_spftree *spftree = args->spftree;
