@@ -38,6 +38,11 @@ struct isis_spf_adj {
 #define F_ISIS_SPF_ADJ_METRIC_INFINITY 0x04
 };
 
+struct prefix_pair {
+	struct prefix dest;
+	struct prefix_ipv6 src;
+};
+
 struct isis_spftree *
 isis_spftree_new(struct isis_area *area, struct lspdb_head *lspdb,
 		 const uint8_t *sysid, int level, enum spf_tree_id tree_id,

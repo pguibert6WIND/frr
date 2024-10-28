@@ -32,11 +32,6 @@ enum vertextype {
 #define VTYPE_ES(t) ((t) == VTYPE_ES)
 #define VTYPE_IP(t) ((t) >= VTYPE_IPREACH_INTERNAL && (t) <= VTYPE_IP6REACH_EXTERNAL)
 
-struct prefix_pair {
-	struct prefix dest;
-	struct prefix_ipv6 src;
-};
-
 struct isis_vertex_adj {
 	struct isis_spf_adj *sadj;
 	struct isis_sr_psid_info sr;
