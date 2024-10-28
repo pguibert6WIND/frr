@@ -489,7 +489,8 @@ tilfa_compute_label_stack(struct lspdb_head *lspdb,
 			}
 
 			/* Check if the SID index falls inside the SRGB. */
-			if (sid->value.index.value >= srgb->range_size) {
+			if (IPV6_ADDR_SAME(&sid->value.sid, &in6addr_any) &&
+			    sid->value.index.value >= srgb->range_size) {
 				flog_warn(
 					EC_ISIS_SID_OVERFLOW,
 					"%s: SID index %u falls outside remote SRGB range",
@@ -641,6 +642,22 @@ static int tilfa_build_repair_list(struct isis_spftree *spftree_pc,
 				&vertex->N.ip.p.dest, sid_index);
 		sid_dest.type = TILFA_SID_PREFIX;
 		sid_dest.value.index.value = sid_index;
+		sid_dest.value.index.remote = true;
+		memcpy(sid_dest.value.index.remote_sysid, pvertex->N.id,
+		       sizeof(sid_dest.value.index.remote_sysid));
+		listnode_add_head(repair_list, &sid_dest);
+	}
+
+	/* Push original End SID label when necessary. */
+	if (VTYPE_IP(vertex->type) && vertex->N.ip.srv6.present) {
+		pvertex = listnode_head(vertex->parents);
+		assert(pvertex);
+
+		if (IS_DEBUG_LFA)
+			zlog_debug("ISIS-LFA: pushing End-SID to %pFX (Seg6 %pI6)",
+				   &vertex->N.ip.p.dest, &vertex->N.ip.srv6.sid);
+		sid_dest.type = TILFA_SID_PREFIX;
+		sid_dest.value.index.value = 0;
 		sid_dest.value.index.remote = true;
 		memcpy(sid_dest.value.index.remote_sysid, pvertex->N.id,
 		       sizeof(sid_dest.value.index.remote_sysid));
@@ -1508,9 +1525,8 @@ int isis_rlfa_activate(struct isis_spftree *spftree, struct rlfa *rlfa,
 		vadj->label_stack = label_stack;
 	}
 
-	isis_route_create(&vertex->N.ip.p.dest, &vertex->N.ip.p.src,
-			  vertex->d_N, vertex->depth, &vertex->N.ip.sr,
-			  vertex->Adj_N, true, area,
+	isis_route_create(&vertex->N.ip.p.dest, &vertex->N.ip.p.src, vertex->d_N, vertex->depth,
+			  &vertex->N.ip.sr, &vertex->N.ip.srv6, vertex->Adj_N, true, area,
 			  spftree->route_table_backup);
 	spftree->lfa.protection_counters.rlfa[vertex->N.ip.priority] += 1;
 
@@ -2241,10 +2257,9 @@ void isis_lfa_compute(struct isis_area *area, struct isis_circuit *circuit,
 
 		/* Create backup route using the best LFAs. */
 		allow_ecmp = area->lfa_load_sharing[level - 1];
-		isis_route_create(&vertex->N.ip.p.dest, &vertex->N.ip.p.src,
-				  best_metric, vertex->depth, &vertex->N.ip.sr,
-				  filtered_lfa_list, allow_ecmp, area,
-				  spftree->route_table_backup);
+		isis_route_create(&vertex->N.ip.p.dest, &vertex->N.ip.p.src, best_metric,
+				  vertex->depth, &vertex->N.ip.sr, &vertex->N.ip.srv6,
+				  filtered_lfa_list, allow_ecmp, area, spftree->route_table_backup);
 		spftree->lfa.protection_counters.lfa[vertex->N.ip.priority] +=
 			1;
 

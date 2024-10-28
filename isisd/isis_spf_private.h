@@ -35,7 +35,7 @@ enum vertextype {
 struct isis_vertex_adj {
 	struct isis_spf_adj *sadj;
 	struct isis_sr_psid_info sr;
-	/* TODO XXX srv6_endsid_info */
+	struct isis_end_sid_info srv6;
 	struct mpls_label_stack *label_stack;
 	uint32_t lfa_metric;
 };

@@ -1912,11 +1912,9 @@ static void spf_path_process(struct isis_spftree *spftree,
 #ifdef EXTREME_DEBUG
 			struct isis_route_info *ri =
 #endif /* EXTREME_DEBUG */
-				isis_route_create(&vertex->N.ip.p.dest,
-						  &vertex->N.ip.p.src,
-						  vertex->d_N, vertex->depth,
-						  &vertex->N.ip.sr,
-						  vertex->Adj_N, allow_ecmp,
+				isis_route_create(&vertex->N.ip.p.dest, &vertex->N.ip.p.src,
+						  vertex->d_N, vertex->depth, &vertex->N.ip.sr,
+						  &vertex->N.ip.srv6, vertex->Adj_N, allow_ecmp,
 						  area, route_table);
 
 #ifdef EXTREME_DEBUG

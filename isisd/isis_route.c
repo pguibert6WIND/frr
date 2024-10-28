@@ -93,6 +93,7 @@ isis_nexthop_dup(const struct isis_nexthop *const orig)
 	nexthop = isis_nexthop_create(orig->family, &orig->ip, orig->ifindex);
 	memcpy(nexthop->sysid, orig->sysid, ISIS_SYS_ID_LEN);
 	nexthop->sr = orig->sr;
+	nexthop->srv6 = orig->srv6;
 	nexthop->label_stack = label_stack_dup(orig->label_stack);
 
 	return nexthop;
@@ -160,8 +161,8 @@ static struct isis_nexthop *nexthoplookup(struct list *nexthops, int family,
 	return NULL;
 }
 
-void adjinfo2nexthop(int family, struct list *nexthops,
-		     struct isis_adjacency *adj, struct isis_sr_psid_info *sr,
+void adjinfo2nexthop(int family, struct list *nexthops, struct isis_adjacency *adj,
+		     struct isis_sr_psid_info *sr, struct isis_end_sid_info *srv6,
 		     struct mpls_label_stack *label_stack)
 {
 	struct isis_nexthop *nh;
@@ -198,6 +199,8 @@ void adjinfo2nexthop(int family, struct list *nexthops,
 				memcpy(nh->sysid, adj->sysid, sizeof(nh->sysid));
 				if (sr)
 					nh->sr = *sr;
+				if (srv6)
+					nh->srv6 = *srv6;
 				nh->label_stack = label_stack;
 				listnode_add(nexthops, nh);
 				break;
@@ -211,9 +214,9 @@ void adjinfo2nexthop(int family, struct list *nexthops,
 	}
 }
 
-static void isis_route_add_dummy_nexthops(struct isis_route_info *rinfo,
-					  const uint8_t *sysid,
+static void isis_route_add_dummy_nexthops(struct isis_route_info *rinfo, const uint8_t *sysid,
 					  struct isis_sr_psid_info *sr,
+					  struct isis_end_sid_info *srv6,
 					  struct mpls_label_stack *label_stack)
 {
 	struct isis_nexthop *nh;
@@ -221,14 +224,16 @@ static void isis_route_add_dummy_nexthops(struct isis_route_info *rinfo,
 	nh = XCALLOC(MTYPE_ISIS_NEXTHOP, sizeof(struct isis_nexthop));
 	memcpy(nh->sysid, sysid, sizeof(nh->sysid));
 	nh->sr = *sr;
+	nh->srv6 = *srv6;
 	nh->label_stack = label_stack;
 	listnode_add(rinfo->nexthops, nh);
 }
 
-static struct isis_route_info *
-isis_route_info_new(struct prefix *prefix, struct prefix_ipv6 *src_p,
-		    uint32_t cost, uint32_t depth, struct isis_sr_psid_info *sr,
-		    struct list *adjacencies, bool allow_ecmp)
+static struct isis_route_info *isis_route_info_new(struct prefix *prefix, struct prefix_ipv6 *src_p,
+						   uint32_t cost, uint32_t depth,
+						   struct isis_sr_psid_info *sr,
+						   struct isis_end_sid_info *srv6,
+						   struct list *adjacencies, bool allow_ecmp)
 {
 	struct isis_route_info *rinfo;
 	struct isis_vertex_adj *vadj;
@@ -241,6 +246,7 @@ isis_route_info_new(struct prefix *prefix, struct prefix_ipv6 *src_p,
 		struct isis_spf_adj *sadj = vadj->sadj;
 		struct isis_adjacency *adj = sadj->adj;
 		struct isis_sr_psid_info *sr = &vadj->sr;
+		struct isis_end_sid_info *srv6 = &vadj->srv6;
 		struct mpls_label_stack *label_stack = vadj->label_stack;
 
 		/*
@@ -248,8 +254,7 @@ isis_route_info_new(struct prefix *prefix, struct prefix_ipv6 *src_p,
 		 * environment.
 		 */
 		if (CHECK_FLAG(im->options, F_ISIS_UNIT_TEST)) {
-			isis_route_add_dummy_nexthops(rinfo, sadj->id, sr,
-						      label_stack);
+			isis_route_add_dummy_nexthops(rinfo, sadj->id, sr, srv6, label_stack);
 			if (!allow_ecmp)
 				break;
 			continue;
@@ -260,8 +265,7 @@ isis_route_info_new(struct prefix *prefix, struct prefix_ipv6 *src_p,
 			       ISIS_CIRCUIT_FLAPPED_AFTER_SPF))
 			SET_FLAG(rinfo->flag, ISIS_ROUTE_FLAG_ZEBRA_RESYNC);
 
-		adjinfo2nexthop(prefix->family, rinfo->nexthops, adj, sr,
-				label_stack);
+		adjinfo2nexthop(prefix->family, rinfo->nexthops, adj, sr, srv6, label_stack);
 		if (!allow_ecmp)
 			break;
 	}
@@ -440,11 +444,12 @@ static int isis_route_info_same(struct isis_route_info *new,
 	return 1;
 }
 
-struct isis_route_info *
-isis_route_create(struct prefix *prefix, struct prefix_ipv6 *src_p,
-		  uint32_t cost, uint32_t depth, struct isis_sr_psid_info *sr,
-		  struct list *adjacencies, bool allow_ecmp,
-		  struct isis_area *area, struct route_table *table)
+struct isis_route_info *isis_route_create(struct prefix *prefix, struct prefix_ipv6 *src_p,
+					  uint32_t cost, uint32_t depth,
+					  struct isis_sr_psid_info *sr,
+					  struct isis_end_sid_info *srv6, struct list *adjacencies,
+					  bool allow_ecmp, struct isis_area *area,
+					  struct route_table *table)
 {
 	struct route_node *route_node;
 	struct isis_route_info *rinfo_new, *rinfo_old, *route_info = NULL;
@@ -453,8 +458,8 @@ isis_route_create(struct prefix *prefix, struct prefix_ipv6 *src_p,
 	if (!table)
 		return NULL;
 
-	rinfo_new = isis_route_info_new(prefix, src_p, cost, depth, sr,
-					adjacencies, allow_ecmp);
+	rinfo_new = isis_route_info_new(prefix, src_p, cost, depth, sr, srv6, adjacencies,
+					allow_ecmp);
 	route_node = srcdest_rnode_get(table, prefix, src_p);
 
 	rinfo_old = route_node->info;

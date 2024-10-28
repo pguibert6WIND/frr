@@ -21,6 +21,7 @@ struct isis_nexthop {
 	union g_addr ip;
 	uint8_t sysid[ISIS_SYS_ID_LEN];
 	struct isis_sr_psid_info sr;
+	struct isis_end_sid_info srv6;
 	struct mpls_label_stack *label_stack;
 };
 
@@ -47,14 +48,15 @@ DECLARE_HOOK(isis_route_update_hook,
 	     (area, prefix, route_info));
 
 void isis_nexthop_delete(struct isis_nexthop *nexthop);
-void adjinfo2nexthop(int family, struct list *nexthops,
-		     struct isis_adjacency *adj, struct isis_sr_psid_info *sr,
+void adjinfo2nexthop(int family, struct list *nexthops, struct isis_adjacency *adj,
+		     struct isis_sr_psid_info *sr, struct isis_end_sid_info *srv6,
 		     struct mpls_label_stack *label_stack);
-struct isis_route_info *
-isis_route_create(struct prefix *prefix, struct prefix_ipv6 *src_p,
-		  uint32_t cost, uint32_t depth, struct isis_sr_psid_info *sr,
-		  struct list *adjacencies, bool allow_ecmp,
-		  struct isis_area *area, struct route_table *table);
+struct isis_route_info *isis_route_create(struct prefix *prefix, struct prefix_ipv6 *src_p,
+					  uint32_t cost, uint32_t depth,
+					  struct isis_sr_psid_info *sr,
+					  struct isis_end_sid_info *srv6, struct list *adjacencies,
+					  bool allow_ecmp, struct isis_area *area,
+					  struct route_table *table);
 void isis_route_delete(struct isis_area *area, struct route_node *rode,
 		       struct route_table *table);
 
