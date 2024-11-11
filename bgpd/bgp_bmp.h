@@ -148,6 +148,7 @@ struct bmp {
 	uint64_t syncpeerid;
 	afi_t syncafi;
 	safi_t syncsafi;
+	struct bgp *sync_bgp;
 };
 
 /* config & state for an active outbound connection.  When the connection
