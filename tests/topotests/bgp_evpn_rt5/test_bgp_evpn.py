@@ -136,19 +136,19 @@ def setup_module(mod):
 
     for rname, router in router_list.items():
         if rname == "r1":
-            router.load_config(TopoRouter.RD_MGMTD, None, "--vrfwnetns")
-            router.load_config(
-                TopoRouter.RD_ZEBRA,
-                os.path.join(CWD, "{}/zebra.conf".format(rname)),
-                "--vrfwnetns",
+            router.load_frr_config(
+                os.path.join(CWD, "{}/frr.conf".format(rname)),
+                [
+                    (TopoRouter.RD_MGMTD, "--vrfwnetns"),
+                    (TopoRouter.RD_ZEBRA, "--vrfwnetns"),
+                    (TopoRouter.RD_BGP, None),
+                ],
             )
         else:
-            router.load_config(
-                TopoRouter.RD_ZEBRA, os.path.join(CWD, "{}/zebra.conf".format(rname))
+            router.load_frr_config(
+                os.path.join(CWD, "{}/frr.conf".format(rname)),
+                [(TopoRouter.RD_ZEBRA, None), (TopoRouter.RD_BGP, None)],
             )
-        router.load_config(
-            TopoRouter.RD_BGP, os.path.join(CWD, "{}/bgpd.conf".format(rname))
-        )
 
     # Initialize all routers.
     tgen.start_router()
