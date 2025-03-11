@@ -44,11 +44,13 @@ def build_topo(tgen):
     tgen.add_router("r2")
     tgen.add_router("r3")
     tgen.add_router("r4")
+    tgen.add_router("rr")
 
     switch = tgen.add_switch("s1")
     switch.add_link(tgen.gears["r1"])
     switch.add_link(tgen.gears["r2"])
     switch.add_link(tgen.gears["r3"])
+    switch.add_link(tgen.gears["rr"])
 
     switch = tgen.add_switch("s2")
     switch.add_link(tgen.gears["r1"])
@@ -132,6 +134,12 @@ def setup_module(mod):
     tgen.net["r1"].cmd_raises("ip link add loop101 type dummy")
     tgen.net["r1"].set_intf_netns("loop101", ns, up=True)
 
+    router = tgen.gears["rr"]
+    for cmd in cmds_vrflite:
+        logger.info("cmd to rr: " + cmd.format("rr", 101))
+        output = router.cmd_raises(cmd.format("rr", 101))
+        logger.info("result: " + output)
+
     router = tgen.gears["r2"]
     for cmd in cmds_vrflite:
         logger.info("cmd to r2: " + cmd.format("r2", 101))
@@ -195,6 +203,12 @@ def setup_module(mod):
     for cmd in cmds_r3:
         logger.info("cmd to r3: " + cmd.format("r3"))
         output = router.cmd_raises(cmd.format("r3"))
+        logger.info("result: " + output)
+
+    router = tgen.gears["rr"]
+    for cmd in cmds_bgpl3vpn:
+        logger.info("cmd to rr: " + cmd.format("rr", 0, 101))
+        output = router.cmd_raises(cmd.format("rr", 0, 101))
         logger.info("result: " + output)
 
     tgen.net["r1"].cmd_raises(

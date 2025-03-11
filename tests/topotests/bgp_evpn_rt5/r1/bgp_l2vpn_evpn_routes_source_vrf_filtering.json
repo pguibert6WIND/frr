@@ -17,13 +17,13 @@
                     "metric":0,
                     "locPrf":100,
                     "weight":0,
-                    "peerId":"192.168.100.41",
+                    "peerId":"192.168.100.100",
                     "path":"",
                     "origin":"IGP",
                     "nexthops":[
                         {
                             "ip":"192.168.100.41",
-                            "hostname":"r2",
+                            "hostname":"rr",
                             "afi":"ipv4",
                             "used":true
                         }
@@ -47,13 +47,13 @@
                     "metric":0,
                     "locPrf":100,
                     "weight":0,
-                    "peerId":"192.168.100.41",
+                    "peerId":"192.168.100.100",
                     "path":"",
                     "origin":"IGP",
                     "nexthops":[
                         {
                             "ip":"192.168.100.41",
-                            "hostname":"r2",
+                            "hostname":"rr",
                             "afi":"ipv4",
                             "used":true
                         }
