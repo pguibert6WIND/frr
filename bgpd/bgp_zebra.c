@@ -3628,6 +3628,8 @@ static int bgp_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 			bgp_vrf->vpn_policy[AFI_IP6].tovpn_sid_locator = locator;
 			bgp_vrf->vpn_policy[AFI_IP6].tovpn_sid_transpose_label =
 				label;
+			UNSET_FLAG(bgp_vrf->vpn_policy[AFI_IP6].flags,
+				   BGP_VPN_POLICY_TOVPN_SID_REQUEST_IN_PROGRESS);
 		} else if (ctx.behavior == ZEBRA_SEG6_LOCAL_ACTION_END_DT4) {
 			XFREE(MTYPE_BGP_SRV6_SID,
 			      bgp_vrf->vpn_policy[AFI_IP].tovpn_sid);
@@ -3640,6 +3642,8 @@ static int bgp_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 			bgp_vrf->vpn_policy[AFI_IP].tovpn_sid_locator = locator;
 			bgp_vrf->vpn_policy[AFI_IP].tovpn_sid_transpose_label =
 				label;
+			UNSET_FLAG(bgp_vrf->vpn_policy[AFI_IP].flags,
+				   BGP_VPN_POLICY_TOVPN_SID_REQUEST_IN_PROGRESS);
 		} else if (ctx.behavior == ZEBRA_SEG6_LOCAL_ACTION_END_DT46) {
 			XFREE(MTYPE_BGP_SRV6_SID, bgp_vrf->tovpn_sid);
 			srv6_locator_free(bgp_vrf->tovpn_sid_locator);
@@ -3648,6 +3652,7 @@ static int bgp_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 			bgp_vrf->tovpn_sid = tovpn_sid;
 			bgp_vrf->tovpn_sid_locator = locator;
 			bgp_vrf->tovpn_sid_transpose_label = label;
+			UNSET_FLAG(bgp_vrf->vrf_flags, BGP_VRF_TOVPN_SID_REQUEST_IN_PROGRESS);
 		} else {
 			srv6_locator_free(locator);
 			if (BGP_DEBUG(zebra, ZEBRA))
@@ -3736,6 +3741,8 @@ static int bgp_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 				   srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 
 		/* Error will be logged by zebra module */
+		UNSET_FLAG(bgp_vrf->vpn_policy[AFI_IP6].flags,
+			   BGP_VPN_POLICY_TOVPN_SID_REQUEST_IN_PROGRESS);
 		break;
 	case ZAPI_SRV6_SID_FAIL_RELEASE:
 		if (BGP_DEBUG(zebra, ZEBRA))

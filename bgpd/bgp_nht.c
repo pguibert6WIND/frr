@@ -329,6 +329,13 @@ int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
 			afi = AFI_IP;
 		}
 
+		if (afi == AFI_IP6 && bgp_route->srv6_locator && bgp_route->srv6_enabled &&
+		    bgp_nexthop->vpn_policy[afi].tovpn_sid_locator &&
+		    (CHECK_FLAG(bgp_nexthop->vpn_policy[afi].flags,
+				BGP_VPN_POLICY_TOVPN_SID_REQUEST_IN_PROGRESS) ||
+		     CHECK_FLAG(bgp_nexthop->vrf_flags, BGP_VRF_TOVPN_SID_REQUEST_IN_PROGRESS)))
+			return 0;
+
 		/* This will return true if the global IPv6 NH is a link local
 		 * addr */
 		if (!make_prefix(afi, pi, &p, bgp_nexthop))
