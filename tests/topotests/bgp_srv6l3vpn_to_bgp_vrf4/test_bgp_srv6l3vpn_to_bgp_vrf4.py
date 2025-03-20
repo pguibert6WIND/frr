@@ -89,7 +89,7 @@ def check_rib(name, cmd, expected_file, count=30, wait=0.5):
 
 
 def test_rib():
-    check_rib("r1", "show bgp ipv4 vpn json", "r1/vpnv4_rib.json", 120, 1)
+    check_rib("r1", "show bgp ipv4 vpn json", "r1/vpnv4_rib.json", 20, 1)
     check_rib("r2", "show bgp ipv4 vpn json", "r2/vpnv4_rib.json")
     check_rib("r1", "show ip route vrf vrf10 json", "r1/vrf10v4_rib.json")
     check_rib("r2", "show ip route vrf vrf10 json", "r2/vrf10v4_rib.json")
