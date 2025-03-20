@@ -298,18 +298,22 @@ void bgp_unlink_nexthop_by_peer(struct peer *peer)
  * A route and its nexthop might belong to different VRFs. Therefore,
  * we need both the bgp_route and bgp_nexthop pointers.
  */
-int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
-			    afi_t afi, safi_t safi, struct bgp_path_info *pi,
-			    struct peer *peer, int connected,
-			    const struct prefix *orig_prefix)
+int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop, afi_t afi, safi_t safi,
+			    struct bgp_path_info *bpi, struct peer *peer, int connected,
+			    const struct prefix *orig_prefix, struct bgp_path_info *source_bpi)
 {
 	struct bgp_nexthop_cache_head *tree = NULL;
 	struct bgp_nexthop_cache *bnc;
-	struct bgp_path_info *bpi_ultimate;
+	struct bgp_path_info *bpi_ultimate, *pi;
 	struct prefix p;
 	uint32_t srte_color = 0;
 	int is_bgp_static_route = 0;
 	ifindex_t ifindex = 0;
+
+	if (safi == SAFI_MPLS_VPN && source_bpi)
+		pi = source_bpi;
+	else
+		pi = bpi;
 
 	if (pi) {
 		is_bgp_static_route = ((pi->type == ZEBRA_ROUTE_BGP)
@@ -421,6 +425,8 @@ int bgp_find_or_add_nexthop(struct bgp *bgp_route, struct bgp *bgp_nexthop,
 				   bnc->ifindex_ipv6_ll, bnc->path_count,
 				   bnc->nht_info, &bnc->resolved_prefix);
 	}
+
+	pi = bpi;
 
 	if (pi && is_route_parent_evpn(pi))
 		bnc->is_evpn_gwip_nexthop = true;
