@@ -7,6 +7,7 @@
 
 import json
 import ipaddress
+from functools import partial
 import sys
 import traceback
 from copy import deepcopy
