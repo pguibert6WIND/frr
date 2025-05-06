@@ -7,11 +7,17 @@ from functools import partial
 from lib import topotest
 
 
-def bgp_get_established_epoch(router, peer):
+def bgp_get_established_epoch(router, peer, vrf=None):
     """
     Get the established epoch for a peer
     """
-    output = router.vtysh_cmd(f"show bgp neighbor {peer} json", isjson=True)
+    if vrf:
+        output = router.vtysh_cmd(
+            f"show bgp vrf {vrf} neighbor {peer} json", isjson=True
+        )
+    else:
+        output = router.vtysh_cmd(f"show bgp neighbor {peer} json", isjson=True)
+
     assert peer in output, "peer not found"
     peer_info = output[peer]
     assert "bgpState" in peer_info, "peer state not found"
@@ -20,11 +26,16 @@ def bgp_get_established_epoch(router, peer):
     return peer_info["bgpTimerUpEstablishedEpoch"]
 
 
-def bgp_check_established_epoch_differ(router, peer, last_established_epoch):
+def bgp_check_established_epoch_differ(router, peer, last_established_epoch, vrf=None):
     """
     Check that the established epoch has changed
     """
-    output = router.vtysh_cmd(f"show bgp neighbor {peer} json", isjson=True)
+    if vrf:
+        output = router.vtysh_cmd(
+            f"show bgp vrf {vrf} neighbor {peer} json", isjson=True
+        )
+    else:
+        output = router.vtysh_cmd(f"show bgp neighbor {peer} json", isjson=True)
     assert peer in output, "peer not found"
     peer_info = output[peer]
     assert "bgpState" in peer_info, "peer state not found"
@@ -39,7 +50,7 @@ def bgp_check_established_epoch_differ(router, peer, last_established_epoch):
     return None
 
 
-def bgp_check_epoch_after_clear(router, peer, last_established_epoch):
+def bgp_check_epoch_after_clear(router, peer, last_established_epoch, vrf=None):
     """
     Checking that the established epoch has changed and the peer is in Established state again after clear
     Without this, the second session is cleared as well on slower systems (like CI)
@@ -49,6 +60,7 @@ def bgp_check_epoch_after_clear(router, peer, last_established_epoch):
         router,
         peer,
         last_established_epoch,
+        vrf=vrf,
     )
     _, result = topotest.run_and_expect(test_func, None, count=20, wait=1)
     assert (

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: ISC
 
 #
-# test_bgp_evpn.py
+# test_bgp_evpn_underlay_vrf.py
 # Part of NetDEF Topology Tests
 #
 # Copyright (c) 2019 by 6WIND
@@ -15,9 +15,8 @@ import os
 CWD = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(CWD, "../"))
 
-os.environ.pop("VRF_UNDERLAY", None)
+os.environ["VRF_UNDERLAY"] = "vrf-evpn"
 
-# Run the script with arguments
 with open(f"{CWD}/bgp_evpn.py") as f:
     code = f.read()
     exec(code)
