@@ -1418,11 +1418,14 @@ static int bgp_mplsvpn_get_label_per_nexthop_cb(mpls_label_t label,
 		return 0; /* no change */
 
 	/* update paths */
-	if (blnc->label != MPLS_INVALID_LABEL)
+	if (blnc->label != MPLS_INVALID_LABEL && blnc->nh)
 		bgp_zebra_send_nexthop_label(ZEBRA_MPLS_LABELS_ADD, blnc->label,
 					     blnc->nh->ifindex,
 					     blnc->nh->vrf_id, ZEBRA_LSP_BGP,
 					     &blnc->nexthop, 0, NULL);
+
+	if (!blnc->nh)
+		return 0;
 
 	LIST_FOREACH (pi, &(blnc->paths), mplsvpn.blnc.label_nh_thread) {
 		if (!pi->net)
