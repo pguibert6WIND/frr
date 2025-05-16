@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: ISC
 
 #
-# test_bgp_pic_topo1.py
+# test_bgp_pic_1_topo1.py
 #
 # Copyright 2024 6WIND S.A.
 #
