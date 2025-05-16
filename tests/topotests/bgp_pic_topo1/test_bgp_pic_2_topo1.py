@@ -205,7 +205,8 @@ def setup_module(mod):
 
     for rname, router in router_list.items():
         router.load_config(
-            TopoRouter.RD_ZEBRA, os.path.join(CWD, "{}/zebra.conf".format(rname))
+            TopoRouter.RD_ZEBRA, os.path.join(CWD, "{}/zebra.conf".format(rname)),
+            '--pic'
         )
         if rname in ("r1", "r3", "r4", "r5", "r6", "r7", "r8"):
             router.load_config(
@@ -271,6 +272,9 @@ def route_check_nhg_id_is_zebra(ipaddr_str, rname, vrf_name=None):
     assert f"ID: {nhg_id} (zebra)" in output, (
         "NHG %d not found in 'show nexthop-group rib ID json" % nhg_id
     )
+
+    return nhg_id
+
 
 def check_ipv4_prefix_with_multiple_nexthops(
     prefix, r5_path=True, r6_path=True, r8_path=False
@@ -595,17 +599,6 @@ def test_bgp_ipv4_three_ecmp_paths_configured():
     check_ipv4_prefix_with_multiple_nexthops_linux(
         "192.0.2.9", nhg_id=local_nhg_id, r8_path=True
     )
-
-    step(f"Get 192.0.2.9/32 child nexthop-groups for ID {local_nhg_id}")
-    output = json.loads(
-        tgen.gears["r1"].vtysh_cmd(f"show bgp nexthop-group {local_nhg_id} json")
-    )
-    assert (
-        "childList" in output.keys()
-    ), f"ID {local_nhg_id}, BGP nexthop group with no child nexthop-group."
-    assert (
-        "childListCount" in output.keys() and output["childListCount"] == 3
-    ), f"ID {local_nhg_id}, expected 2 dependent nexthops."
 
 
 def test_bgp_ipv4_one_additional_network_configured():
