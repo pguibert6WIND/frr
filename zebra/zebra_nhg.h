@@ -311,6 +311,8 @@ extern uint32_t zebra_nhg_hash_key(const void *arg);
 extern uint32_t zebra_nhg_id_key(const void *arg);
 
 extern bool zebra_nhg_hash_equal(const void *arg1, const void *arg2);
+extern bool zebra_nhg_hash_equal_relax_attrs(const void *arg1, const void *arg2, bool relax_afi,
+					     bool relax_recursive);
 extern bool zebra_nhg_hash_id_equal(const void *arg1, const void *arg2);
 
 /*

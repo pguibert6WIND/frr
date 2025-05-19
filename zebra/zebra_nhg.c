@@ -578,7 +578,8 @@ static bool nhg_compare_nexthops(const struct nexthop *nh1,
 	return true;
 }
 
-bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
+bool zebra_nhg_hash_equal_relax_attrs(const void *arg1, const void *arg2, bool relax_afi,
+				      bool relax_recursive)
 {
 	const struct nhg_hash_entry *nhe1 = arg1;
 	const struct nhg_hash_entry *nhe2 = arg2;
@@ -604,7 +605,7 @@ bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
 	if (nhe1->vrf_id != nhe2->vrf_id)
 		return false;
 
-	if (nhe1->afi != nhe2->afi)
+	if (relax_afi == false && nhe1->afi != nhe2->afi)
 		return false;
 
 	if (nhe1->nhg.nhgr.buckets != nhe2->nhg.nhgr.buckets)
@@ -616,17 +617,24 @@ bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
 	if (nhe1->nhg.nhgr.unbalanced_timer != nhe2->nhg.nhgr.unbalanced_timer)
 		return false;
 
-	/* Nexthops should be in-order, so we simply compare them in-place */
-	for (nexthop1 = nhe1->nhg.nexthop, nexthop2 = nhe2->nhg.nexthop;
-	     nexthop1 && nexthop2;
-	     nexthop1 = nexthop_next(nexthop1), nexthop2 = nexthop_next(nexthop2)) {
-		if (!nhg_compare_nexthops(nexthop1, nexthop2))
+	if (relax_recursive) {
+		/* Nexthops should be in-order, so we simply compare them in-place */
+		for (nexthop1 = nhe1->nhg.nexthop, nexthop2 = nhe2->nhg.nexthop;
+		     nexthop1 && nexthop2; nexthop1 = nexthop1->next, nexthop2 = nexthop2->next) {
+			if (!nhg_compare_nexthops(nexthop1, nexthop2))
+				return false;
+		}
+	} else {
+		for (nexthop1 = nhe1->nhg.nexthop, nexthop2 = nhe2->nhg.nexthop;
+		     nexthop1 && nexthop2;
+		     nexthop1 = nexthop_next(nexthop1), nexthop2 = nexthop_next(nexthop2)) {
+			if (!nhg_compare_nexthops(nexthop1, nexthop2))
+				return false;
+		}
+		/* Check for unequal list lengths */
+		if (nexthop1 || nexthop2)
 			return false;
 	}
-
-	/* Check for unequal list lengths */
-	if (nexthop1 || nexthop2)
-		return false;
 
 	/* If there's no backup info, comparison is done. */
 	if ((nhe1->backup_info == NULL) && (nhe2->backup_info == NULL))
@@ -660,6 +668,11 @@ bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
 	}
 
 	return true;
+}
+
+bool zebra_nhg_hash_equal(const void *arg1, const void *arg2)
+{
+	return zebra_nhg_hash_equal_relax_attrs(arg1, arg2, false, false);
 }
 
 bool zebra_nhg_hash_id_equal(const void *arg1, const void *arg2)

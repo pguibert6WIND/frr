@@ -753,17 +753,56 @@ bool zebra_update_pic_dep_nhe(struct nhg_hash_entry *pic_dep_nhe)
 	return true;
 }
 
+struct zebra_nhg_update_failed {
+	struct nhg_hash_entry *nhe_lookup;
+	struct route_node *rn;
+	bool matched;
+};
+
+static void zebra_nhg_update_failed_nhg(struct hash_bucket *bucket, void *arg)
+{
+	struct nhg_hash_entry *picnhe = bucket->data;
+	struct nhg_connected *rb_node_dep = NULL;
+	struct zebra_nhg_update_failed *nhg_ctx = arg;
+	struct nhg_hash_entry *nhe_lookup = nhg_ctx->nhe_lookup;
+
+	if (nhg_ctx->matched)
+		return;
+
+	if (zebra_nhg_hash_equal_relax_attrs(picnhe, nhe_lookup, true, true) == false)
+		return;
+
+	/* filter out based on pic_nhe settings */
+	UNSET_FLAG(picnhe->flags, NEXTHOP_GROUP_VALID);
+
+	frr_each_safe (nhg_connected_tree, &picnhe->nhg_dependents, rb_node_dep) {
+		if (ZEBRA_DEBUG_DPLANE_DETAILED)
+			zlog_debug("%s: pic_nhe %u become invalid during route %pRN deleted, update pic_nh dependents %u",
+				   __func__, picnhe->id, nhg_ctx->rn, rb_node_dep->nhe->id);
+		UNSET_FLAG(rb_node_dep->nhe->flags, NEXTHOP_GROUP_INSTALLED);
+		zebra_nhg_install_kernel(rb_node_dep->nhe, ZEBRA_ROUTE_MAX);
+	}
+
+	rb_node_dep = NULL;
+	frr_each_safe (nhg_connected_tree, &picnhe->picnh_dependents, rb_node_dep) {
+		if (ZEBRA_DEBUG_DPLANE_DETAILED)
+			zlog_debug("%s: pic_nh dependent %u become invalid during route %pRN deleted",
+				   __func__, rb_node_dep->nhe->id, nhg_ctx->rn);
+		UNSET_FLAG(rb_node_dep->nhe->flags, NEXTHOP_GROUP_VALID);
+		zebra_update_pic_dep_nhe(rb_node_dep->nhe);
+	}
+	nhg_ctx->matched = true;
+}
 
 bool zebra_update_pic_nhe(struct route_node *rn)
 {
 	afi_t afi;
 	int ret = 0;
-	struct nhg_hash_entry *picnhe;
 	struct nexthop *nh = NULL;
 	struct nhg_hash_entry pic_nh_lookup = { 0 };
 	struct prefix *p;
-	struct nhg_connected *rb_node_dep = NULL;
 	struct rnh *rnh = NULL;
+	struct zebra_nhg_update_failed nhg_ctx = { 0 };
 
 	rnh = rn->info;
 	if (!rnh)
@@ -797,32 +836,14 @@ bool zebra_update_pic_nhe(struct route_node *rn)
 		return false;
 	}
 
-	picnhe = hash_lookup(zrouter.nhgs, &pic_nh_lookup);
+	nhg_ctx.nhe_lookup = &pic_nh_lookup;
+	nhg_ctx.rn = rn;
+	hash_iterate(zrouter.nhgs_id, zebra_nhg_update_failed_nhg, &nhg_ctx);
 
 	if (pic_nh_lookup.nhg.nexthop)
 		nexthops_free(pic_nh_lookup.nhg.nexthop);
 
-	if (!picnhe)
-		return false;
-
-	UNSET_FLAG(picnhe->flags, NEXTHOP_GROUP_VALID);
-
-	frr_each_safe (nhg_connected_tree, &picnhe->nhg_dependents, rb_node_dep) {
-		//zebra_nhg_set_invalid(rb_node_dep->nhe);
-		if (ZEBRA_DEBUG_DPLANE_DETAILED)
-			zlog_debug("%s: pic_nhe %ul become invalid during route %pRN deleted, update pic_nh dependents %ul",
-				   __func__, picnhe->id, rn, rb_node_dep->nhe->id);
-		UNSET_FLAG(rb_node_dep->nhe->flags, NEXTHOP_GROUP_INSTALLED);
-		zebra_nhg_install_kernel(rb_node_dep->nhe, ZEBRA_ROUTE_MAX);
-	}
-
-	rb_node_dep = NULL;
-	frr_each_safe (nhg_connected_tree, &picnhe->picnh_dependents, rb_node_dep) {
-		UNSET_FLAG(rb_node_dep->nhe->flags, NEXTHOP_GROUP_VALID);
-		zebra_update_pic_dep_nhe(rb_node_dep->nhe);
-	}
-
-	return true;
+	return nhg_ctx.matched;
 }
 
 /*
