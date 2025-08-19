@@ -3190,9 +3190,11 @@ DEFPY(no_bmp_mirror_limit_cfg,
 
 DEFPY(show_bmp,
       show_bmp_cmd,
-      "show bmp",
+      "show bmp [queue$queue [detail$detail]]",
       SHOW_STR
-      BMP_STR)
+      BMP_STR
+      "Display Queue Information"
+      "Display detailed queue Information")
 {
 	struct bmp_bgp *bmpbgp;
 	struct bmp_targets *bt;
@@ -3202,6 +3204,7 @@ DEFPY(show_bmp,
 	struct ttable *tt;
 	char uptime[BGP_UPTIME_LEN];
 	char *out;
+	struct bmp_queue_entry *bqe;
 
 	frr_each(bmp_bgph, &bmp_bgph, bmpbgp) {
 		vty_out(vty, "BMP state for BGP %s:\n\n",
@@ -3215,6 +3218,26 @@ DEFPY(show_bmp,
 			vty_out(vty, "                  %9zu bytes buffer size limit\n",
 					bmpbgp->mirror_qsizelimit);
 		vty_out(vty, "\n");
+
+                if (queue) {
+			frr_each(bmp_targets, &bmpbgp->targets, bt) {
+				vty_out(vty, "  Extra Info for target \"%s\":\n", bt->name);
+				vty_out(vty, "   Count updlist %lu, updhash %lu, loc updlist %lu, loc updhash %lu\n",
+					bmp_qlist_count(&bt->updlist), bmp_qhash_count(&bt->updhash),
+					bmp_qlist_count(&bt->locupdlist), bmp_qhash_count(&bt->locupdhash));
+				if (detail) {
+					frr_each(bmp_qlist, &bt->updlist, bqe) {
+						vty_out(vty, "   UpdList Pfx %pFX, afi %u, safi %u, refcnt %lu\n",
+							&bqe->p, bqe->afi, bqe->safi, bqe->refcount);
+					}
+					frr_each(bmp_qlist, &bt->locupdlist, bqe) {
+						vty_out(vty, "   Loc UpdList Pfx %pFX, afi %u, safi %u, refcnt %lu\n",
+							&bqe->p, bqe->afi, bqe->safi, bqe->refcount);
+					}
+				}
+			}
+			continue;
+		}
 
 		frr_each(bmp_targets, &bmpbgp->targets, bt) {
 			vty_out(vty, "  Targets \"%s\":\n", bt->name);
