@@ -365,13 +365,13 @@ class Topogen(object):
         self.peern += 1
         return self.gears[name]
 
-    def add_bmp_server(self, name, ip, defaultRoute, port=1789):
+    def add_bmp_server(self, name, ip, defaultRoute, port=1789, use_nc=False):
         """Add the bmp collector gear"""
         if name in self.gears:
             raise KeyError("The bmp server already exists")
 
         self.gears[name] = TopoBMPCollector(
-            self, name, ip=ip, defaultRoute=defaultRoute, port=port
+            self, name, ip=ip, defaultRoute=defaultRoute, port=port, use_nc=use_nc
         )
 
     def add_link(self, node1, node2, ifname1=None, ifname2=None):
@@ -1292,6 +1292,8 @@ class TopoBMPCollector(TopoHost):
         params["private_mounts"] = self.PRIVATE_DIRS
         self.port = params["port"]
         self.ip = params["ip"]
+        self.use_nc = params["use_nc"]
+        self.pid_value = 0
         super(TopoBMPCollector, self).__init__(tgen, name, **params)
 
     def __str__(self):
@@ -1309,16 +1311,31 @@ class TopoBMPCollector(TopoHost):
         self.pid_file = os.path.join(log_dir, "bmpserver.pid")
 
         with open(log_err, "w") as err:
-            self.run(
-                "{}/bmp_collector/bmpserver.py -a {} -p {} -r {} {}&".format(
-                    CWD, self.ip, self.port, self.pid_file, log_arg
-                ),
-                stdout=None,
-                stderr=err,
-            )
+            if self.use_nc:
+                self.run(
+                    "nc -l -p {} > /dev/null &".format(
+                        self.port
+                    ),
+                    stdout=None,
+                    stderr=err,
+                )
+                self.pid_value = self.run(f"ps -ax | grep nc | grep {self.port}")
+                self.pid_value = self.pid_value.split()[0]
+            else:
+                self.run(
+                    "{}/bmp_collector/bmpserver.py -a {} -p {} -r {} {}&".format(
+                        CWD, self.ip, self.port, self.pid_file, log_arg
+                    ),
+                    stdout=None,
+                    stderr=err,
+                )
+                
 
     def stop(self):
-        self.run(f"kill $(cat {self.pid_file}")
+        if self.use_nc:
+            self.run(f"kill {self.pid_value}")
+        else:
+            self.run(f"kill $(cat {self.pid_file}")
         return ""
 
 
