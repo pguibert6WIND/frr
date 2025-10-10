@@ -31,6 +31,7 @@
 #include "lib/sockopt.h"
 #include "frr_pthread.h"
 #include "bitfield.h"
+#include "l2vpn.h"
 
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_table.h"
@@ -80,6 +81,7 @@
 #include "bgpd/bgp_mac.h"
 #include "bgpd/bgp_trace.h"
 #include "bgpd/bgp_srv6.h"
+#include "bgpd/bgp_l2vpn.h"
 
 DEFINE_MTYPE_STATIC(BGPD, PEER_TX_SHUTDOWN_MSG, "Peer shutdown message (TX)");
 DEFINE_QOBJ_TYPE(bgp_master);
@@ -9186,6 +9188,9 @@ void bgp_init(unsigned short instance)
 	access_list_init();
 	access_list_add_hook(peer_distribute_update);
 	access_list_delete_hook(peer_distribute_update);
+
+	/* BGP L2VPN initialize */
+	bgp_l2vpn_init();
 
 	/* Filter list initialize. */
 	bgp_filter_init();

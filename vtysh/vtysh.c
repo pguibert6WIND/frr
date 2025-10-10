@@ -2182,6 +2182,7 @@ DEFUNSH(VTYSH_LDPD, ldp_interface_ifname, ldp_interface_ifname_cmd,
 
 	return CMD_SUCCESS;
 }
+#endif
 
 DEFUNSH(VTYSH_L2VPN, l2vpn_word_type_vpls, l2vpn_word_type_vpls_cmd,
 	"l2vpn WORD type vpls",
@@ -2203,7 +2204,6 @@ DEFUNSH(VTYSH_L2VPN, ldp_member_pseudowire_ifname,
 	vty->node = L2VPN_PSEUDOWIRE_NODE;
 	return CMD_SUCCESS;
 }
-#endif
 
 #ifdef HAVE_ISISD
 DEFUNSH(VTYSH_ISISD, router_isis, router_isis_cmd,
@@ -5399,6 +5399,7 @@ void vtysh_init_vty(void)
 	install_element(LDP_IPV6_IFACE_NODE, &vtysh_exit_ldpd_cmd);
 	install_element(LDP_IPV6_IFACE_NODE, &vtysh_quit_ldpd_cmd);
 	install_element(LDP_IPV6_IFACE_NODE, &vtysh_end_all_cmd);
+#endif
 
 	install_element(CONFIG_NODE, &l2vpn_word_type_vpls_cmd);
 	install_element(L2VPN_NODE, &vtysh_exit_ldpd_cmd);
@@ -5409,7 +5410,6 @@ void vtysh_init_vty(void)
 	install_element(L2VPN_PSEUDOWIRE_NODE, &vtysh_exit_ldpd_cmd);
 	install_element(L2VPN_PSEUDOWIRE_NODE, &vtysh_quit_ldpd_cmd);
 	install_element(L2VPN_PSEUDOWIRE_NODE, &vtysh_end_all_cmd);
-#endif
 
 	/* eigrpd */
 #ifdef HAVE_EIGRPD
