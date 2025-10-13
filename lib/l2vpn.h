@@ -75,6 +75,9 @@ DECLARE_QOBJ_TYPE(l2vpn_pw);
 #define F_PW_NO_REMOTE_LABEL    0x03	/* have not recvd label from peer */
 #define F_PW_MTU_MISMATCH       0x04	/* mtu mismatch between peers */
 
+
+typedef enum { L2VPN_TYPE_VPWS = 1, L2VPN_TYPE_VPLS = 2 } l2vpn_types;
+
 struct l2vpn {
 	RB_ENTRY(l2vpn)		 entry;
 	char			 name[L2VPN_NAME_LEN];
@@ -92,8 +95,6 @@ struct l2vpn {
 RB_HEAD(l2vpn_head, l2vpn);
 RB_PROTOTYPE(l2vpn_head, l2vpn, entry, l2vpn_compare);
 DECLARE_QOBJ_TYPE(l2vpn);
-#define L2VPN_TYPE_VPWS		1
-#define L2VPN_TYPE_VPLS		2
 
 /* clang-format on */
 
@@ -105,8 +106,9 @@ extern void l2vpn_init(void);
 extern void l2vpn_init_new(bool in_backend);
 
 struct l2vpn *l2vpn_new(const char *name);
-struct l2vpn *l2vpn_find(struct l2vpn_head *l2vpn_tree, const char *name);
+struct l2vpn *l2vpn_find(struct l2vpn_head *conf, const char *name, int type);
 void l2vpn_del(struct l2vpn *l2vpn);
+void l2vpn_vpls_cli_init(void);
 
 struct l2vpn_if *l2vpn_if_new(struct l2vpn *l2vpn, const char *ifname);
 struct l2vpn_if *l2vpn_if_find(struct l2vpn *l2vpn, const char *ifname);

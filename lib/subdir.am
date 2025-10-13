@@ -144,6 +144,7 @@ lib_libfrr_la_SOURCES = \
 	lib/routing_nb.c \
 	lib/routing_nb_config.c \
 	lib/tc.c \
+	lib/l2vpn.c \
 	lib/l2vpn_cli.c \
 	lib/l2vpn_northbound.c \
 	# end
