@@ -4113,6 +4113,24 @@ static int bgp_zebra_process_srv6_locator_delete(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
+/*
+ * Receive PW status update from Zebra
+ */
+static int
+bgp_zebra_read_pw_status_update(ZAPI_CALLBACK_ARGS)
+{
+	struct zapi_pw_status	 zpw;
+
+	zebra_read_pw_status_update(cmd, zclient, length, vrf_id, &zpw);
+
+	if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("%s: pseudowire %s status %s 0x%x", zpw.ifname,
+				   (zpw.status == PW_FORWARDING) ? "up" : "down",
+				    zpw.status);
+	/* update status in L2VPN */
+	return (0);
+}
+
 static zclient_handler *const bgp_handlers[] = {
 	[ZEBRA_ROUTER_ID_UPDATE] = bgp_router_id_update,
 	[ZEBRA_INTERFACE_ADDRESS_ADD] = bgp_interface_address_add,
@@ -4144,6 +4162,7 @@ static zclient_handler *const bgp_handlers[] = {
 	[ZEBRA_SRV6_MANAGER_GET_LOCATOR_CHUNK] =
 		bgp_zebra_process_srv6_locator_chunk,
 	[ZEBRA_SRV6_SID_NOTIFY] = bgp_zebra_srv6_sid_notify,
+	[ZEBRA_PW_STATUS_UPDATE] = bgp_zebra_read_pw_status_update,
 };
 
 static int bgp_if_new_hook(struct interface *ifp)

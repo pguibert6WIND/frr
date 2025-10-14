@@ -105,7 +105,7 @@ static int l2vpn_instance_pw_type_modify(struct nb_cb_modify_args *args)
 			l2vpn->pw_type = PW_TYPE_ETHERNET_TAGGED;
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 
@@ -127,7 +127,7 @@ static int l2vpn_instance_pw_type_destroy(struct nb_cb_destroy_args *args)
 		l2vpn->pw_type = DEFAULT_PW_TYPE;
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)( NULL);
 		break;
 	}
 	return NB_OK;
@@ -153,7 +153,7 @@ static int l2vpn_instance_mtu_modify(struct nb_cb_modify_args *args)
 		l2vpn->mtu = mtu;
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 
@@ -175,7 +175,7 @@ static int l2vpn_instance_mtu_destroy(struct nb_cb_destroy_args *args)
 		l2vpn->mtu = DEFAULT_L2VPN_MTU;
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 	return NB_OK;
@@ -201,7 +201,7 @@ static int l2vpn_instance_bridge_interface_modify(struct nb_cb_modify_args *args
 		strlcpy(l2vpn->br_ifname, ifname, sizeof(l2vpn->br_ifname));
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 
@@ -223,7 +223,7 @@ static int l2vpn_instance_bridge_interface_destroy(struct nb_cb_destroy_args *ar
 		memset(l2vpn->br_ifname, 0, sizeof(l2vpn->br_ifname));
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 
@@ -240,10 +240,11 @@ static int l2vpn_instance_member_interface_create(struct nb_cb_create_args *args
 	const char *ifname;
 
 	ifname = yang_dnode_get_string(args->dnode, "interface");
+	l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 	switch (args->event) {
 	case NB_EV_VALIDATE:
 		if ((l2vpn_lib_master.iface_ok_for_l2vpn &&
-		     (*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
+		     !(*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
 		    l2vpn_iface_is_configured(ifname)) {
 			snprintf(args->errmsg, args->errmsg_len, "%% Interface is already in use");
 			return NB_ERR_VALIDATION;
@@ -254,7 +255,6 @@ static int l2vpn_instance_member_interface_create(struct nb_cb_create_args *args
 		/* NOTHING */
 		break;
 	case NB_EV_APPLY:
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 		lif = l2vpn_if_find(l2vpn, ifname);
 		if (lif) {
 			nb_running_set_entry(args->dnode, lif);
@@ -266,7 +266,7 @@ static int l2vpn_instance_member_interface_create(struct nb_cb_create_args *args
 		nb_running_set_entry(args->dnode, lif);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 
@@ -295,7 +295,7 @@ static int l2vpn_instance_member_interface_destroy(struct nb_cb_destroy_args *ar
 		free(lif);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(NULL);
 		break;
 	}
 	return NB_OK;
@@ -314,7 +314,7 @@ static int l2vpn_instance_member_pseudowire_create(struct nb_cb_create_args *arg
 	switch (args->event) {
 	case NB_EV_VALIDATE:
 		if ((l2vpn_lib_master.iface_ok_for_l2vpn &&
-		     (*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
+		     !(*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
 		    l2vpn_iface_is_configured(ifname)) {
 			snprintf(args->errmsg, args->errmsg_len, "%% Interface is already in use");
 			return NB_ERR_VALIDATION;
@@ -339,7 +339,7 @@ static int l2vpn_instance_member_pseudowire_create(struct nb_cb_create_args *arg
 		nb_running_set_entry(args->dnode, pw);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -368,12 +368,74 @@ static int l2vpn_instance_member_pseudowire_destroy(struct nb_cb_destroy_args *a
 			RB_REMOVE(l2vpn_pw_head, &l2vpn->pw_inactive_tree, pw);
 		else
 			RB_REMOVE(l2vpn_pw_head, &l2vpn->pw_tree, pw);
-		free(pw);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
+
+		free(pw);
 		break;
 	}
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/vni
+ */
+static int l2vpn_instance_vni_modify(struct nb_cb_modify_args *args)
+{
+	uint32_t vni;
+	struct l2vpn_pw *l2vpn_pw;
+
+	vni = yang_dnode_get_uint32(args->dnode, NULL);
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		l2vpn_pw = nb_running_get_entry(args->dnode, NULL, true);
+		if (l2vpn_pw->vni && l2vpn_pw->vni != vni) {
+			if (l2vpn_lib_master.event_hook) {
+				l2vpn_pw->enabled = false;
+				(*l2vpn_lib_master.event_hook)(l2vpn_pw);
+				l2vpn_pw->enabled = true;
+			}
+		}
+
+		l2vpn_pw->vni = vni;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(l2vpn_pw);
+
+		break;
+	}
+
+	return NB_OK;
+}
+
+static int l2vpn_instance_vni_destroy(struct nb_cb_destroy_args *args)
+{
+	struct l2vpn *l2vpn;
+	struct l2vpn_pw *l2vpn_pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		l2vpn_pw = nb_running_get_entry(args->dnode, NULL, true);
+		if (l2vpn_lib_master.event_hook) {
+				l2vpn_pw->enabled = false;
+				(*l2vpn_lib_master.event_hook)(l2vpn_pw);
+				l2vpn_pw->enabled = true;
+		}
+
+		l2vpn_pw->vni = 0;
+		break;
+	}
+
 	return NB_OK;
 }
 
@@ -384,7 +446,6 @@ static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_modify(struct nb_cb_
 {
 	struct l2vpn_pw *pw;
 	struct ipaddr lsr_id;
-	struct l2vpn *l2vpn;
 
 	yang_dnode_get_ip(&lsr_id, args->dnode, NULL);
 	switch (args->event) {
@@ -401,10 +462,9 @@ static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_modify(struct nb_cb_
 	case NB_EV_APPLY:
 		pw = nb_running_get_entry(args->dnode, NULL, true);
 		pw->lsr_id = lsr_id.ip._v4_addr;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -414,7 +474,6 @@ static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_modify(struct nb_cb_
 static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_destroy(struct nb_cb_destroy_args *args)
 {
 	struct l2vpn_pw *pw;
-	struct l2vpn *l2vpn;
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -425,10 +484,9 @@ static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_destroy(struct nb_cb
 	case NB_EV_APPLY:
 		pw = nb_running_get_entry(args->dnode, NULL, true);
 		pw->lsr_id.s_addr = INADDR_ANY;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 	return NB_OK;
@@ -439,9 +497,8 @@ static int l2vpn_instance_member_pseudowire_neighbor_lsr_id_destroy(struct nb_cb
  */
 static int l2vpn_instance_member_pseudowire_pw_id_modify(struct nb_cb_modify_args *args)
 {
-	struct l2vpn_pw *pw;
 	uint32_t pw_id;
-	struct l2vpn *l2vpn;
+	struct l2vpn_pw *pw;
 
 	pw_id = yang_dnode_get_uint32(args->dnode, NULL);
 	switch (args->event) {
@@ -453,10 +510,9 @@ static int l2vpn_instance_member_pseudowire_pw_id_modify(struct nb_cb_modify_arg
 	case NB_EV_APPLY:
 		pw = nb_running_get_entry(args->dnode, NULL, true);
 		pw->pwid = pw_id;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -466,7 +522,6 @@ static int l2vpn_instance_member_pseudowire_pw_id_modify(struct nb_cb_modify_arg
 static int l2vpn_instance_member_pseudowire_pw_id_destroy(struct nb_cb_destroy_args *args)
 {
 	struct l2vpn_pw *pw;
-	struct l2vpn *l2vpn;
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -477,10 +532,9 @@ static int l2vpn_instance_member_pseudowire_pw_id_destroy(struct nb_cb_destroy_a
 	case NB_EV_APPLY:
 		pw = nb_running_get_entry(args->dnode, NULL, true);
 		pw->pwid = 0;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 	return NB_OK;
@@ -493,7 +547,6 @@ static int l2vpn_instance_member_pseudowire_neighbor_address_modify(struct nb_cb
 {
 	struct l2vpn_pw *pw;
 	struct ipaddr nbr_id;
-	struct l2vpn *l2vpn;
 
 	yang_dnode_get_ip(&nbr_id, args->dnode, NULL);
 	switch (args->event) {
@@ -519,10 +572,9 @@ static int l2vpn_instance_member_pseudowire_neighbor_address_modify(struct nb_cb
 			IPV6_ADDR_COPY(&pw->addr.ipv6, &nbr_id.ip._v4_addr);
 		}
 		pw->flags |= F_PW_STATIC_NBR_ADDR;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -532,7 +584,6 @@ static int l2vpn_instance_member_pseudowire_neighbor_address_modify(struct nb_cb
 static int l2vpn_instance_member_pseudowire_neighbor_address_destroy(struct nb_cb_destroy_args *args)
 {
 	struct l2vpn_pw *pw;
-	struct l2vpn *l2vpn;
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -545,10 +596,218 @@ static int l2vpn_instance_member_pseudowire_neighbor_address_destroy(struct nb_c
 		pw->af = AF_UNSPEC;
 		memset(&pw->addr, 0, sizeof(pw->addr));
 		pw->flags &= ~F_PW_STATIC_NBR_ADDR;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn
+ */
+static int l2vpn_instance_member_pseudowire_neighbor_evpn_modify(struct nb_cb_create_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+		pw->flags |= F_PW_EVPN_NBR_ADDR;
+
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+
+	return NB_OK;
+}
+
+static int l2vpn_instance_member_pseudowire_neighbor_evpn_destroy(struct nb_cb_destroy_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+
+		pw->enabled = false;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+
+		pw->flags &= ~F_PW_EVPN_NBR_ADDR;
+		pw->local_ac_id = 0;
+		pw->remote_ac_id = 0;
+		pw->pwid = 0;
+
+		break;
+	}
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/evi
+ */
+static int l2vpn_instance_member_pseudowire_neighbor_evpn_evi_modify(struct nb_cb_modify_args *args)
+{
+	uint32_t evi;
+	struct l2vpn_pw *pw;
+
+	evi = yang_dnode_get_uint32(args->dnode, NULL);
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+		if (pw->enabled && pw->pwid && pw->pwid != evi) {
+			pw->enabled = false;
+			if (l2vpn_lib_master.event_hook)
+				(*l2vpn_lib_master.event_hook)(pw);
+		}
+
+		pw->enabled = true;
+		pw->pwid = evi;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+
+	return NB_OK;
+}
+
+static int l2vpn_instance_member_pseudowire_neighbor_evpn_evi_destroy(struct nb_cb_destroy_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+		pw->enabled = false;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+
+		pw->pwid = 0;
+		break;
+	}
+
+	return NB_OK;
+
+}
+
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/local-ac-id
+ */
+static int
+l2vpn_instance_member_pseudowire_neighbor_evpn_local_ac_id_modify(struct nb_cb_modify_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+		pw->local_ac_id = yang_dnode_get_uint32(args->dnode, NULL);
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+
+	return NB_OK;
+}
+
+static int
+l2vpn_instance_member_pseudowire_neighbor_evpn_local_ac_id_destroy(struct nb_cb_destroy_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	pw = nb_running_get_entry(args->dnode, NULL, true);
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		if (pw->local_ac_id != yang_dnode_get_uint32(args->dnode, NULL)) {
+			snprintf(args->errmsg, args->errmsg_len, "%% Wrong local-ac-id");
+			return NB_ERR_VALIDATION;
+		}
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw->local_ac_id = 0;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/remote-ac-id
+ */
+static int
+l2vpn_instance_member_pseudowire_neighbor_evpn_remote_ac_id_modify(struct nb_cb_modify_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw = nb_running_get_entry(args->dnode, NULL, true);
+		pw->remote_ac_id = yang_dnode_get_uint32(args->dnode, NULL);
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
+		break;
+	}
+
+	return NB_OK;
+}
+
+static int
+l2vpn_instance_member_pseudowire_neighbor_evpn_remote_ac_id_destroy(struct nb_cb_destroy_args *args)
+{
+	struct l2vpn_pw *pw;
+
+	pw = nb_running_get_entry(args->dnode, NULL, true);
+	switch (args->event) {
+	case NB_EV_VALIDATE:
+		if (pw->remote_ac_id != yang_dnode_get_uint32(args->dnode, NULL)) {
+			snprintf(args->errmsg, args->errmsg_len, "%% Wrong remote-ac-id");
+			return NB_ERR_VALIDATION;
+		}
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+		/* NOTHING */
+		break;
+	case NB_EV_APPLY:
+		pw->remote_ac_id = 0;
+		if (l2vpn_lib_master.event_hook)
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 	return NB_OK;
@@ -560,7 +819,6 @@ static int l2vpn_instance_member_pseudowire_neighbor_address_destroy(struct nb_c
 static int l2vpn_instance_member_pseudowire_control_word_modify(struct nb_cb_modify_args *args)
 {
 	struct l2vpn_pw *pw;
-	struct l2vpn *l2vpn;
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -574,10 +832,9 @@ static int l2vpn_instance_member_pseudowire_control_word_modify(struct nb_cb_mod
 			pw->flags &= ~F_PW_CWORD_CONF;
 		else
 			pw->flags |= F_PW_CWORD_CONF;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -590,7 +847,6 @@ static int l2vpn_instance_member_pseudowire_control_word_modify(struct nb_cb_mod
 static int l2vpn_instance_member_pseudowire_pw_status_modify(struct nb_cb_modify_args *args)
 {
 	struct l2vpn_pw *pw;
-	struct l2vpn *l2vpn;
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -604,10 +860,9 @@ static int l2vpn_instance_member_pseudowire_pw_status_modify(struct nb_cb_modify
 			pw->flags &= ~F_PW_STATUSTLV_CONF;
 		else
 			pw->flags |= F_PW_STATUSTLV_CONF;
-		l2vpn = nb_running_get_entry(args->dnode, "../.", true);
 
 		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(l2vpn->name);
+			(*l2vpn_lib_master.event_hook)(pw);
 		break;
 	}
 
@@ -660,6 +915,13 @@ const struct frr_yang_module_info frr_l2vpn = {
 			}
 		},
 		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/vni",
+			.cbs = {
+				.modify = l2vpn_instance_vni_modify,
+				.destroy = l2vpn_instance_vni_destroy,
+			}
+		},
+		{
 			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-lsr-id",
 			.cbs = {
 				.modify = l2vpn_instance_member_pseudowire_neighbor_lsr_id_modify,
@@ -671,6 +933,34 @@ const struct frr_yang_module_info frr_l2vpn = {
 			.cbs = {
 				.modify = l2vpn_instance_member_pseudowire_neighbor_address_modify,
 				.destroy = l2vpn_instance_member_pseudowire_neighbor_address_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn",
+			.cbs = {
+				.create = l2vpn_instance_member_pseudowire_neighbor_evpn_modify,
+				.destroy = l2vpn_instance_member_pseudowire_neighbor_evpn_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/evi",
+			.cbs = {
+				.modify = l2vpn_instance_member_pseudowire_neighbor_evpn_evi_modify,
+				.destroy = l2vpn_instance_member_pseudowire_neighbor_evpn_evi_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/remote-ac-id",
+			.cbs = {
+				.modify = l2vpn_instance_member_pseudowire_neighbor_evpn_remote_ac_id_modify,
+				.destroy = l2vpn_instance_member_pseudowire_neighbor_evpn_remote_ac_id_destroy,
+			}
+		},
+		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/local-ac-id",
+			.cbs = {
+				.modify = l2vpn_instance_member_pseudowire_neighbor_evpn_local_ac_id_modify,
+				.destroy = l2vpn_instance_member_pseudowire_neighbor_evpn_local_ac_id_destroy,
 			}
 		},
 		{

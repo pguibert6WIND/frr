@@ -45,7 +45,10 @@ struct l2vpn_pw {
 	struct in_addr		 lsr_id;
 	int			 af;
 	union g_addr addr;
-	uint32_t		 pwid;
+	uint32_t pwid;
+	uint32_t local_ac_id;
+	uint32_t remote_ac_id;
+	vni_t vni;
 	char ifname[IFNAMSIZ];
 	ifindex_t		 ifindex;
 	bool			 enabled;
@@ -67,7 +70,7 @@ DECLARE_QOBJ_TYPE(l2vpn_pw);
 #define F_PW_CWORD		0x08	/* control word negotiated */
 #define F_PW_STATIC_NBR_ADDR	0x10	/* static neighbor address configured */
 #define F_PW_SEND_REMOTE	0x20	/* send pw message to remote */
-
+#define F_PW_EVPN_NBR_ADDR   0x40       /* EVPN neighbor configured */
 
 #define F_PW_NO_ERR             0x00	/* no error reported */
 #define F_PW_LOCAL_NOT_FWD      0x01	/* locally can't forward over PW */
@@ -107,8 +110,10 @@ extern void l2vpn_init_new(bool in_backend);
 
 struct l2vpn *l2vpn_new(const char *name);
 struct l2vpn *l2vpn_find(struct l2vpn_head *conf, const char *name, int type);
+int l2vpn_iface_is_configured(const char *ifname);
 void l2vpn_del(struct l2vpn *l2vpn);
 void l2vpn_vpls_cli_init(void);
+void l2vpn_vpws_cli_init(void);
 
 struct l2vpn_if *l2vpn_if_new(struct l2vpn *l2vpn, const char *ifname);
 struct l2vpn_if *l2vpn_if_find(struct l2vpn *l2vpn, const char *ifname);
@@ -121,17 +126,15 @@ struct l2vpn_pw *l2vpn_pw_find_inactive(struct l2vpn *l2vpn, const char *ifname)
 struct l2vpn_lib_register {
 	void (*add_hook)(const char *name);
 	void (*del_hook)(const char *name);
-	void (*event_hook)(const char *name);
+	void (*event_hook)(struct l2vpn_pw *l2vpn_pw);
 	bool (*iface_ok_for_l2vpn)(const char *ifname);
 };
 
 extern struct l2vpn_lib_register l2vpn_lib_master;
 extern struct l2vpn_head l2vpn_tree_config;
 
-int l2vpn_iface_is_configured(const char *ifname);
-
 void l2vpn_register_hook(void (*func_add)(const char *), void (*func_del)(const char *),
-			 void (*func_event)(const char *),
+			 void (*func_event)(struct l2vpn_pw *),
 			 bool (*func_iface_ok_for_l2vpn)(const char *));
 
 #ifdef __cplusplus

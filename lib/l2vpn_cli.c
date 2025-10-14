@@ -254,6 +254,61 @@ DEFPY_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+DEFPY_YANG(
+	l2vpn_vni,
+	l2vpn_vni_cmd,
+	"[no] vni (1-16777215)$vni",
+	NO_STR
+	"Specify BGP EVPN vni used for this VPWS\n"
+	"BGP EVPN vni value\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./vni", NB_OP_DESTROY, NULL);
+	else
+		nb_cli_enqueue_change(vty, "./vni", NB_OP_MODIFY, vni_str);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(
+	l2vpn_neighbor_evpn,
+	l2vpn_neighbor_evpn_cmd,
+	"[no] neighbor evpn evi (1-16777215)$evi [local-ac-id (1-16777215)$local_ac_id remote-ac-id (1-16777215)$remote_ac_id]",
+	NO_STR
+	"Remote endpoint configuration\n"
+	"Specify that L2VPN uses information from BGP EVPN\n"
+	"Define EVPN instance identifier\n"
+	"EVPN instance identifier value\n"
+        "Define the local attachment circuit ID\n"
+	"Local attachment circuit ID value\n"
+        "Define the remote attachment circuit ID\n"
+	"Remote attachment circuit ID value\n")
+{
+	char xpath[XPATH_MAXLEN], xpath_val[XPATH_MAXLEN + 32];
+	enum nb_operation operation = NB_OP_MODIFY;
+
+	snprintf(xpath, sizeof(xpath), "./neighbor-evpn");
+	if (no)
+		operation = NB_OP_DESTROY;
+
+	nb_cli_enqueue_change(vty, xpath, operation, NULL);
+	snprintf(xpath_val, sizeof(xpath_val), "%s/evi", xpath);
+	nb_cli_enqueue_change(vty, xpath_val, operation, evi_str);
+
+	if (!no && local_ac_id_str) {
+		snprintf(xpath_val, sizeof(xpath_val), "%s/local-ac-id", xpath);
+		nb_cli_enqueue_change(vty, xpath_val, operation,
+				      local_ac_id_str);
+	}
+	if (!no && remote_ac_id_str) {
+		snprintf(xpath_val, sizeof(xpath_val), "%s/remote-ac-id", xpath);
+		nb_cli_enqueue_change(vty, xpath_val, operation,
+				      remote_ac_id_str);
+	}
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 struct cmd_node l2vpn_node = {
 	.name = "l2vpn",
 	.node = L2VPN_NODE,
@@ -303,6 +358,8 @@ void l2vpn_cli_init(void)
 	install_element(L2VPN_PSEUDOWIRE_NODE, &l2vpn_neighbor_address_cmd);
 	install_element(L2VPN_PSEUDOWIRE_NODE, &l2vpn_neighbor_lsr_id_cmd);
 	install_element(L2VPN_PSEUDOWIRE_NODE, &l2vpn_pw_id_cmd);
+	install_element(L2VPN_PSEUDOWIRE_NODE, &l2vpn_neighbor_evpn_cmd);
+	install_element(L2VPN_PSEUDOWIRE_NODE, &l2vpn_vni_cmd);
 }
 
 static void l2vpn_instance_show(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
@@ -332,6 +389,7 @@ static void l2vpn_instance_show(struct vty *vty, const struct lyd_node *dnode, b
 		if (bridge_name)
 			vty_out(vty, " bridge %s\n", bridge_name);
 	}
+
 }
 
 static void l2vpn_instance_show_end(struct vty *vty, const struct lyd_node *dnode)
@@ -348,6 +406,7 @@ static void l2vpn_instance_member_pseudowire_show(struct vty *vty, const struct 
 	uint32_t pw_id;
 	struct ipaddr lsr_id;
 	struct ipaddr address;
+	uint32_t vni;
 
 	vty_out(vty, " member pseudowire %s\n", name);
 
@@ -360,6 +419,11 @@ static void l2vpn_instance_member_pseudowire_show(struct vty *vty, const struct 
 			vty_out(vty, "  pw-id %u\n", pw_id);
 		else
 			vty_out(vty, "  ! Incomplete config, specify a pw-id\n");
+	}
+
+	if (yang_dnode_exists(dnode, "./vni")) {
+		vni = yang_dnode_get_uint32(dnode, "./vni");
+		vty_out(vty, "  vni %u\n", vni);
 	}
 
 	if (yang_dnode_exists(dnode, "./neighbor-lsr-id")) {
@@ -396,6 +460,27 @@ static void l2vpn_instance_member_interface_show(struct vty *vty, const struct l
 	vty_out(vty, " member interface %s\n", name);
 }
 
+static void l2vpn_instance_member_pseudowire_neighbor_evpn_show(struct vty *vty,
+								const struct lyd_node *dnode,
+								bool show_defaults)
+{
+	uint32_t local_ac_id, remote_ac_id, evi;
+
+	evi = yang_dnode_get_uint32(dnode, "./evi");
+	if (!evi)
+		return;
+
+	if (!yang_dnode_exists(dnode, "./local-ac-id") ||
+	    !yang_dnode_exists(dnode, "./remote-ac-id"))
+		vty_out(vty, "  neighbor evpn evi %u\n", evi);
+	else {
+		local_ac_id = yang_dnode_get_uint32(dnode, "./local-ac-id");
+		remote_ac_id = yang_dnode_get_uint32(dnode, "./remote-ac-id");
+		vty_out(vty, "  neighbor evpn evi %u local-ac-id %u remote-ac-id %u\n",
+			evi, local_ac_id, remote_ac_id);
+	}
+}
+
 const struct frr_yang_module_info frr_l2vpn_cli_info = {
 	.name = "frr-l2vpn",
 	.ignore_cfg_cbs = true,
@@ -419,6 +504,10 @@ const struct frr_yang_module_info frr_l2vpn_cli_info = {
 				.cli_show = l2vpn_instance_member_pseudowire_show,
 				.cli_show_end = l2vpn_instance_member_pseudowire_show_end,
 			}
+		},
+		{
+			.xpath = "/frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn",
+			.cbs.cli_show = l2vpn_instance_member_pseudowire_neighbor_evpn_show,
 		},
 		{
 			.xpath = NULL,

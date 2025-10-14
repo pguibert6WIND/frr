@@ -9,9 +9,13 @@
 
 #include "bgpd/bgp_l2vpn.h"
 
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance
+ */
 static void bgp_l2vpn_entry_added(const char *l2vpn_name)
 {
 	/* XXX handle l2vpn entry add */
+	/* bridge-interface and member-interface must form an EVPN VNI notified by ZEBRA_VNI_ADD message */
 }
 
 static void bgp_l2vpn_entry_deleted(const char *l2vpn_name)
@@ -19,9 +23,21 @@ static void bgp_l2vpn_entry_deleted(const char *l2vpn_name)
 	/* XXX handle l2vpn entry deletion */
 }
 
-static void bgp_l2vpn_entry_event(const char *l2vpn_name)
+/*
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/mtu
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/pw-type
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-interface
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/bridge-interface
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/pw-status
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/control-word
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/local-ac-id
+ * XPath: /frr-l2vpn:l2vpn/l2vpn-instance/member-pseudowire/neighbor-evpn/remote-ac-id
+ */
+
+static void bgp_l2vpn_entry_event(struct l2vpn_pw *l2vpn_pw)
 {
-	/* XXX handle l2vpn changes */
 }
 
 static bool bgp_l2vpn_iface_ok_for_l2vpn(const char *ifname)
