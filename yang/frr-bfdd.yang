@@ -668,4 +668,37 @@ module frr-bfdd {
         "This container defines BFD protocol configuration.";
     }
   }
+
+  grouping interface-config {
+    description
+      "Grouping for BFD interface configuration.";
+
+    container bfd-monitoring {
+      description
+        "Container for BFD monitoring configuration.";
+
+      leaf enabled {
+        type boolean;
+        default "false";
+        description
+          "BFD enabled over this interface.";
+      }
+
+      leaf profile {
+        type string;
+        description
+          "Let BFD use a pre-configured profile.";
+      }
+    }
+  }
+
+  augment "/frr-interface:lib/frr-interface:interface" {
+    description
+      "Extends interface model with BFD related parameters.";
+    container bfd {
+      description
+        "BFD interface parameters.";
+      uses interface-config;
+    }
+  }
 }

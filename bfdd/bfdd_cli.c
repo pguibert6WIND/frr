@@ -89,6 +89,37 @@ DEFUN_YANG(
 	return nb_cli_apply_changes(vty, NULL);
 }
 
+/*
+ * XPath: /frr-interface:lib/interface/frr-bfdd:bfd/enabled
+ */
+DEFPY_YANG(bfd_interface_profile, bfd_interface_profile_cmd,
+      "[no$no] bfd profile BFDPROF$profile",
+      NO_STR
+      "BFD integration\n"
+      "Use a pre-configured profile\n"
+      "Profile name\n")
+{
+	if (no)
+		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/profile", NB_OP_DESTROY,
+				      NULL);
+	else
+		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/profile", NB_OP_MODIFY,
+				      profile);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+DEFPY_YANG(bfd_interface_bfd,
+      bfd_interface_bfd_cmd,
+      "[no] bfd",
+      NO_STR "Enable BFD support\n")
+{
+	nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/enabled", NB_OP_MODIFY,
+			      no ? "false" : "true");
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
 void bfd_cli_show_header(struct vty *vty,
 			 const struct lyd_node *dnode
 			 __attribute__((__unused__)),
@@ -1294,6 +1325,20 @@ void bfd_cli_peer_profile_show(struct vty *vty, const struct lyd_node *dnode,
 	vty_out(vty, "  profile %s\n", yang_dnode_get_string(dnode, NULL));
 }
 
+void bfd_cli_interface_bfd_monitoring(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, "enabled")) {
+		if (show_defaults)
+			vty_out(vty, " no bfd\n");
+	} else {
+		vty_out(vty, " bfd\n");
+	}
+
+	if (yang_dnode_exists(dnode, "profile"))
+		vty_out(vty, " bfd profile %s\n", yang_dnode_get_string(dnode, "profile"));
+}
+
 struct cmd_node bfd_profile_node = {
 	.name = "bfd profile",
 	.node = BFD_PROFILE_NODE,
@@ -1319,6 +1364,7 @@ static const struct cmd_variable_handler bfd_vars[] = {
 void
 bfdd_cli_init(void)
 {
+	if_cmd_init_default();
 	install_element(CONFIG_NODE, &bfd_enter_cmd);
 	install_element(CONFIG_NODE, &bfd_config_reset_cmd);
 
@@ -1350,6 +1396,9 @@ bfdd_cli_init(void)
 	install_element(BFD_PEER_NODE, &bfd_peer_log_session_changes_cmd);
 	install_element(BFD_PEER_NODE, &bfd_peer_minimum_ttl_cmd);
 	install_element(BFD_PEER_NODE, &no_bfd_peer_minimum_ttl_cmd);
+
+	install_element(INTERFACE_NODE, &bfd_interface_bfd_cmd);
+	install_element(INTERFACE_NODE, &bfd_interface_profile_cmd);
 
 	/* Profile commands. */
 	cmd_variable_handler_register(bfd_vars);

@@ -972,6 +972,26 @@ const struct frr_yang_module_info frr_bfdd_info = {
 			}
 		},
 		{
+			.xpath = "/frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring",
+			.cbs = {
+				.apply_finish = lib_interface_bfd_monitoring_apply_finish,
+				.cli_show = bfd_cli_interface_bfd_monitoring,
+			}
+		},
+                {
+                        .xpath = "/frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring/enabled",
+                        .cbs = {
+                                .modify = lib_interface_bfd_monitoring_enabled_modify,
+                        }
+                },
+                {
+                        .xpath = "/frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring/profile",
+                        .cbs = {
+				.modify = lib_interface_bfd_monitoring_profile_modify,
+				.destroy = lib_interface_bfd_monitoring_profile_destroy,
+                        }
+                },
+		{
 			.xpath = NULL,
 		},
 	}

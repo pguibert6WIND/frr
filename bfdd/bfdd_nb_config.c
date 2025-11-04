@@ -1225,3 +1225,31 @@ int bfdd_bfd_sessions_sbfd_multi_hop_destroy(struct nb_cb_destroy_args *args)
 {
 	return NB_OK;
 }
+
+/*
+ * XPath: /frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring
+ */
+void lib_interface_bfd_monitoring_apply_finish(struct nb_cb_apply_finish_args *args)
+{
+}
+
+/*
+ * XPath: /frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring/enabled
+ */
+int lib_interface_bfd_monitoring_enabled_modify(struct nb_cb_modify_args *args)
+{
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-interface:lib/interface/frr-bfdd:bfd/bfd-monitoring/profile
+ */
+int lib_interface_bfd_monitoring_profile_modify(struct nb_cb_modify_args *args)
+{
+	return NB_OK;
+}
+
+int lib_interface_bfd_monitoring_profile_destroy(struct nb_cb_destroy_args *args)
+{
+	return NB_OK;
+}

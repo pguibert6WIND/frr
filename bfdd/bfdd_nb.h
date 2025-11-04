@@ -242,4 +242,12 @@ int bfdd_bfd_sessions_bfd_mode_destroy(struct nb_cb_destroy_args *args);
 int bfdd_bfd_sessions_segment_list_create(struct nb_cb_create_args *args);
 int bfdd_bfd_sessions_segment_list_destroy(struct nb_cb_destroy_args *args);
 
+void lib_interface_bfd_monitoring_apply_finish(struct nb_cb_apply_finish_args *args);
+int lib_interface_bfd_monitoring_enabled_modify(struct nb_cb_modify_args *args);
+int lib_interface_bfd_monitoring_profile_modify(struct nb_cb_modify_args *args);
+int lib_interface_bfd_monitoring_profile_destroy(struct nb_cb_destroy_args *args);
+
+void bfd_cli_interface_bfd_monitoring(struct vty *vty, const struct lyd_node *dnode,
+				      bool show_defaults);
+
 #endif /* _FRR_BFDD_NB_H_ */
