@@ -21,6 +21,7 @@
 #include "lib/queue.h"
 #include "lib/vrf.h"
 #include "lib/bfd.h"
+#include "lib/if.h"
 
 #ifdef BFD_DEBUG
 #define BFDD_JSON_CONV_OPTIONS (JSON_C_TO_STRING_PRETTY)
@@ -41,12 +42,20 @@
 DECLARE_MGROUP(BFDD);
 DECLARE_MTYPE(BFDD_CLIENT);
 DECLARE_MTYPE(BFDD_CLIENT_NOTIFICATION);
+DECLARE_MTYPE(BFDD_IF_INFO);
 
 struct sockaddr_any {
 	union {
 		struct sockaddr_in sa_sin;
 		struct sockaddr_in6 sa_sin6;
 	};
+};
+
+struct bfd_if_cfg {
+	bool enabled;
+	char *profile;
+	struct interface *ifp;
+	bool updated;
 };
 
 struct bfd_peer_cfg {
@@ -879,6 +888,9 @@ void sbfd_echo_state_handler(struct bfd_session *bs, int nstate);
 void sbfd_initiator_state_handler(struct bfd_session *bs, int nstate);
 
 struct bfd_session *bfd_session_get_by_name(const char *name);
+
+struct bfd_if_cfg *bfd_interface_add(struct interface *ifp);
+void bfd_interface_del(struct bfd_if_cfg *cfg);
 
 /*
  * Permitted VRF Configuration for BFD Sessions.

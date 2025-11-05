@@ -31,6 +31,7 @@
 DEFINE_MGROUP(BFDD, "Bidirectional Forwarding Detection Daemon");
 DEFINE_MTYPE(BFDD, BFDD_CLIENT, "BFD client data");
 DEFINE_MTYPE(BFDD, BFDD_CLIENT_NOTIFICATION, "BFD client notification data");
+DEFINE_MTYPE(BFDD, BFDD_IF_INFO, "BFD interface context");
 
 /* Master of threads. */
 struct event_loop *master;
@@ -325,6 +326,38 @@ static void bg_init(void)
 	       sizeof(bfdd_privs));
 }
 
+static int bfd_if_new_hook(struct interface *ifp)
+{
+	/* will be done at config time*/
+	return 0;
+}
+
+static int bfd_if_delete_hook(struct interface *ifp)
+{
+	if (ifp->info)
+		bfd_interface_del(ifp->info);
+	ifp->info = NULL;
+	return 0;
+}
+
+struct bfd_if_cfg *bfd_interface_add(struct interface *ifp)
+{
+	struct bfd_if_cfg *cfg;
+
+	if (ifp->info)
+		return (struct bfd_if_cfg *)ifp->info;
+	cfg = XCALLOC(MTYPE_BFDD_IF_INFO, sizeof(struct bfd_if_cfg));
+	ifp->info = cfg;
+
+	return cfg;
+}
+
+void bfd_interface_del(struct bfd_if_cfg *cfg)
+{
+	cfg->ifp = NULL;
+	XFREE(MTYPE_BFDD_IF_INFO, cfg);
+}
+
 int main(int argc, char *argv[])
 {
 	char dplane_addr[512];
@@ -374,6 +407,9 @@ int main(int argc, char *argv[])
 
 	/* Initialize zebra connection. */
 	bfdd_zclient_init(&bglobal.bfdd_privs);
+
+	hook_register_prio(if_add, 0, bfd_if_new_hook);
+	hook_register_prio(if_del, 0, bfd_if_delete_hook);
 
 	/* Install commands. */
 	bfdd_vty_init();

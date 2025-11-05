@@ -1231,6 +1231,13 @@ int bfdd_bfd_sessions_sbfd_multi_hop_destroy(struct nb_cb_destroy_args *args)
  */
 void lib_interface_bfd_monitoring_apply_finish(struct nb_cb_apply_finish_args *args)
 {
+	struct bfd_if_cfg *cfg = nb_running_get_entry(args->dnode, NULL, true);
+
+	if (!cfg->updated)
+		return;
+
+	cfg->updated = false;
+	/* XXX update BFD */
 }
 
 /*
@@ -1238,6 +1245,16 @@ void lib_interface_bfd_monitoring_apply_finish(struct nb_cb_apply_finish_args *a
  */
 int lib_interface_bfd_monitoring_enabled_modify(struct nb_cb_modify_args *args)
 {
+	struct bfd_if_cfg *cfg;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	cfg = nb_running_get_entry(args->dnode, NULL, true);
+	if (cfg->enabled == yang_dnode_get_bool(args->dnode, NULL))
+		return NB_OK;
+	cfg->enabled = yang_dnode_get_bool(args->dnode, NULL);
+	cfg->updated = true;
 	return NB_OK;
 }
 
@@ -1246,10 +1263,69 @@ int lib_interface_bfd_monitoring_enabled_modify(struct nb_cb_modify_args *args)
  */
 int lib_interface_bfd_monitoring_profile_modify(struct nb_cb_modify_args *args)
 {
+	struct bfd_if_cfg *cfg;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	cfg = nb_running_get_entry(args->dnode, NULL, true);
+	if (cfg->profile && strmatch(cfg->profile, yang_dnode_get_string(args->dnode, NULL)))
+		return NB_OK;
+
+	cfg->profile = XSTRDUP(MTYPE_TMP, yang_dnode_get_string(args->dnode, NULL));
+	cfg->updated = true;
 	return NB_OK;
 }
 
 int lib_interface_bfd_monitoring_profile_destroy(struct nb_cb_destroy_args *args)
 {
+	struct bfd_if_cfg *cfg;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	cfg = nb_running_get_entry(args->dnode, NULL, true);
+	if (!cfg->profile)
+		return NB_OK;
+	XFREE(MTYPE_TMP, cfg->profile);
+	cfg->updated = true;
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-interface:lib/interface/frr-bfdd:bfd
+ */
+int lib_interface_bfd_create(struct nb_cb_create_args *args)
+{
+	struct interface *ifp;
+	struct bfd_if_cfg *cfg;
+
+	switch (args->event) {
+	case NB_EV_PREPARE:
+	case NB_EV_ABORT:
+	case NB_EV_VALIDATE:
+		break;
+	case NB_EV_APPLY:
+		ifp = nb_running_get_entry(args->dnode, NULL, true);
+		cfg = bfd_interface_add(ifp);
+		nb_running_set_entry(args->dnode, cfg);
+		break;
+	}
+
+	return NB_OK;
+}
+
+int lib_interface_bfd_destroy(struct nb_cb_destroy_args *args)
+{
+	struct bfd_if_cfg *cfg;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	cfg = nb_running_unset_entry(args->dnode);
+
+	/* BFD del */
+	bfd_interface_del(cfg);
+
 	return NB_OK;
 }

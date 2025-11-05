@@ -102,10 +102,11 @@ DEFPY_YANG(bfd_interface_profile, bfd_interface_profile_cmd,
 	if (no)
 		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/profile", NB_OP_DESTROY,
 				      NULL);
-	else
+	else {
+		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd", NB_OP_CREATE, NULL);
 		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/profile", NB_OP_MODIFY,
 				      profile);
-
+	}
 	return nb_cli_apply_changes(vty, NULL);
 }
 
@@ -114,6 +115,8 @@ DEFPY_YANG(bfd_interface_bfd,
       "[no] bfd",
       NO_STR "Enable BFD support\n")
 {
+	if (!no)
+		nb_cli_enqueue_change(vty, "./frr-bfdd:bfd", NB_OP_CREATE, NULL);
 	nb_cli_enqueue_change(vty, "./frr-bfdd:bfd/bfd-monitoring/enabled", NB_OP_MODIFY,
 			      no ? "false" : "true");
 

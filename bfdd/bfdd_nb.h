@@ -249,5 +249,7 @@ int lib_interface_bfd_monitoring_profile_destroy(struct nb_cb_destroy_args *args
 
 void bfd_cli_interface_bfd_monitoring(struct vty *vty, const struct lyd_node *dnode,
 				      bool show_defaults);
+int lib_interface_bfd_create(struct nb_cb_create_args *args);
+int lib_interface_bfd_destroy(struct nb_cb_destroy_args *args);
 
 #endif /* _FRR_BFDD_NB_H_ */
