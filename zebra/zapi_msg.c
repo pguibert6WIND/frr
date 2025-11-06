@@ -3809,6 +3809,7 @@ static inline void zebra_gre_get(ZAPI_HANDLER_ARGS)
 	struct interface *ifp_link = NULL;
 	vrf_id_t vrf_id_link = VRF_UNKNOWN;
 	vrf_id_t vrf_id = zvrf->vrf->vrf_id;
+	bool valid_gre;
 
 	s = msg;
 	STREAM_GETL(s, idx);
@@ -3820,8 +3821,9 @@ static inline void zebra_gre_get(ZAPI_HANDLER_ARGS)
 	s = stream_new(ZEBRA_MAX_PACKET_SIZ);
 
 	zclient_create_header(s, ZEBRA_GRE_UPDATE, vrf_id);
-
-	if (ifp  && IS_ZEBRA_IF_GRE(ifp) && zebra_if) {
+	valid_gre = IS_ZEBRA_IF_GRE(ifp) || IS_ZEBRA_IF_IP6GRE(ifp) || IS_ZEBRA_IF_GRETAP(ifp) ||
+		    IS_ZEBRA_IF_IP6GRETAP(ifp);
+	if (ifp && valid_gre && zebra_if) {
 		/* XXX TODO: other tunnels kinds should be handled */
 		gre_info = &zebra_if->l2info.gre;
 
@@ -3836,14 +3838,22 @@ static inline void zebra_gre_get(ZAPI_HANDLER_ARGS)
 		if (ifp_link)
 			vrf_id_link = ifp_link->vrf->vrf_id;
 		stream_putl(s, vrf_id_link);
-		stream_putl(s, gre_info->vtep_ip.s_addr);
-		stream_putl(s, gre_info->vtep_ip_remote.s_addr);
+		if (IS_ZEBRA_IF_IP6GRE(ifp) || IS_ZEBRA_IF_IP6GRETAP(ifp)) {
+			stream_putc(s, AF_INET6);
+			stream_putl(s, gre_info->local.vtep_ip.s_addr);
+			stream_putl(s, gre_info->remote.vtep_ip.s_addr);
+		} else {
+			stream_putc(s, AF_INET);
+			stream_putl(s, gre_info->local.vtep_ip.s_addr);
+			stream_putl(s, gre_info->remote.vtep_ip.s_addr);
+		}
 	} else {
 		stream_putl(s, idx);
 		stream_putl(s, 0);
 		stream_putl(s, 0);
 		stream_putl(s, IFINDEX_INTERNAL);
 		stream_putl(s, VRF_UNKNOWN);
+		stream_putc(s, AF_INET);
 		stream_putl(s, 0);
 		stream_putl(s, 0);
 	}

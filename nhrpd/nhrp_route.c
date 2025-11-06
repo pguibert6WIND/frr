@@ -482,6 +482,7 @@ int nhrp_gre_update(ZAPI_CALLBACK_ARGS)
 	struct stream *s;
 	struct nhrp_gre_info gre_info, *val;
 	struct interface *ifp;
+	uint8_t family;
 
 	/* result */
 	s = zclient->ibuf;
@@ -494,6 +495,9 @@ int nhrp_gre_update(ZAPI_CALLBACK_ARGS)
 	STREAM_GETL(s, gre_info.okey);
 	STREAM_GETL(s, gre_info.ifindex_link);
 	STREAM_GETL(s, gre_info.vrfid_link);
+	STREAM_GETC(s, family);
+	if (family != AF_INET)
+		return 0;
 	STREAM_GETL(s, gre_info.vtep_ip.s_addr);
 	STREAM_GETL(s, gre_info.vtep_ip_remote.s_addr);
 	if (gre_info.ifindex == IFINDEX_INTERNAL)
