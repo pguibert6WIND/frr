@@ -1232,12 +1232,21 @@ int bfdd_bfd_sessions_sbfd_multi_hop_destroy(struct nb_cb_destroy_args *args)
 void lib_interface_bfd_monitoring_apply_finish(struct nb_cb_apply_finish_args *args)
 {
 	struct bfd_if_cfg *cfg = nb_running_get_entry(args->dnode, NULL, true);
+	struct interface *ifp = cfg->ifp;
 
 	if (!cfg->updated)
 		return;
 
 	cfg->updated = false;
-	/* XXX update BFD */
+
+	if (cfg->enabled == false) {
+		bfd_interface_stop(cfg);
+		return;
+	}
+	if (ifp->zif_type != ZEBRA_IF_GRE && ifp->zif_type != ZEBRA_IF_GRETAP &&
+	    ifp->zif_type != ZEBRA_IF_IP6GRE && ifp->zif_type != ZEBRA_IF_IP6GRETAP)
+		return;
+	bfd_interface_try_start(cfg);
 }
 
 /*

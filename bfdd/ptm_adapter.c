@@ -820,6 +820,74 @@ static int bfd_ifp_create(struct interface *ifp)
 	return 0;
 }
 
+static int bfdd_interface_gre_update(ZAPI_CALLBACK_ARGS)
+{
+	struct stream *s;
+	struct bfd_if_cfg gre_info, *cfg, *orig_cfg;
+	struct interface *ifp;
+	ifindex_t ifindex;
+	uint32_t key __attribute__((__unused__));
+
+	/* result */
+	s = zclient->ibuf;
+	if (vrf_id != VRF_DEFAULT)
+		return 0;
+
+	/* read GRE information */
+	STREAM_GETL(s, ifindex);
+	ifp = if_lookup_by_index(ifindex, vrf_id);
+	if (!ifp)
+		return 0;
+
+	orig_cfg = ifp->info;
+	if (!ifp->info)
+		bfd_interface_add(ifp);
+
+	cfg = &gre_info;
+	STREAM_GETL(s, key);
+	STREAM_GETL(s, key);
+	STREAM_GETL(s, ifindex);
+	STREAM_GETL(s, vrf_id);
+	STREAM_GETC(s, cfg->family);
+	if (cfg->family == AF_INET) {
+		STREAM_GETL(s, cfg->local.vtep_ip.s_addr);
+		STREAM_GETL(s, cfg->remote.vtep_ip.s_addr);
+	} else {
+		STREAM_GET(&cfg->local.vtep_ip6, s, sizeof(struct in6_addr));
+		STREAM_GET(&cfg->remote.vtep_ip6, s, sizeof(struct in6_addr));
+	}
+
+	if (0 == memcmp(&cfg, ifp->info, sizeof(struct bfd_if_cfg)))
+		return 0;
+
+	if (orig_cfg == NULL) {
+		memcpy(ifp->info, cfg, sizeof(struct bfd_if_cfg));
+		bfd_interface_try_start((struct bfd_if_cfg *)ifp->info);
+		return 0;
+	}
+
+	if (cfg->family != orig_cfg->family)
+		bfd_interface_stop(cfg);
+
+	if (cfg->family == AF_INET &&
+	    (cfg->local.vtep_ip.s_addr != orig_cfg->local.vtep_ip.s_addr ||
+	     cfg->remote.vtep_ip.s_addr != orig_cfg->remote.vtep_ip.s_addr))
+		bfd_interface_stop(cfg);
+	else if (cfg->family == AF_INET &&
+		 (!IPV6_ADDR_SAME(&cfg->local.vtep_ip6, &orig_cfg->local.vtep_ip6) ||
+		  !IPV6_ADDR_SAME(&cfg->remote.vtep_ip6, &orig_cfg->remote.vtep_ip6)))
+		bfd_interface_stop(cfg);
+
+	memcpy(ifp->info, cfg, sizeof(struct bfd_if_cfg));
+	bfd_interface_try_start((struct bfd_if_cfg *)ifp->info);
+
+	return 0;
+
+stream_failure:
+	zlog_err("%s(): error reading response ..", __func__);
+	return -1;
+}
+
 static zclient_handler *const bfd_handlers[] = {
 	/*
 	 * We'll receive all messages through replay, however it will
@@ -831,6 +899,7 @@ static zclient_handler *const bfd_handlers[] = {
 	/* Learn about new addresses being registered. */
 	[ZEBRA_INTERFACE_ADDRESS_ADD] = bfdd_interface_address_update,
 	[ZEBRA_INTERFACE_ADDRESS_DELETE] = bfdd_interface_address_update,
+	[ZEBRA_GRE_UPDATE] = bfdd_interface_gre_update,
 };
 
 void bfdd_zclient_init(struct zebra_privs_t *bfdd_priv)

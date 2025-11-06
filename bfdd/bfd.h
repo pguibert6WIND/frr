@@ -56,6 +56,15 @@ struct bfd_if_cfg {
 	char *profile;
 	struct interface *ifp;
 	bool updated;
+	uint8_t family;
+	union {
+		struct in_addr vtep_ip;	  /* IFLA_GRE_LOCAL */
+		struct in6_addr vtep_ip6; /* IFLA_GRE_LOCAL */
+	} local;
+	union {
+		struct in_addr vtep_ip;	  /* IFLA_GRE_REMOTE */
+		struct in6_addr vtep_ip6; /* IFLA_GRE_REMOTE */
+	} remote;
 };
 
 struct bfd_peer_cfg {
@@ -891,6 +900,8 @@ struct bfd_session *bfd_session_get_by_name(const char *name);
 
 struct bfd_if_cfg *bfd_interface_add(struct interface *ifp);
 void bfd_interface_del(struct bfd_if_cfg *cfg);
+void bfd_interface_try_start(struct bfd_if_cfg *cfg);
+void bfd_interface_stop(struct bfd_if_cfg *cfg);
 
 /*
  * Permitted VRF Configuration for BFD Sessions.

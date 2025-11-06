@@ -340,6 +340,24 @@ static int bfd_if_delete_hook(struct interface *ifp)
 	return 0;
 }
 
+void bfd_interface_stop(struct bfd_if_cfg *cfg)
+{
+	/* XXX stop */
+}
+
+void bfd_interface_try_start(struct bfd_if_cfg *cfg)
+{
+	if (cfg->enabled == false)
+		return;
+	if (cfg->family == AF_INET &&
+	    (cfg->local.vtep_ip.s_addr == INADDR_ANY || cfg->remote.vtep_ip.s_addr == INADDR_ANY))
+		return;
+	if (cfg->family == AF_INET6 && (IPV6_ADDR_SAME(&cfg->local.vtep_ip6, &in6addr_any) ||
+					IPV6_ADDR_SAME(&cfg->remote.vtep_ip6, &in6addr_any)))
+		return;
+	/* XXX check remote address reachability, create */
+}
+
 struct bfd_if_cfg *bfd_interface_add(struct interface *ifp)
 {
 	struct bfd_if_cfg *cfg;
