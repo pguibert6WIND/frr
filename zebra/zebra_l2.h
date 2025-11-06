@@ -69,9 +69,11 @@ struct zebra_l2info_gre {
 	uint8_t family;
 	union {
 		struct in_addr vtep_ip; /* IFLA_GRE_LOCAL */
+		struct in6_addr vtep_ip6; /* IFLA_GRE_LOCAL */
 	} local;
 	union {
 		struct in_addr vtep_ip; /* IFLA_GRE_REMOTE */
+		struct in6_addr vtep_ip6; /* IFLA_GRE_REMOTE */
 	} remote;
 	uint32_t ikey;
 	uint32_t okey;

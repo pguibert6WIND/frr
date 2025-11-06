@@ -301,6 +301,7 @@ void zebra_l2_greif_add_update(struct interface *ifp,
 {
 	struct zebra_if *zif;
 	struct in_addr old_vtep_ip;
+	struct in6_addr old_vtep_ip6;
 
 	zif = ifp->info;
 	assert(zif);
@@ -309,11 +310,17 @@ void zebra_l2_greif_add_update(struct interface *ifp,
 		memcpy(&zif->l2info.gre, gre_info, sizeof(*gre_info));
 		return;
 	}
-	old_vtep_ip = zif->l2info.gre.local.vtep_ip;
-	if (IPV4_ADDR_SAME(&old_vtep_ip, &gre_info->local.vtep_ip))
-		return;
-
-	zif->l2info.gre.local.vtep_ip = gre_info->local.vtep_ip;
+	if (IS_ZEBRA_IF_IP6GRE(ifp) || IS_ZEBRA_IF_IP6GRETAP(ifp)) {
+		IPV6_ADDR_COPY(&old_vtep_ip6, &zif->l2info.gre.local.vtep_ip6);
+		if (IPV6_ADDR_SAME(&old_vtep_ip6, &gre_info->local.vtep_ip6))
+			return;
+		IPV6_ADDR_COPY(&zif->l2info.gre.local.vtep_ip6, &gre_info->local.vtep_ip6);
+	} else {
+		old_vtep_ip = zif->l2info.gre.local.vtep_ip;
+		if (IPV4_ADDR_SAME(&old_vtep_ip, &gre_info->local.vtep_ip))
+			return;
+		zif->l2info.gre.local.vtep_ip = gre_info->local.vtep_ip;
+	}
 }
 
 /*

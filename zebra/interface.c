@@ -2765,11 +2765,20 @@ static void if_dump_vty(struct vty *vty, struct interface *ifp)
 		struct zebra_l2info_gre *gre_info;
 
 		gre_info = &zebra_if->l2info.gre;
-		if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
-			vty_out(vty, "  VTEP IP: %pI4", &gre_info->local.vtep_ip);
-			if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
-				vty_out(vty, " , remote %pI4", &gre_info->remote.vtep_ip);
-			vty_out(vty, "\n");
+		if (IS_ZEBRA_IF_GRE(ifp) || IS_ZEBRA_IF_GRETAP(ifp)) {
+			if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
+				vty_out(vty, "  VTEP IP: %pI4", &gre_info->local.vtep_ip);
+				if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
+					vty_out(vty, " , remote %pI4", &gre_info->remote.vtep_ip);
+				vty_out(vty, "\n");
+			}
+		} else {
+			if (!IPV6_ADDR_SAME(&gre_info->local.vtep_ip6, &in6addr_any)) {
+				vty_out(vty, "  VTEP IP: %pI6", &gre_info->local.vtep_ip6);
+				if (!IPV6_ADDR_SAME(&gre_info->remote.vtep_ip6, &in6addr_any))
+					vty_out(vty, " , remote %pI6", &gre_info->remote.vtep_ip6);
+				vty_out(vty, "\n");
+			}
 		}
 		if (gre_info->ifindex_link &&
 		    (gre_info->link_nsid != NS_UNKNOWN)) {
@@ -3168,12 +3177,22 @@ static void if_dump_vty_json(struct vty *vty, struct interface *ifp,
 		struct zebra_l2info_gre *gre_info;
 
 		gre_info = &zebra_if->l2info.gre;
-		if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
-			json_object_string_addf(json_if, "vtepIp", "%pI4",
-						&gre_info->local.vtep_ip);
-			if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
-				json_object_string_addf(json_if, "vtepRemoteIp", "%pI4",
-							&gre_info->remote.vtep_ip);
+		if (IS_ZEBRA_IF_GRE(ifp) || IS_ZEBRA_IF_GRETAP(ifp)) {
+			if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
+				json_object_string_addf(json_if, "vtepIp", "%pI4",
+							&gre_info->local.vtep_ip);
+				if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
+					json_object_string_addf(json_if, "vtepRemoteIp", "%pI4",
+								&gre_info->remote.vtep_ip);
+			}
+		} else {
+			if (!IPV6_ADDR_SAME(&gre_info->local.vtep_ip6, &in6addr_any)) {
+				json_object_string_addf(json_if, "vtepIp", "%pI6",
+							&gre_info->local.vtep_ip6);
+				if (!IPV6_ADDR_SAME(&gre_info->remote.vtep_ip6, &in6addr_any))
+					json_object_string_addf(json_if, "vtepRemoteIp", "%pI6",
+								&gre_info->remote.vtep_ip6);
+			}
 		}
 		if (gre_info->ifindex_link
 		    && (gre_info->link_nsid != NS_UNKNOWN)) {

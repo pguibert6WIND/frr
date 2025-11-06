@@ -42,6 +42,7 @@
 #include "vrf_int.h"
 #include "mpls.h"
 #include "lib_errors.h"
+#include "prefix.h"
 
 #include "vty.h"
 #include "zebra/zserv.h"
@@ -329,6 +330,7 @@ uint32_t kernel_get_speed(struct interface *ifp, int *error)
 	return get_iflink_speed(ifp, error);
 }
 
+/* XXX only for IPv4 GRE Tunnel */
 static ssize_t
 netlink_gre_set_msg_encoder(struct zebra_dplane_ctx *ctx, void *buf,
 			    size_t buflen)
@@ -433,8 +435,8 @@ static int netlink_extract_vlan_info(struct rtattr *link_data,
 	return 0;
 }
 
-static int netlink_extract_gre_info(struct rtattr *link_data,
-				    struct zebra_l2info_gre *gre_info)
+static int netlink_extract_gre_info(struct rtattr *link_data, struct zebra_l2info_gre *gre_info,
+				    enum zebra_iftype zif_type)
 {
 	struct rtattr *attr[IFLA_GRE_MAX + 1];
 
@@ -446,14 +448,20 @@ static int netlink_extract_gre_info(struct rtattr *link_data,
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"IFLA_GRE_LOCAL missing from GRE IF message");
-	} else
+	} else if (zif_type == ZEBRA_IF_GRE || zif_type == ZEBRA_IF_GRETAP)
 		gre_info->local.vtep_ip = *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]);
+	else
+		IPV6_ADDR_COPY(&gre_info->local.vtep_ip6,
+			       (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]));
 	if (!attr[IFLA_GRE_REMOTE]) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"IFLA_GRE_REMOTE missing from GRE IF message");
-	} else
+	} else if (zif_type == ZEBRA_IF_IP6GRE || zif_type == ZEBRA_IF_IP6GRETAP)
 		gre_info->remote.vtep_ip = *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]);
+	else
+		IPV6_ADDR_COPY(&gre_info->remote.vtep_ip6,
+			       (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]));
 
 	if (!attr[IFLA_GRE_LINK]) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
@@ -581,7 +589,7 @@ static void netlink_interface_update_l2info(struct zebra_dplane_ctx *ctx,
 	case ZEBRA_IF_IP6GRE:
 	case ZEBRA_IF_GRETAP:
 	case ZEBRA_IF_IP6GRETAP:
-		netlink_extract_gre_info(link_data, &gre_info);
+		netlink_extract_gre_info(link_data, &gre_info, zif_type);
 		gre_info.link_nsid = link_nsid;
 		dplane_ctx_set_ifp_gre_info(ctx, &gre_info);
 		break;
