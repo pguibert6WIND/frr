@@ -66,8 +66,13 @@ struct zebra_l2info_vlan {
 
 /* zebra L2 interface information - GRE interface */
 struct zebra_l2info_gre {
-	struct in_addr vtep_ip; /* IFLA_GRE_LOCAL */
-	struct in_addr vtep_ip_remote; /* IFLA_GRE_REMOTE */
+	uint8_t family;
+	union {
+		struct in_addr vtep_ip; /* IFLA_GRE_LOCAL */
+	} local;
+	union {
+		struct in_addr vtep_ip; /* IFLA_GRE_REMOTE */
+	} remote;
 	uint32_t ikey;
 	uint32_t okey;
 	ifindex_t ifindex_link; /* Interface index of interface

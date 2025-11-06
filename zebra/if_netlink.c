@@ -378,14 +378,12 @@ netlink_gre_set_msg_encoder(struct zebra_dplane_ctx *ctx, void *buf,
 	if (!nl_attr_put32(&req->n, buflen, IFLA_GRE_LINK, link_idx))
 		return 0;
 
-	if (gre_info->vtep_ip.s_addr &&
-	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_LOCAL,
-			   gre_info->vtep_ip.s_addr))
+	if (gre_info->local.vtep_ip.s_addr &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_LOCAL, gre_info->local.vtep_ip.s_addr))
 		return 0;
 
-	if (gre_info->vtep_ip_remote.s_addr &&
-	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_REMOTE,
-			   gre_info->vtep_ip_remote.s_addr))
+	if (gre_info->remote.vtep_ip.s_addr &&
+	    !nl_attr_put32(&req->n, buflen, IFLA_GRE_REMOTE, gre_info->remote.vtep_ip.s_addr))
 		return 0;
 
 	if (gre_info->ikey &&
@@ -449,15 +447,13 @@ static int netlink_extract_gre_info(struct rtattr *link_data,
 			zlog_debug(
 				"IFLA_GRE_LOCAL missing from GRE IF message");
 	} else
-		gre_info->vtep_ip =
-			*(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]);
+		gre_info->local.vtep_ip = *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]);
 	if (!attr[IFLA_GRE_REMOTE]) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug(
 				"IFLA_GRE_REMOTE missing from GRE IF message");
 	} else
-		gre_info->vtep_ip_remote =
-			*(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]);
+		gre_info->remote.vtep_ip = *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]);
 
 	if (!attr[IFLA_GRE_LINK]) {
 		if (IS_ZEBRA_DEBUG_KERNEL)

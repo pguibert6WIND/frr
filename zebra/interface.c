@@ -2765,11 +2765,10 @@ static void if_dump_vty(struct vty *vty, struct interface *ifp)
 		struct zebra_l2info_gre *gre_info;
 
 		gre_info = &zebra_if->l2info.gre;
-		if (gre_info->vtep_ip.s_addr != INADDR_ANY) {
-			vty_out(vty, "  VTEP IP: %pI4", &gre_info->vtep_ip);
-			if (gre_info->vtep_ip_remote.s_addr != INADDR_ANY)
-				vty_out(vty, " , remote %pI4",
-					&gre_info->vtep_ip_remote);
+		if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
+			vty_out(vty, "  VTEP IP: %pI4", &gre_info->local.vtep_ip);
+			if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
+				vty_out(vty, " , remote %pI4", &gre_info->remote.vtep_ip);
 			vty_out(vty, "\n");
 		}
 		if (gre_info->ifindex_link &&
@@ -3169,13 +3168,12 @@ static void if_dump_vty_json(struct vty *vty, struct interface *ifp,
 		struct zebra_l2info_gre *gre_info;
 
 		gre_info = &zebra_if->l2info.gre;
-		if (gre_info->vtep_ip.s_addr != INADDR_ANY) {
+		if (gre_info->local.vtep_ip.s_addr != INADDR_ANY) {
 			json_object_string_addf(json_if, "vtepIp", "%pI4",
-						&gre_info->vtep_ip);
-			if (gre_info->vtep_ip_remote.s_addr != INADDR_ANY)
-				json_object_string_addf(
-					json_if, "vtepRemoteIp", "%pI4",
-					&gre_info->vtep_ip_remote);
+						&gre_info->local.vtep_ip);
+			if (gre_info->remote.vtep_ip.s_addr != INADDR_ANY)
+				json_object_string_addf(json_if, "vtepRemoteIp", "%pI4",
+							&gre_info->remote.vtep_ip);
 		}
 		if (gre_info->ifindex_link
 		    && (gre_info->link_nsid != NS_UNKNOWN)) {
