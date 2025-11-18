@@ -233,6 +233,9 @@ struct bgp_master {
 	/* Limit the number of clearing dests we'll process per callback */
 	uint32_t peer_clearing_batch_max_dests;
 
+	/* Hash of all SRv6 locators, keyed by name. */
+	struct hash *srv6_locators;
+
 	QOBJ_FIELDS;
 };
 DECLARE_QOBJ_TYPE(bgp_master);

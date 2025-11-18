@@ -28,5 +28,6 @@ void bgp_srv6_unicast_register_route(struct bgp *bgp, afi_t afi, struct bgp_dest
 				     struct bgp_path_info *bpi);
 void bgp_srv6_unicast_announce(struct bgp *bgp, afi_t afi);
 void bgp_srv6_unicast_withdraw(struct bgp *bgp, afi_t afi);
+struct srv6_locator *bgp_srv6_locator_lookup_all_by_name(const char *name);
 
 #endif /* _BGP_SRV6_H_ */
