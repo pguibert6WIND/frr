@@ -243,10 +243,7 @@ static void ldp_l2vpn_entry_added(const char *l2vpn_name)
 
 static void ldp_l2vpn_entry_deleted(const char *l2vpn_name)
 {
-	struct l2vpn *l2vpn;
-
-	l2vpn = l2vpn_find(&l2vpn_tree_config, l2vpn_name, L2VPN_TYPE_VPLS);
-	if (!l2vpn)
+	if (l2vpn->type != L2VPN_TYPE_VPLS)
 		return;
 
 	/* XXX handle config load from file */
@@ -255,10 +252,7 @@ static void ldp_l2vpn_entry_deleted(const char *l2vpn_name)
 
 static void ldp_l2vpn_entry_event(struct l2vpn_pw *l2vpn_pw)
 {
-	struct l2vpn *l2vpn;
-
-	l2vpn = l2vpn_find(&l2vpn_tree_config, l2vpn_name, L2VPN_TYPE_VPLS);
-	if (!l2vpn)
+	if (l2vpn_pw->l2vpn->type != L2VPN_TYPE_VPLS)
 		return;
 
 	/* XXX handle config load from file */

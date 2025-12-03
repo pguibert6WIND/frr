@@ -54,7 +54,6 @@ static int l2vpn_instance_destroy(struct nb_cb_destroy_args *args)
 	struct l2vpn *l2vpn;
 	struct l2vpn_if *lif;
 	struct l2vpn_pw *pw;
-	char name[L2VPN_NAME_LEN];
 
 	switch (args->event) {
 	case NB_EV_VALIDATE:
@@ -64,7 +63,6 @@ static int l2vpn_instance_destroy(struct nb_cb_destroy_args *args)
 		break;
 	case NB_EV_APPLY:
 		l2vpn = nb_running_unset_entry(args->dnode);
-		snprintf(name, sizeof(name), "%s", l2vpn->name);
 		RB_FOREACH (lif, l2vpn_if_head, &l2vpn->if_tree)
 			QOBJ_UNREG(lif);
 		RB_FOREACH (pw, l2vpn_pw_head, &l2vpn->pw_tree)
@@ -73,9 +71,11 @@ static int l2vpn_instance_destroy(struct nb_cb_destroy_args *args)
 			QOBJ_UNREG(pw);
 		QOBJ_UNREG(l2vpn);
 		RB_REMOVE(l2vpn_head, &l2vpn_tree_config, l2vpn);
-		l2vpn_del(l2vpn);
 		if (l2vpn_lib_master.del_hook)
-			(*l2vpn_lib_master.del_hook)(name);
+			(*l2vpn_lib_master.del_hook)(l2vpn);
+
+		l2vpn_del(l2vpn);
+
 		break;
 	}
 
@@ -200,8 +200,11 @@ static int l2vpn_instance_bridge_interface_modify(struct nb_cb_modify_args *args
 		ifname = yang_dnode_get_string(args->dnode, NULL);
 		strlcpy(l2vpn->br_ifname, ifname, sizeof(l2vpn->br_ifname));
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.event_hook) {
+			RB_FOREACH (l2vpn_pw, l2vpn_pw_head, &l2vpn->pw_inactive_tree)
+				(*l2vpn_lib_master.event_hook)(l2vpn_pw);
+		}
+
 		break;
 	}
 
@@ -222,8 +225,9 @@ static int l2vpn_instance_bridge_interface_destroy(struct nb_cb_destroy_args *ar
 		l2vpn = nb_running_get_entry(args->dnode, NULL, true);
 		memset(l2vpn->br_ifname, 0, sizeof(l2vpn->br_ifname));
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.del_hook)
+			(*l2vpn_lib_master.del_hook)(l2vpn);
+
 		break;
 	}
 

@@ -127,16 +127,17 @@ struct l2vpn_pw *l2vpn_pw_find_active(struct l2vpn *l2vpn, const char *ifname);
 struct l2vpn_pw *l2vpn_pw_find_inactive(struct l2vpn *l2vpn, const char *ifname);
 
 struct l2vpn_lib_register {
-	void (*add_hook)(const char *name);
-	void (*del_hook)(const char *name);
-	void (*event_hook)(struct l2vpn_pw *l2vpn_pw);
-	bool (*iface_ok_for_l2vpn)(const char *ifname);
+	void (*add_hook)(const char *);
+	void (*del_hook)(struct l2vpn *l2vpn);
+	void (*event_hook)(struct l2vpn_pw *);
+	bool (*iface_ok_for_l2vpn)(const char *);
 };
 
 extern struct l2vpn_lib_register l2vpn_lib_master;
 extern struct l2vpn_head l2vpn_tree_config;
 
-void l2vpn_register_hook(void (*func_add)(const char *), void (*func_del)(const char *),
+void l2vpn_register_hook(void (*func_add)(const char *),
+			 void (*func_del)(struct l2vpn *),
 			 void (*func_event)(struct l2vpn_pw *),
 			 bool (*func_iface_ok_for_l2vpn)(const char *));
 

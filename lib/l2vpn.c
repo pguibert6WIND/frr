@@ -181,7 +181,7 @@ int l2vpn_iface_is_configured(const char *ifname)
 }
 
 void l2vpn_register_hook(void (*func_add)(const char *),
-			 void (*func_del)(const  char *),
+			 void (*func_del)(struct l2vpn *l2vpn),
 			 void (*func_event)(struct l2vpn_pw *),
 			 bool (*func_iface_ok_for_l2vpn)(const char *))
 {
