@@ -35,6 +35,7 @@ static int l2vpn_instance_create(struct nb_cb_create_args *args)
 			nb_running_set_entry(args->dnode, l2vpn);
 			return NB_OK;
 		}
+		zlog_err("create new l2vpn name %s type %u", l2vpn_name, l2_type);
 		l2vpn = l2vpn_new(l2vpn_name);
 		l2vpn->type = l2_type;
 		RB_INSERT(l2vpn_head, &l2vpn_tree_config, l2vpn);
@@ -200,11 +201,6 @@ static int l2vpn_instance_bridge_interface_modify(struct nb_cb_modify_args *args
 		ifname = yang_dnode_get_string(args->dnode, NULL);
 		strlcpy(l2vpn->br_ifname, ifname, sizeof(l2vpn->br_ifname));
 
-		if (l2vpn_lib_master.event_hook) {
-			RB_FOREACH (l2vpn_pw, l2vpn_pw_head, &l2vpn->pw_inactive_tree)
-				(*l2vpn_lib_master.event_hook)(l2vpn_pw);
-		}
-
 		break;
 	}
 
@@ -336,7 +332,6 @@ static int l2vpn_instance_member_pseudowire_create(struct nb_cb_create_args *arg
 			return NB_OK;
 		}
 		pw = l2vpn_pw_new(l2vpn, ifname);
-		pw->flags = F_PW_STATUSTLV_CONF | F_PW_CWORD_CONF;
 		RB_INSERT(l2vpn_pw_head, &l2vpn->pw_inactive_tree, pw);
 		QOBJ_REG(pw, l2vpn_pw);
 
@@ -653,7 +648,7 @@ static int l2vpn_instance_member_pseudowire_neighbor_evpn_destroy(struct nb_cb_d
 		pw->flags &= ~F_PW_EVPN_NBR_ADDR;
 		pw->local_ac_id = 0;
 		pw->remote_ac_id = 0;
-		pw->pwid = 0;
+		pw->evi = 0;
 
 		break;
 	}
@@ -677,14 +672,14 @@ static int l2vpn_instance_member_pseudowire_neighbor_evpn_evi_modify(struct nb_c
 		break;
 	case NB_EV_APPLY:
 		pw = nb_running_get_entry(args->dnode, NULL, true);
-		if (pw->enabled && pw->pwid && pw->pwid != evi) {
+		if (pw->enabled && pw->evi && pw->evi != evi) {
 			pw->enabled = false;
 			if (l2vpn_lib_master.event_hook)
 				(*l2vpn_lib_master.event_hook)(pw);
 		}
 
 		pw->enabled = true;
-		pw->pwid = evi;
+		pw->evi = evi;
 		if (l2vpn_lib_master.event_hook)
 			(*l2vpn_lib_master.event_hook)(pw);
 		break;
@@ -709,7 +704,7 @@ static int l2vpn_instance_member_pseudowire_neighbor_evpn_evi_destroy(struct nb_
 		if (l2vpn_lib_master.event_hook)
 			(*l2vpn_lib_master.event_hook)(pw);
 
-		pw->pwid = 0;
+		pw->evi = 0;
 		break;
 	}
 

@@ -5236,6 +5236,8 @@ static void rib_process_dplane_results(struct event *event)
 				zebra_mpls_process_dplane_notify(ctx);
 				break;
 
+			case DPLANE_OP_PW_VXLAN_INSTALL:
+			case DPLANE_OP_PW_VXLAN_UNINSTALL:
 			case DPLANE_OP_PW_INSTALL:
 			case DPLANE_OP_PW_UNINSTALL:
 				zebra_pw_handle_dplane_results(ctx);

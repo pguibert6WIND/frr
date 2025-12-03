@@ -19,6 +19,7 @@
 #include "zclient.h"
 
 #include "lib/printfrr.h"
+#include "lib/l2vpn.h"
 
 #include "bgpd/bgp_attr_evpn.h"
 #include "bgpd/bgpd.h"
@@ -40,6 +41,7 @@
 #include "bgpd/bgp_nhg.h"
 #include "bgpd/bgp_mpath.h"
 #include "bgpd/bgp_trace.h"
+#include "bgpd/bgp_l2vpn.h"
 
 static void bgp_evpn_local_es_down(struct bgp *bgp,
 		struct bgp_evpn_es *es);
@@ -55,11 +57,8 @@ static enum zclient_send_status bgp_evpn_es_vtep_del(struct bgp *bgp,
 						     bool esr);
 static void bgp_evpn_es_cons_checks_pend_add(struct bgp_evpn_es *es);
 static void bgp_evpn_es_cons_checks_pend_del(struct bgp_evpn_es *es);
-static struct bgp_evpn_es_evi *
-bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi);
 static uint32_t bgp_evpn_es_get_active_vtep_cnt(struct bgp_evpn_es *es);
 static void bgp_evpn_l3nhg_update_on_vtep_chg(struct bgp_evpn_es *es);
-static struct bgp_evpn_es *bgp_evpn_es_new(struct bgp *bgp, const esi_t *esi);
 static void bgp_evpn_es_free(struct bgp_evpn_es *es, const char *caller);
 static void bgp_evpn_path_es_unlink(struct bgp_path_es_info *es_info);
 static void bgp_evpn_mac_update_on_es_local_chg(struct bgp_evpn_es *es,
@@ -1932,7 +1931,7 @@ struct bgp_evpn_es *bgp_evpn_es_find(const esi_t *esi)
 	return RB_FIND(bgp_es_rb_head, &bgp_mh_info->es_rb_tree, &tmp);
 }
 
-static struct bgp_evpn_es *bgp_evpn_es_new(struct bgp *bgp, const esi_t *esi)
+struct bgp_evpn_es *bgp_evpn_es_new(struct bgp *bgp, const esi_t *esi)
 {
 	struct bgp_evpn_es *es;
 
@@ -2037,7 +2036,7 @@ static inline bool bgp_evpn_is_es_local_and_non_bypass(struct bgp_evpn_es *es)
 }
 
 /* init local info associated with the ES */
-static void bgp_evpn_es_local_info_set(struct bgp *bgp, struct bgp_evpn_es *es)
+void bgp_evpn_es_local_info_set(struct bgp *bgp, struct bgp_evpn_es *es)
 {
 	bool old_is_local;
 	bool is_local;
@@ -2291,6 +2290,7 @@ static void bgp_evpn_local_es_activate(struct bgp *bgp, struct bgp_evpn_es *es,
 	if (regen_ead) {
 		if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
 			zlog_debug("local es %s generate EAD", es->esi_str);
+
 		/* generate EAD-EVI */
 		bgp_evpn_local_type1_evi_route_add(bgp, es);
 
@@ -2444,6 +2444,9 @@ int bgp_evpn_local_es_add(struct bgp *bgp, esi_t *esi,
 		regen_esr = true;
 	}
 	bgp_evpn_es_local_info_set(bgp, es);
+
+	if (bgp_l2vpn_vpws_es_add(es->esi))
+		return 0;
 
 	/* import all remote Type-4 routes in the ES table */
 	if (new_es)
@@ -3765,7 +3768,7 @@ static void bgp_evpn_es_evi_remote_info_re_eval(struct bgp_evpn_es_evi *es_evi)
 	}
 }
 
-static struct bgp_evpn_es_evi *
+struct bgp_evpn_es_evi *
 bgp_evpn_local_es_evi_do_del(struct bgp_evpn_es_evi *es_evi)
 {
 	struct prefix_evpn p;
@@ -3917,7 +3920,8 @@ int bgp_evpn_local_es_evi_add(struct bgp *bgp, esi_t *esi, vni_t vni,
  */
 enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
 						    struct bgpevpn *vpn,
-						    const struct prefix_evpn *p)
+						    const struct prefix_evpn *p,
+						    const struct bgp_path_info *pi)
 {
 	char buf[ESI_STR_LEN];
 	struct bgp_evpn_es *es;
@@ -3925,7 +3929,9 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
 	bool ead_es;
 	const esi_t *esi = &p->prefix.ead_addr.esi;
 	uint32_t eth_tag = p->prefix.ead_addr.eth_tag;
+	struct l2vpn_pw *evpn_vpws;
 	enum zclient_send_status ret = ZCLIENT_SEND_SUCCESS;
+	struct ecommunity_val *eval;
 
 	if (!vpn)
 		/* local EAD-ES need not be sent back to zebra */
@@ -3950,6 +3956,32 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
 				       p->prefix.ead_addr.ip.ipaddr_v4, ead_es);
 
 	bgp_evpn_es_evi_remote_info_re_eval(es_evi);
+
+	if (ret)
+		return ret;
+
+	if (!ead_es) {
+		evpn_vpws = bgp_l2vpn_vpws_evi_match(eth_tag);
+		if (evpn_vpws) {
+			if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
+				zlog_debug("Match EVPN VPWS local ac %u, remote ac %u for peer %pI4",
+					   evpn_vpws->local_ac_id,
+					   evpn_vpws->remote_ac_id, &evpn_vpws->lsr_id);
+			IPV4_ADDR_COPY(&evpn_vpws->addr.ipv4, &p->prefix.ead_addr.ip.ipaddr_v4);
+			IPV4_ADDR_COPY(&evpn_vpws->lsr_id, &pi->peer->remote_id);
+
+			eval = ecommunity_lookup(bgp_attr_get_ecommunity(pi->attr),
+						 ECOMMUNITY_ENCODE_EVPN,
+						 ECOMMUNITY_EVPN_SUBTYPE_LAYER2_ATTR);
+			if (eval) {
+				memcpy(&evpn_vpws->remote_mtu, eval->val + 4, 2);
+				evpn_vpws->remote_mtu = ntohs(evpn_vpws->remote_mtu);
+			}
+
+			bgp_l2vpn_vpws_zebra_set(bgp, evpn_vpws, true);
+		}
+	}
+
 	return ret;
 }
 
@@ -3958,13 +3990,15 @@ enum zclient_send_status bgp_evpn_remote_es_evi_add(struct bgp *bgp,
  */
 enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
 						    struct bgpevpn *vpn,
-						    const struct prefix_evpn *p)
+						    const struct prefix_evpn *p,
+						    const struct bgp_path_info *pi)
 {
 	char buf[ESI_STR_LEN];
 	struct bgp_evpn_es *es;
 	struct bgp_evpn_es_evi *es_evi;
 	uint32_t eth_tag = p->prefix.ead_addr.eth_tag;
 	bool ead_es;
+	struct l2vpn_pw *evpn_vpws;
 	enum zclient_send_status ret = ZCLIENT_SEND_SUCCESS;
 
 	if (!vpn)
@@ -4005,6 +4039,20 @@ enum zclient_send_status bgp_evpn_remote_es_evi_del(struct bgp *bgp,
 	}
 
 	ead_es = p->prefix.ead_addr.eth_tag == BGP_EVPN_AD_ES_ETH_TAG;
+	if (!ead_es) {
+		evpn_vpws = bgp_l2vpn_vpws_evi_match(eth_tag);
+		if (evpn_vpws) {
+			if (BGP_DEBUG(evpn_mh, EVPN_MH_ES))
+				zlog_err("Unmatch EVPN VPWS local ac %u, remote ac %u for peer %pI4",
+				 evpn_vpws->local_ac_id,
+				 evpn_vpws->remote_ac_id, &evpn_vpws->lsr_id);
+
+			bgp_l2vpn_vpws_zebra_set(bgp, evpn_vpws, false);
+			evpn_vpws->reason = F_PW_NO_REMOTE_AD;
+			evpn_vpws->lsr_id.s_addr = INADDR_ANY;
+			evpn_vpws->addr.ipv4.s_addr = INADDR_ANY;
+		}
+	}
 	ret = bgp_evpn_es_evi_vtep_del(bgp, es_evi,
 				       p->prefix.ead_addr.ip.ipaddr_v4, ead_es);
 	bgp_evpn_es_evi_remote_info_re_eval(es_evi);

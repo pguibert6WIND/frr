@@ -134,6 +134,8 @@ enum dplane_op_e {
 	/* Pseudowire update */
 	DPLANE_OP_PW_INSTALL,
 	DPLANE_OP_PW_UNINSTALL,
+	DPLANE_OP_PW_VXLAN_INSTALL,
+	DPLANE_OP_PW_VXLAN_UNINSTALL,
 
 	/* System route notification */
 	DPLANE_OP_SYS_ROUTE_ADD,

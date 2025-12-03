@@ -31,4 +31,12 @@ extern int bgp_evpn_cli_parse_type(int *type, struct cmd_token **argv,
 extern int bgp_evpn_show_all_routes(struct vty *vty, struct bgp *bgp, int type,
 				    bool use_json, int detail);
 
+extern void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+			      struct ecommunity *ecomadd);
+extern void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+				struct ecommunity *ecomdel);
+extern void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+			      struct ecommunity *ecomadd);
+extern void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+				struct ecommunity *ecomdel);
 #endif /* _QUAGGA_BGP_EVPN_VTY_H */

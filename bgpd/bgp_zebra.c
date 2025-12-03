@@ -56,6 +56,7 @@
 #include "bgpd/bgp_community.h"
 #include "bgpd/bgp_lcommunity.h"
 #include "bgpd/bgp_srv6.h"
+#include "bgpd/bgp_l2vpn.h"
 
 /* All information about zebra. */
 struct zclient *bgp_zclient = NULL;
@@ -217,8 +218,10 @@ static int bgp_ifp_up(struct interface *ifp)
 	struct nbr_connected *nc;
 	struct listnode *node, *nnode;
 	struct bgp *bgp;
+	struct bgp_interface *iifp;
 
 	bgp = ifp->vrf->info;
+	iifp = ifp->info,
 
 	bgp_mac_add_mac_entry(ifp);
 
@@ -252,6 +255,9 @@ static int bgp_ifp_up(struct interface *ifp)
 		bgp_srv6_unicast_sid_endpoint(bgp, AFI_IP6, ifp, true);
 	}
 
+	if (CHECK_FLAG(iifp->flags, BGP_INTERFACE_EVPN_SINGLE_HOMED))
+		bgp_l2vpn_ifp_up(ifp, true);
+
 	return 0;
 }
 
@@ -262,8 +268,10 @@ static int bgp_ifp_down(struct interface *ifp)
 	struct listnode *node, *nnode;
 	struct bgp *bgp;
 	struct peer *peer;
+	struct bgp_interface *iifp;
 
 	bgp = ifp->vrf->info;
+	iifp = ifp->info;
 
 	bgp_mac_del_mac_entry(ifp);
 
@@ -313,6 +321,9 @@ static int bgp_ifp_down(struct interface *ifp)
 		bgp_srv6_unicast_sid_endpoint(bgp, AFI_IP, ifp, false);
 		bgp_srv6_unicast_sid_endpoint(bgp, AFI_IP6, ifp, false);
 	}
+
+	if (CHECK_FLAG(iifp->flags, BGP_INTERFACE_EVPN_SINGLE_HOMED))
+		bgp_l2vpn_ifp_up(ifp, false);
 
 	return 0;
 }
@@ -4119,16 +4130,21 @@ static int bgp_zebra_process_srv6_locator_delete(ZAPI_CALLBACK_ARGS)
 static int
 bgp_zebra_read_pw_status_update(ZAPI_CALLBACK_ARGS)
 {
-	struct zapi_pw_status	 zpw;
+	struct zapi_pw_status zpw;
 
 	zebra_read_pw_status_update(cmd, zclient, length, vrf_id, &zpw);
+	stream_get(&zpw.esi, zclient->ibuf, sizeof(esi_t));
+	stream_get(zpw.local_ac, zclient->ibuf, IFNAMSIZ);
 
 	if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug("%s: pseudowire %s status %s 0x%x", zpw.ifname,
-				   (zpw.status == PW_FORWARDING) ? "up" : "down",
-				    zpw.status);
+		zlog_debug("%s: pseudowire %s status 0x%x loacl-ac %s", zpw.ifname,
+			   (zpw.status == PW_FORWARDING) ? "up" : "down", zpw.status,
+			   zpw.local_ac);
+
 	/* update status in L2VPN */
-	return (0);
+	bgp_l2vpn_pw_update_status(&zpw);
+
+	return 0;
 }
 
 static zclient_handler *const bgp_handlers[] = {

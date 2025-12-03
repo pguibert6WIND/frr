@@ -114,6 +114,7 @@ struct l2vpn_pw *l2vpn_pw_new(struct l2vpn *l2vpn, const char *ifname)
 	pw = XCALLOC(MTYPE_L2VPN_PWE, sizeof(*pw));
 
 	pw->l2vpn = l2vpn;
+	pw->ignore_mtu_mismatch = true;
 	strlcpy(pw->ifname, ifname, sizeof(pw->ifname));
 
 	return (pw);
@@ -205,4 +206,29 @@ void l2vpn_init()
 {
 	RB_INIT(l2vpn_head, &l2vpn_tree_config);
 	l2vpn_cli_init();
+}
+
+const char *l2vpn_pw_error_code(uint8_t status)
+{
+	static char buf[16];
+
+	switch (status) {
+	case F_PW_NO_ERR:
+		return ("No Error");
+	case F_PW_LOCAL_NOT_FWD:
+		return ("local not forwarding");
+	case F_PW_REMOTE_NOT_FWD:
+		return ("remote not forwarding");
+	case F_PW_NO_REMOTE_LABEL:
+		return ("no remote label");
+	case F_PW_MTU_MISMATCH:
+		return ("mtu mismatch between peers");
+	case F_PW_NO_REMOTE_AD:
+		return ("missing remote per-EVI EVPN A-D route");
+	case F_PW_AD_MISMATCH:
+		return ("received multiple same EVI A-D route");
+	default:
+		snprintf(buf, sizeof(buf), "[%0x]", status);
+		return (buf);
+	}
 }

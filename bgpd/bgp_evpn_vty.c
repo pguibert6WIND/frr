@@ -2190,8 +2190,8 @@ static void evpn_export_rt_delete_auto(struct bgp *bgp, struct bgpevpn *vpn)
  * Configure the Import RTs for a VNI (vty handler). Caller expected to
  * check that this is a change.
  */
-static void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
-				     struct ecommunity *ecomadd)
+void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+			      struct ecommunity *ecomadd)
 {
 	/* If the VNI is "live", we need to uninstall routes using the current
 	 * import RT(s) first before we update the import RT, and subsequently
@@ -2220,8 +2220,8 @@ static void evpn_configure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Unconfigure Import RT(s) for a VNI (vty handler).
  */
-static void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
-				       struct ecommunity *ecomdel)
+void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
+				struct ecommunity *ecomdel)
 {
 	struct listnode *node, *nnode, *node_to_del;
 	struct ecommunity *ecom;
@@ -2280,8 +2280,8 @@ static void evpn_unconfigure_import_rt(struct bgp *bgp, struct bgpevpn *vpn,
  * allowed for a VNI and any change to configuration is implemented as
  * a "replace" (similar to other configuration).
  */
-static void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
-				     struct ecommunity *ecomadd)
+void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+			      struct ecommunity *ecomadd)
 {
 	/* If the auto route-target is in use we must remove it */
 	evpn_export_rt_delete_auto(bgp, vpn);
@@ -2296,8 +2296,8 @@ static void evpn_configure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
 /*
  * Unconfigure the Export RT for a VNI (vty handler)
  */
-static void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
-				       struct ecommunity *ecomdel)
+void evpn_unconfigure_export_rt(struct bgp *bgp, struct bgpevpn *vpn,
+				struct ecommunity *ecomdel)
 {
 	struct listnode *node, *nnode, *node_to_del;
 	struct ecommunity *ecom;

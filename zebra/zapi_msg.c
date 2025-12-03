@@ -1098,7 +1098,7 @@ int zsend_router_id_update(struct zserv *client, afi_t afi, struct prefix *p,
 }
 
 /*
- * Function used by Zebra to send a PW status update to LDP daemon
+ * Function used by Zebra to send a PW status update to LDP/BGP daemon
  */
 int zsend_pw_update(struct zserv *client, struct zebra_pw *pw)
 {
@@ -1108,6 +1108,11 @@ int zsend_pw_update(struct zserv *client, struct zebra_pw *pw)
 	stream_write(s, pw->ifname, IFNAMSIZ);
 	stream_putl(s, pw->ifindex);
 	stream_putl(s, pw->status);
+
+	if (pw->protocol == ZEBRA_ROUTE_BGP) {
+		stream_put(s, &pw->data.bgp.esi, sizeof(esi_t));
+		stream_put(s, pw->data.bgp.local_ac, IFNAMSIZ);
+	}
 
 	/* Put length at the first point of the stream. */
 	stream_putw_at(s, 0, stream_get_endp(s));
@@ -3264,7 +3269,7 @@ static void zread_pseudowire(ZAPI_HANDLER_ARGS)
 			return;
 		}
 
-		zebra_pw_add(zvrf, ifname, protocol, client);
+		zebra_pw_add(zvrf, ifname, protocol, data, client);
 		break;
 	case ZEBRA_PW_DELETE:
 		if (!pw) {

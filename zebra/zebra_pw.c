@@ -20,6 +20,7 @@
 #include "zebra/zebra_rnh.h"
 #include "zebra/zebra_vrf.h"
 #include "zebra/zebra_pw.h"
+#include "zebra/zebra_evpn_mh.h"
 
 DEFINE_MTYPE_STATIC(LIB, PW, "Pseudowire");
 
@@ -36,6 +37,7 @@ static void zebra_pw_uninstall(struct zebra_pw *);
 static void zebra_pw_install_retry(struct event *event);
 static int zebra_pw_check_reachability(const struct zebra_pw *);
 static void zebra_pw_update_status(struct zebra_pw *, int);
+static void zebra_pw_bgp_vni_check(struct zebra_pw *pw);
 
 static inline int zebra_pw_compare(const struct zebra_pw *a,
 				   const struct zebra_pw *b)
@@ -47,7 +49,8 @@ RB_GENERATE(zebra_pw_head, zebra_pw, pw_entry, zebra_pw_compare)
 RB_GENERATE(zebra_static_pw_head, zebra_pw, static_pw_entry, zebra_pw_compare)
 
 struct zebra_pw *zebra_pw_add(struct zebra_vrf *zvrf, const char *ifname,
-			      uint8_t protocol, struct zserv *client)
+			      uint8_t protocol, union pw_protocol_fields data,
+			      struct zserv *client)
 {
 	struct zebra_pw *pw;
 
@@ -69,6 +72,14 @@ struct zebra_pw *zebra_pw_add(struct zebra_vrf *zvrf, const char *ifname,
 	if (pw->protocol == ZEBRA_ROUTE_STATIC) {
 		RB_INSERT(zebra_static_pw_head, &zvrf->static_pseudowires, pw);
 		QOBJ_REG(pw, zebra_pw);
+	}
+
+	if (pw->protocol == ZEBRA_ROUTE_BGP) {
+		if (!data.bgp.vni)
+			return pw;
+
+		pw->data.bgp.vni = data.bgp.vni;
+		zebra_pw_bgp_vni_check(pw);
 	}
 
 	return pw;
@@ -104,6 +115,8 @@ void zebra_pw_change(struct zebra_pw *pw, ifindex_t ifindex, int type, int af,
 		     uint32_t remote_label, uint8_t flags,
 		     union pw_protocol_fields *data)
 {
+	bool nht_exists;
+
 	pw->ifindex = ifindex;
 	pw->type = type;
 	pw->af = af;
@@ -114,7 +127,6 @@ void zebra_pw_change(struct zebra_pw *pw, ifindex_t ifindex, int type, int af,
 	pw->data = *data;
 
 	if (zebra_pw_enabled(pw)) {
-		bool nht_exists;
 		zebra_register_rnh_pseudowire(pw->vrf_id, pw, &nht_exists);
 		if (nht_exists)
 			zebra_pw_update(pw);
@@ -212,9 +224,11 @@ void zebra_pw_handle_dplane_results(struct zebra_dplane_ctx *ctx)
 	if (dplane_ctx_get_status(ctx) != ZEBRA_DPLANE_REQUEST_SUCCESS) {
 		zebra_pw_install_failure(pw, dplane_ctx_get_pw_status(ctx));
 	} else {
-		if (op == DPLANE_OP_PW_INSTALL && pw->status != PW_FORWARDING)
+		if ((op == DPLANE_OP_PW_INSTALL || op == DPLANE_OP_PW_VXLAN_INSTALL)
+		    && pw->status != PW_FORWARDING)
 			zebra_pw_update_status(pw, PW_FORWARDING);
-		else if (op == DPLANE_OP_PW_UNINSTALL && zebra_pw_enabled(pw))
+		else if ((op == DPLANE_OP_PW_UNINSTALL || DPLANE_OP_PW_VXLAN_UNINSTALL)
+			 && zebra_pw_enabled(pw))
 			zebra_pw_update_status(pw, PW_NOT_FORWARDING);
 	}
 }
@@ -252,6 +266,106 @@ static void zebra_pw_update_status(struct zebra_pw *pw, int status)
 	pw->status = status;
 	if (pw->client)
 		zsend_pw_update(pw->client, pw);
+}
+
+static void zebra_pw_bgp_vni_check(struct zebra_pw *pw)
+{
+	int status;
+	struct vrf *vrf;
+	struct zebra_if *zif;
+	struct zebra_ns *zns;
+	struct zebra_vrf *zvrf;
+	struct zebra_evpn *zevpn;
+	vni_t vni = pw->data.bgp.vni;
+	struct zebra_l2info_brslave *br_slave;
+	struct interface *br_if, *ifp, *ifp_match = NULL;
+
+	if (IS_ZEBRA_DEBUG_PW)
+		zlog_debug("VPWS VXLAN: validating reachability for VNI %u", vni);
+
+	status = PW_LOCAL_TX_FAULT;
+	zevpn = zebra_evpn_lookup(vni);
+	if (!zevpn) {
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: missing zebra evpn for VNI %u", vni);
+
+		goto out;
+	}
+
+	if(strcmp(pw->ifname, zevpn->vxlan_if->name)) {
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: pseudowire interface %s does not match the vni %u",
+				   pw->ifname, vni);
+
+		goto out;
+	}
+
+	pw->ifindex = zevpn->vxlan_if->ifindex;
+	br_if = zevpn->bridge_if;
+	if (!br_if) {
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: missing bridge for VNI %u", vni);
+
+		goto out;
+	}
+
+	zvrf = br_if->vrf->info;
+	zns = zvrf->zns;
+	RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
+		FOR_ALL_INTERFACES (vrf, ifp) {
+			if (ifp->ifindex == IFINDEX_INTERNAL || !ifp->info)
+				continue;
+			if (!IS_ZEBRA_IF_BRIDGE_SLAVE(ifp) || ifp->ifindex == zevpn->vxlan_if->ifindex)
+				continue;
+
+			zif = (struct zebra_if *)ifp->info;
+			br_slave = &zif->brslave_info;
+			if (br_slave->ns_id != zns->ns_id)
+				continue;
+			if (br_slave->bridge_ifindex != br_if->ifindex)
+				continue;
+
+			if (!ifp_match)
+				ifp_match = ifp;
+			else {
+				if (IS_ZEBRA_DEBUG_PW)
+					zlog_debug("VPWS VXLAN: multiple ACs for VNI %u", vni);
+
+				goto out;
+			}
+		}
+	}
+
+	if (!ifp_match) {
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: missing AC for VNI %u", vni);
+
+		goto out;
+	}
+
+	/* Check AC status */
+	strlcpy(pw->data.bgp.local_ac, ifp_match->name, IFNAMSIZ);
+	zif = (struct zebra_if *)ifp_match->info;
+	if (!zif->es_info.es) {
+		/* Single-homed */
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: AC %s is active for VNI %u", ifp_match->name, vni);
+
+		status = PW_NOT_FORWARDING;
+		memset(&pw->data.bgp.esi, 0, sizeof(esi_t));
+	} else {
+		memcpy(&pw->data.bgp.esi, &zif->es_info.es->esi, sizeof(esi_t));
+		if (CHECK_FLAG(zif->es_info.es->flags, ZEBRA_EVPNES_READY_FOR_BGP))
+			status = PW_NOT_FORWARDING;
+
+		if (IS_ZEBRA_DEBUG_PW)
+			zlog_debug("VPWS VXLAN: multihoming AC %s is %s for VNI %u",
+				   ifp_match->name, status == PW_LOCAL_TX_FAULT ? "inactive"
+				   : "active", vni);
+	}
+
+out:
+	zebra_pw_update_status(pw, status);
 }
 
 static int zebra_pw_check_reachability_strict(const struct zebra_pw *pw,
@@ -350,8 +464,15 @@ static int zebra_pw_check_reachability(const struct zebra_pw *pw)
 			if (CHECK_FLAG(nexthop->flags, NEXTHOP_FLAG_RECURSIVE))
 				continue;
 
-			if (CHECK_FLAG(nexthop->flags, NEXTHOP_FLAG_ACTIVE) &&
-			    nexthop->nh_label != NULL) {
+			if (!CHECK_FLAG(nexthop->flags, NEXTHOP_FLAG_ACTIVE))
+				continue;
+
+			if (pw->protocol == ZEBRA_ROUTE_BGP && pw->data.bgp.vni) {
+				found_p = true;
+				break;
+			}
+
+			if (nexthop->nh_label != NULL) {
 				found_p = true;
 				break;
 			}
@@ -440,6 +561,7 @@ DEFUN_NOSH (pseudowire_if,
 	struct zebra_pw *pw;
 	const char *ifname;
 	int idx = 0;
+	union pw_protocol_fields data = {};
 
 	zvrf = zebra_vrf_lookup_by_id(VRF_DEFAULT);
 
@@ -453,7 +575,7 @@ DEFUN_NOSH (pseudowire_if,
 	}
 
 	if (!pw)
-		pw = zebra_pw_add(zvrf, ifname, ZEBRA_ROUTE_STATIC, NULL);
+		pw = zebra_pw_add(zvrf, ifname, ZEBRA_ROUTE_STATIC, data, NULL);
 	VTY_PUSH_CONTEXT(PW_NODE, pw);
 
 	return CMD_SUCCESS;
@@ -601,6 +723,9 @@ DEFUN (show_pseudowires,
 	RB_FOREACH (pw, zebra_pw_head, &zvrf->pseudowires) {
 		char buf_nbr[INET6_ADDRSTRLEN];
 		char buf_labels[64];
+
+		if (pw->protocol == ZEBRA_ROUTE_BGP && pw->data.bgp.vni)
+			continue;
 
 		inet_ntop(pw->af, &pw->nexthop, buf_nbr, sizeof(buf_nbr));
 

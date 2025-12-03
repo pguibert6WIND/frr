@@ -241,7 +241,7 @@ static void ldp_l2vpn_entry_added(const char *l2vpn_name)
 	ldp_config_apply(NULL, vty_conf);
 }
 
-static void ldp_l2vpn_entry_deleted(const char *l2vpn_name)
+static void ldp_l2vpn_entry_deleted(struct l2vpn *l2vpn)
 {
 	if (l2vpn->type != L2VPN_TYPE_VPLS)
 		return;

@@ -12,6 +12,7 @@ extern "C" {
 
 #include "lib/zebra.h"
 #include "openbsd-tree.h"
+#include "lib/prefix.h"
 #include "lib/if.h"
 #include "lib/pw.h"
 #include "lib/qobj.h"
@@ -45,12 +46,18 @@ struct l2vpn_pw {
 	struct in_addr		 lsr_id;
 	int			 af;
 	union g_addr addr;
-	uint32_t pwid;
+	union {
+		uint32_t pwid;
+		uint32_t evi;
+	};
+	esi_t esi;
+	char local_ac[IFNAMSIZ];
 	uint32_t local_ac_id;
 	uint32_t remote_ac_id;
 	vni_t vni;
 	char ifname[IFNAMSIZ];
 	ifindex_t		 ifindex;
+	bool ignore_mtu_mismatch;
 	bool			 enabled;
 	uint32_t		 remote_group;
 	uint16_t		 remote_mtu;
@@ -73,6 +80,7 @@ DECLARE_QOBJ_TYPE(l2vpn_pw);
 #define F_PW_STATIC_NBR_ADDR (1 << 4) /* static neighbor address configured */
 #define F_PW_SEND_REMOTE     (1 << 5) /* send pw message to remote */
 #define F_PW_EVPN_NBR_ADDR   (1 << 6) /* EVPN neighbor configured */
+#define F_PW_EVPN_VNI        (1 << 7) /* VNI for VPWS in Ethernet VPN */
 
 /* PW status code */
 #define F_PW_NO_ERR          (1 << 0) /* no error reported */
@@ -80,7 +88,8 @@ DECLARE_QOBJ_TYPE(l2vpn_pw);
 #define F_PW_REMOTE_NOT_FWD  (1 << 2) /* remote end of PW reported fwd error*/
 #define F_PW_NO_REMOTE_LABEL (1 << 3) /* have not recvd label from peer */
 #define F_PW_MTU_MISMATCH    (1 << 4) /* mtu mismatch between peers */
-
+#define F_PW_NO_REMOTE_AD    (1 << 5) /* have not recvd per-EVI Ethernet A-D route from peer */
+#define F_PW_AD_MISMATCH     (1 << 6) /* recvd multiple same EVI Ethernet A-D */
 
 typedef enum { L2VPN_TYPE_VPWS = 1, L2VPN_TYPE_VPLS = 2 } l2vpn_types;
 
@@ -110,6 +119,7 @@ extern const struct frr_yang_module_info frr_l2vpn_cli_info;
 extern void l2vpn_cli_init(void);
 extern void l2vpn_init(void);
 extern void l2vpn_init_new(bool in_backend);
+extern const char *l2vpn_pw_error_code(uint8_t status);
 
 struct l2vpn *l2vpn_new(const char *name);
 struct l2vpn *l2vpn_find(struct l2vpn_head *conf, const char *name, int type);

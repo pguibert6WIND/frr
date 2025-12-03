@@ -693,8 +693,10 @@ struct zapi_pw {
 
 struct zapi_pw_status {
 	char ifname[IFNAMSIZ];
+	char local_ac[IFNAMSIZ];
 	ifindex_t ifindex;
 	uint32_t status;
+	esi_t esi;
 };
 
 /* IGP instance data associated to a RLFA. */

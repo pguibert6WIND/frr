@@ -58,7 +58,8 @@ DECLARE_HOOK(pw_install, (struct zebra_pw * pw), (pw));
 DECLARE_HOOK(pw_uninstall, (struct zebra_pw * pw), (pw));
 
 struct zebra_pw *zebra_pw_add(struct zebra_vrf *zvrf, const char *ifname,
-			      uint8_t protocol, struct zserv *client);
+			      uint8_t protocol, union pw_protocol_fields data,
+			      struct zserv *client);
 void zebra_pw_del(struct zebra_vrf *zvrf, struct zebra_pw *pw);
 void zebra_pw_change(struct zebra_pw *pw, ifindex_t ifindex, int type, int af,
 		     union g_addr *nexthop, uint32_t local_label, uint32_t remote_label,

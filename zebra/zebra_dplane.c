@@ -864,6 +864,8 @@ static void dplane_ctx_free_internal(struct zebra_dplane_ctx *ctx)
 		}
 		break;
 
+	case DPLANE_OP_PW_VXLAN_INSTALL:
+	case DPLANE_OP_PW_VXLAN_UNINSTALL:
 	case DPLANE_OP_MAC_INSTALL:
 	case DPLANE_OP_MAC_DELETE:
 	case DPLANE_OP_NEIGH_INSTALL:
@@ -1100,6 +1102,11 @@ const char *dplane_op2str(enum dplane_op_e op)
 		return "PW_INSTALL";
 	case DPLANE_OP_PW_UNINSTALL:
 		return "PW_UNINSTALL";
+
+	case DPLANE_OP_PW_VXLAN_INSTALL:
+		return "PW_VXLAN_INSTALL";
+	case DPLANE_OP_PW_VXLAN_UNINSTALL:
+		return "PW_VXLAN_UNINSTALL";
 
 	case DPLANE_OP_SYS_ROUTE_ADD:
 		return "SYS_ROUTE_ADD";
@@ -4183,6 +4190,7 @@ static int dplane_ctx_pw_init(struct zebra_dplane_ctx *ctx,
 	int ret = EINVAL;
 	struct prefix p;
 	afi_t afi;
+	struct ethaddr mac = { {0, 0, 0, 0, 0, 0} };
 	struct route_table *table;
 	struct route_node *rn;
 	struct route_entry *re;
@@ -4206,17 +4214,29 @@ static int dplane_ctx_pw_init(struct zebra_dplane_ctx *ctx,
 
 	/* This name appears to be c-string, so we use string copy. */
 	strlcpy(ctx->zd_ifname, pw->ifname, sizeof(ctx->zd_ifname));
-
 	ctx->zd_vrf_id = pw->vrf_id;
 	ctx->zd_ifindex = pw->ifindex;
+
+	if (op == DPLANE_OP_PW_VXLAN_INSTALL || op == DPLANE_OP_PW_VXLAN_UNINSTALL) {
+		dplane_ctx_set_type(ctx, 0);
+		memset(&ctx->u.neigh, 0, sizeof(ctx->u.neigh));
+		ctx->u.neigh.ip_addr.ipa_type = pw->af;
+		ctx->u.neigh.ip_addr.ipaddr_v4 = pw->nexthop.ipv4;
+		ctx->u.neigh.flags = 0;
+		ctx->u.neigh.vni = pw->data.bgp.vni;
+		ctx->u.neigh.state = 0;
+		ctx->u.neigh.update_flags = 0;
+		ctx->u.neigh.link.mac = mac;
+
+		return AOK;
+	}
+
 	ctx->u.pw.type = pw->type;
 	ctx->u.pw.af = pw->af;
 	ctx->u.pw.local_label = pw->local_label;
 	ctx->u.pw.remote_label = pw->remote_label;
 	ctx->u.pw.flags = pw->flags;
-
 	ctx->u.pw.dest = pw->nexthop;
-
 	ctx->u.pw.fields = pw->data;
 
 	/* Capture nexthop info for the pw destination. We need to look
@@ -5142,6 +5162,9 @@ done:
  */
 enum zebra_dplane_result dplane_pw_install(struct zebra_pw *pw)
 {
+	if (pw->protocol == ZEBRA_ROUTE_BGP)
+		return pw_update_internal(pw, DPLANE_OP_PW_VXLAN_INSTALL);
+
 	return pw_update_internal(pw, DPLANE_OP_PW_INSTALL);
 }
 
@@ -5150,6 +5173,9 @@ enum zebra_dplane_result dplane_pw_install(struct zebra_pw *pw)
  */
 enum zebra_dplane_result dplane_pw_uninstall(struct zebra_pw *pw)
 {
+	if (pw->protocol == ZEBRA_ROUTE_BGP)
+		return pw_update_internal(pw, DPLANE_OP_PW_VXLAN_UNINSTALL);
+
 	return pw_update_internal(pw, DPLANE_OP_PW_UNINSTALL);
 }
 
@@ -6896,6 +6922,8 @@ static void kernel_dplane_log_detail(struct zebra_dplane_ctx *ctx)
 			   buf, dplane_ctx_get_ifindex(ctx));
 		break;
 
+	case DPLANE_OP_PW_VXLAN_INSTALL:
+	case DPLANE_OP_PW_VXLAN_UNINSTALL:
 	case DPLANE_OP_NEIGH_INSTALL:
 	case DPLANE_OP_NEIGH_UPDATE:
 	case DPLANE_OP_NEIGH_DELETE:
@@ -7100,6 +7128,8 @@ static void kernel_dplane_handle_result(struct zebra_dplane_ctx *ctx)
 						  1, memory_order_relaxed);
 		break;
 
+	case DPLANE_OP_PW_VXLAN_INSTALL:
+	case DPLANE_OP_PW_VXLAN_UNINSTALL:
 	case DPLANE_OP_NEIGH_INSTALL:
 	case DPLANE_OP_NEIGH_UPDATE:
 	case DPLANE_OP_NEIGH_DELETE:
