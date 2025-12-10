@@ -1897,9 +1897,6 @@ static struct zebra_evpn_es *zebra_evpn_es_new(const esi_t *esi)
 {
 	struct zebra_evpn_es *es;
 
-	if (!memcmp(esi, zero_esi, sizeof(esi_t)))
-		return NULL;
-
 	es = XCALLOC(MTYPE_ZES, sizeof(struct zebra_evpn_es));
 
 	/* fill in ESI */
