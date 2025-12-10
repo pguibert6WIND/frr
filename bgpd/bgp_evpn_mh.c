@@ -3557,6 +3557,9 @@ bgp_evpn_es_evi_vtep_add(struct bgp *bgp, struct bgp_evpn_es_evi *es_evi,
 	else
 		SET_FLAG(evi_vtep->flags, BGP_EVPN_EVI_VTEP_EAD_PER_EVI);
 
+	if (!memcmp(&es_evi->es->esi, zero_esi, sizeof(esi_t)))
+		SET_FLAG(evi_vtep->flags, BGP_EVPN_EVI_VTEP_EAD_PER_ES);
+
 	return bgp_evpn_es_evi_vtep_re_eval_active(bgp, evi_vtep);
 }
 
