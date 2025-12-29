@@ -285,6 +285,8 @@ int lib_interface_isis_fast_reroute_level_1_ti_lfa_node_protection_modify(
 	struct nb_cb_modify_args *args);
 int lib_interface_isis_fast_reroute_level_1_ti_lfa_link_fallback_modify(
 	struct nb_cb_modify_args *args);
+int lib_interface_isis_fast_reroute_level_1_ti_lfa_srlg_protection_modify(
+	struct nb_cb_modify_args *args);
 int lib_interface_isis_fast_reroute_level_2_lfa_enable_modify(struct nb_cb_modify_args *args);
 int lib_interface_isis_fast_reroute_level_2_lfa_exclude_interface_create(
 	struct nb_cb_create_args *args);
@@ -299,6 +301,8 @@ int lib_interface_isis_fast_reroute_level_2_ti_lfa_enable_modify(struct nb_cb_mo
 int lib_interface_isis_fast_reroute_level_2_ti_lfa_node_protection_modify(
 	struct nb_cb_modify_args *args);
 int lib_interface_isis_fast_reroute_level_2_ti_lfa_link_fallback_modify(
+	struct nb_cb_modify_args *args);
+int lib_interface_isis_fast_reroute_level_2_ti_lfa_srlg_protection_modify(
 	struct nb_cb_modify_args *args);
 int lib_interface_isis_srlg_create(struct nb_cb_create_args *args);
 int lib_interface_isis_srlg_destroy(struct nb_cb_destroy_args *args);
