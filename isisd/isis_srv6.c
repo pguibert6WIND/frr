@@ -848,11 +848,15 @@ struct tilfa_srv6_find_endx_sid_args {
 	struct in6_addr sid;
 	bool found;
 	uint8_t algorithm;
+	uint8_t best_weight; /* Track highest weight for load balancing */
 };
 
 /**
  * Callback to find End.X SID in Extended IS Reachability TLV (TLV 22).
- * Per RFC 9352 section 8, End.X SID sub-TLVs have an algorithm field.
+ * Per RFC 9352 section 8, End.X SID sub-TLVs have algorithm and weight fields.
+ *
+ * When multiple matching SIDs exist, select the one with highest weight
+ * per RFC 8402 load balancing semantics.
  */
 static int tilfa_srv6_find_endx_sid_cb(const uint8_t *id, uint32_t metric, bool oldmetric,
 				       struct isis_ext_subtlvs *subtlvs, void *arg)
@@ -868,7 +872,7 @@ static int tilfa_srv6_find_endx_sid_cb(const uint8_t *id, uint32_t metric, bool 
 	if (!subtlvs)
 		return LSP_ITER_CONTINUE;
 
-	/* Check P2P End.X SIDs first (Sub-TLV 43) */
+	/* Check P2P End.X SIDs (Sub-TLV 43) */
 	if (subtlvs->srv6_endx_sid.count > 0) {
 		for (endx_sid = (struct isis_srv6_endx_sid_subtlv *)subtlvs->srv6_endx_sid.head;
 		     endx_sid; endx_sid = endx_sid->next) {
@@ -881,9 +885,15 @@ static int tilfa_srv6_find_endx_sid_cb(const uint8_t *id, uint32_t metric, bool 
 			if (CHECK_FLAG(endx_sid->flags, EXT_SUBTLV_LINK_SRV6_ENDX_SID_BFLG))
 				continue;
 
-			args->sid = endx_sid->sid;
-			args->found = true;
-			return LSP_ITER_STOP;
+			/*
+			 * Per RFC 8402, prefer SID with highest weight
+			 * for load balancing. Keep searching for better.
+			 */
+			if (!args->found || endx_sid->weight > args->best_weight) {
+				args->sid = endx_sid->sid;
+				args->best_weight = endx_sid->weight;
+				args->found = true;
+			}
 		}
 	}
 
@@ -906,12 +916,18 @@ static int tilfa_srv6_find_endx_sid_cb(const uint8_t *id, uint32_t metric, bool 
 			if (CHECK_FLAG(lan_endx_sid->flags, EXT_SUBTLV_LINK_SRV6_ENDX_SID_BFLG))
 				continue;
 
-			args->sid = lan_endx_sid->sid;
-			args->found = true;
-			return LSP_ITER_STOP;
+			/*
+			 * Per RFC 8402, prefer SID with highest weight.
+			 */
+			if (!args->found || lan_endx_sid->weight > args->best_weight) {
+				args->sid = lan_endx_sid->sid;
+				args->best_weight = lan_endx_sid->weight;
+				args->found = true;
+			}
 		}
 	}
 
+	/* Continue iterating to find all SIDs and select best weight */
 	return LSP_ITER_CONTINUE;
 }
 
