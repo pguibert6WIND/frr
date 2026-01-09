@@ -46,7 +46,6 @@ endif
 
 clippy_scan += \
 	ldpd/ldp_vty_cmds.c \
-	ldpd/ldp_l2vpn_cli.c \
 	# end
 
 noinst_HEADERS += \
