@@ -2030,6 +2030,7 @@ static int unpack_item_ext_subtlvs(uint16_t mtid, uint8_t len, struct stream *s,
 					ISIS_CONTEXT_SUBSUBTLV_SRV6_ENDX_SID);
 
 				bool unpacked_known_tlvs = false;
+
 				if (unpack_tlvs(ISIS_CONTEXT_SUBSUBTLV_SRV6_ENDX_SID,
 						subsubtlv_len, s, log, adj->subsubtlvs, indent + 4,
 						&unpacked_known_tlvs)) {
@@ -2775,6 +2776,7 @@ static int unpack_item_srv6_end_sid(uint16_t mtid, uint8_t len, struct stream *s
 	sid->subsubtlvs = isis_alloc_subsubtlvs(ISIS_CONTEXT_SUBSUBTLV_SRV6_END_SID);
 
 	bool unpacked_known_tlvs = false;
+
 	if (unpack_tlvs(ISIS_CONTEXT_SUBSUBTLV_SRV6_END_SID, subsubtlv_len, s, log,
 			sid->subsubtlvs, indent + 4, &unpacked_known_tlvs)) {
 		goto out;
@@ -6553,6 +6555,7 @@ static int unpack_item_srv6_locator(uint16_t mtid, uint8_t len, struct stream *s
 		rv->subtlvs = isis_alloc_subtlvs(ISIS_CONTEXT_SUBTLV_SRV6_LOCATOR);
 
 		bool unpacked_known_tlvs = false;
+
 		if (unpack_tlvs(ISIS_CONTEXT_SUBTLV_SRV6_LOCATOR, subtlv_len, s, log, rv->subtlvs,
 				indent + 4, &unpacked_known_tlvs)) {
 			goto out;
@@ -8205,7 +8208,9 @@ void isis_subtlvs_add_srv6_end_sid(struct isis_subtlvs *subtlvs, struct isis_srv
 	 * applied (e.g. End, End.DT6, ...). Before proceeding, let's make sure
 	 * we are encoding one of the supported behaviors. */
 	if (sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END &&
+	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_PSP &&
 	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID &&
+	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP &&
 	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_DT6 &&
 	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_DT6_USID &&
 	    sid->behavior != SRV6_ENDPOINT_BEHAVIOR_END_DT4 &&
@@ -8245,7 +8250,9 @@ void isis_tlvs_add_srv6_locator(struct isis_tlvs *tlvs, uint16_t mtid,
 	loc_tlv->subtlvs = isis_alloc_subtlvs(ISIS_CONTEXT_SUBTLV_SRV6_LOCATOR);
 	frr_each (isis_srv6_sid_list, &loc->srv6_sid, sid) {
 		if (sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END ||
+		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_PSP ||
 		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID ||
+		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP ||
 		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_DT6 ||
 		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_DT6_USID ||
 		    sid->behavior == SRV6_ENDPOINT_BEHAVIOR_END_DT4 ||
