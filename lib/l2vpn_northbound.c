@@ -244,7 +244,7 @@ static int l2vpn_instance_member_interface_create(struct nb_cb_create_args *args
 	switch (args->event) {
 	case NB_EV_VALIDATE:
 		if ((l2vpn_lib_master.iface_ok_for_l2vpn &&
-		     !(*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
+		     (*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
 		    l2vpn_iface_is_configured(ifname)) {
 			snprintf(args->errmsg, args->errmsg_len, "%% Interface is already in use");
 			return NB_ERR_VALIDATION;
@@ -314,7 +314,7 @@ static int l2vpn_instance_member_pseudowire_create(struct nb_cb_create_args *arg
 	switch (args->event) {
 	case NB_EV_VALIDATE:
 		if ((l2vpn_lib_master.iface_ok_for_l2vpn &&
-		     !(*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
+		     (*l2vpn_lib_master.iface_ok_for_l2vpn)(ifname)) ||
 		    l2vpn_iface_is_configured(ifname)) {
 			snprintf(args->errmsg, args->errmsg_len, "%% Interface is already in use");
 			return NB_ERR_VALIDATION;
