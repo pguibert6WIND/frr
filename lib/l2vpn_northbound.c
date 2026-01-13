@@ -105,8 +105,8 @@ static int l2vpn_instance_pw_type_modify(struct nb_cb_modify_args *args)
 		else
 			l2vpn->pw_type = PW_TYPE_ETHERNET_TAGGED;
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 
@@ -127,8 +127,8 @@ static int l2vpn_instance_pw_type_destroy(struct nb_cb_destroy_args *args)
 		l2vpn = nb_running_get_entry(args->dnode, NULL, true);
 		l2vpn->pw_type = DEFAULT_PW_TYPE;
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)( NULL);
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 	return NB_OK;
@@ -153,8 +153,8 @@ static int l2vpn_instance_mtu_modify(struct nb_cb_modify_args *args)
 		mtu = yang_dnode_get_uint16(args->dnode, NULL);
 		l2vpn->mtu = mtu;
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 
@@ -175,8 +175,8 @@ static int l2vpn_instance_mtu_destroy(struct nb_cb_destroy_args *args)
 		l2vpn = nb_running_get_entry(args->dnode, NULL, true);
 		l2vpn->mtu = DEFAULT_L2VPN_MTU;
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 	return NB_OK;
@@ -201,6 +201,8 @@ static int l2vpn_instance_bridge_interface_modify(struct nb_cb_modify_args *args
 		ifname = yang_dnode_get_string(args->dnode, NULL);
 		strlcpy(l2vpn->br_ifname, ifname, sizeof(l2vpn->br_ifname));
 
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 
@@ -265,8 +267,8 @@ static int l2vpn_instance_member_interface_create(struct nb_cb_create_args *args
 		QOBJ_REG(lif, l2vpn_if);
 		nb_running_set_entry(args->dnode, lif);
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.add_hook)
+			(*l2vpn_lib_master.add_hook)(l2vpn->name);
 		break;
 	}
 
@@ -294,8 +296,8 @@ static int l2vpn_instance_member_interface_destroy(struct nb_cb_destroy_args *ar
 		RB_REMOVE(l2vpn_if_head, &l2vpn->if_tree, lif);
 		free(lif);
 
-		if (l2vpn_lib_master.event_hook)
-			(*l2vpn_lib_master.event_hook)(NULL);
+		if (l2vpn_lib_master.del_hook)
+			(*l2vpn_lib_master.del_hook)(NULL);
 		break;
 	}
 	return NB_OK;
