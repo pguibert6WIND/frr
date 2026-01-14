@@ -268,6 +268,9 @@ static void zebra_pw_update_status(struct zebra_pw *pw, int status)
 		zsend_pw_update(pw->client, pw);
 }
 
+/* TODO: bgp vni check should be removed
+ * to be handled in BGP
+ */
 static void zebra_pw_bgp_vni_check(struct zebra_pw *pw)
 {
 	int status;
