@@ -1103,6 +1103,13 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	struct stream *s;
 	ifindex_t svi_index;
 	int rc;
+	struct vrf *vrf;
+	struct interface *ifp;
+	struct zebra_if *zif;
+	struct zebra_l2info_brslave *br_slave;
+	struct zebra_ns *zns = NULL;
+	struct zebra_vrf *zvrf;
+	int number_ac = 0;
 
 	client = zserv_find_client(ZEBRA_ROUTE_BGP, 0);
 	/* BGP may not be running. */
@@ -1119,7 +1126,32 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	stream_put(s, &zevpn->vrf_id, sizeof(vrf_id_t)); /* tenant vrf */
 	stream_put_in_addr(s, &zevpn->mcast_grp);
 	stream_put(s, &svi_index, sizeof(ifindex_t));
+	/* provide list of Attachment Circuits */
+	if (zevpn->bridge_if && zevpn->bridge_if->vrf && zevpn->bridge_if->vrf) {
+		zvrf = zevpn->bridge_if->vrf->info;
+		if (zvrf)
+			zns = zvrf->zns;
+		RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
+			FOR_ALL_INTERFACES (vrf, ifp) {
+				if (!IS_ZEBRA_IF_BRIDGE_SLAVE(ifp) ||
+				    ifp->ifindex == zevpn->vxlan_if->ifindex)
+					continue;
+				zif = (struct zebra_if *)ifp->info;
+				br_slave = &zif->brslave_info;
 
+				/* restriction: only ACs from same netns */
+				if (!zns || br_slave->ns_id != zns->ns_id)
+					continue;
+				if (br_slave->bridge_ifindex != zevpn->bridge_if->ifindex)
+					continue;
+				number_ac++;
+			}
+		}
+		stream_putc(s, number_ac);
+
+	} else {
+		stream_putc(s, 0);
+	}
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 
