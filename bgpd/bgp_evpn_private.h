@@ -121,6 +121,8 @@ struct bgpevpn {
 
 	enum vxlan_flood_control vxlan_flood_ctrl;
 
+	int number_ac;
+
 	QOBJ_FIELDS;
 };
 

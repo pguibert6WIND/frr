@@ -3402,6 +3402,7 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 	vrf_id_t tenant_vrf_id = VRF_DEFAULT;
 	struct in_addr mcast_grp = {INADDR_ANY};
 	ifindex_t svi_ifindex = 0;
+	int number_ac = 0;
 
 	s = zclient->ibuf;
 	vni = stream_getl(s);
@@ -3414,6 +3415,7 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 		stream_get(&tenant_vrf_id, s, sizeof(vrf_id_t));
 		mcast_grp.s_addr = stream_get_ipv4(s);
 		stream_get(&svi_ifindex, s, sizeof(ifindex_t));
+		number_ac = stream_getc(s);
 	}
 
 	bgp = bgp_lookup_by_vrf_id(vrf_id);
@@ -3436,10 +3438,8 @@ static int bgp_zebra_process_local_vni(ZAPI_CALLBACK_ARGS)
 		frrtrace(4, frr_bgp, evpn_local_vni_add_zrecv, vni, &vtep_ip, tenant_vrf_id,
 			 mcast_grp);
 
-		return bgp_evpn_local_vni_add(
-			bgp, vni,
-			&vtep_ip,
-			tenant_vrf_id, mcast_grp, svi_ifindex);
+		return bgp_evpn_local_vni_add(bgp, vni, &vtep_ip, tenant_vrf_id, mcast_grp,
+					      svi_ifindex, number_ac);
 	} else {
 		frrtrace(1, frr_bgp, evpn_local_vni_del_zrecv, vni);
 

@@ -401,13 +401,48 @@ uint32_t bgp_evpn_vpws_vni_add(struct bgp *bgp, struct bgpevpn *vpn,
 		if (l2vpn->type != L2VPN_TYPE_VPWS)
 			continue;
 
+		RB_FOREACH_SAFE (l2vpn_pw, l2vpn_pw_head, &l2vpn->pw_tree, l2vpn_pw_nxt) {
+			if (vpn->vni != l2vpn_pw->vni)
+				continue;
+
+			if (vpn->number_ac != 1) {
+				if (BGP_DEBUG(l2vpn, PSEUDOWIRE))
+					zlog_debug("%s: VPWS local-ac %u, remote-ac %u no ready, reason: invalid AC count %u",
+						   __func__, l2vpn_pw->local_ac_id,
+						   l2vpn_pw->remote_ac_id, vpn->number_ac);
+				if (CHECK_FLAG(vpn->flags, VNI_FLAG_VPWS))
+					count++;
+				UNSET_FLAG(vpn->flags, VNI_FLAG_VPWS);
+				/* VNI changed, PW local status forced to FAULT */
+				l2vpn_pw->local_status = PW_LOCAL_TX_FAULT;
+				continue;
+			}
+			if (!CHECK_FLAG(vpn->flags, VNI_FLAG_VPWS)) {
+				count++;
+				SET_FLAG(vpn->flags, VNI_FLAG_VPWS);
+				/* XXX check if PW local_status can be refreshed */
+			}
+		}
+
 		RB_FOREACH_SAFE (l2vpn_pw, l2vpn_pw_head, &l2vpn->pw_inactive_tree, l2vpn_pw_nxt) {
 			if (vpn->vni != l2vpn_pw->vni)
 				continue;
-			SET_FLAG(vpn->flags, VNI_FLAG_VPWS);
 
 			if (!l2vpn_pw->enabled)
 				continue;
+
+			if (vpn->number_ac != 1) {
+				if (BGP_DEBUG(l2vpn, PSEUDOWIRE))
+					zlog_debug("%s: VPWS local-ac %u, remote-ac %u no ready, reason: invalid AC count %u",
+						   __func__, l2vpn_pw->local_ac_id,
+						   l2vpn_pw->remote_ac_id, vpn->number_ac);
+				/* VNI changed, PW local status forced to FAULT */
+				l2vpn_pw->local_status = PW_LOCAL_TX_FAULT;
+				continue;
+			}
+
+			SET_FLAG(vpn->flags, VNI_FLAG_VPWS);
+
 			if (!is_l2vpn_vpws_ready(bgp, l2vpn, l2vpn_pw, &pmsg)) {
 				if (BGP_DEBUG(l2vpn, PSEUDOWIRE))
 					zlog_debug("%s: VPWS local-ac %u, remote-ac %u no ready, reason: %s",

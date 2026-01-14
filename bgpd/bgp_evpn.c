@@ -6646,6 +6646,7 @@ struct bgpevpn *bgp_evpn_new(struct bgp *bgp, vni_t vni,
 	vpn->mcast_grp = mcast_grp;
 	vpn->svi_ifindex = svi_ifindex;
 	vpn->vxlan_flood_ctrl = VXLAN_FLOOD_INHERIT_GLOBAL;
+	vpn->number_ac = 0;
 
 	/* Initialize route-target import and export lists */
 	vpn->import_rtl = list_new();
@@ -7517,11 +7518,9 @@ int bgp_evpn_local_vni_del(struct bgp *bgp, vni_t vni)
  * Handle add (or update) of a local VNI. The VNI changes we care
  * about are for the local-tunnel-ip and the (tenant) VRF.
  */
-int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
-			   struct ipaddr *originator_ip,
-			   vrf_id_t tenant_vrf_id,
-			   struct in_addr mcast_grp,
-			   ifindex_t svi_ifindex)
+int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni, struct ipaddr *originator_ip,
+			   vrf_id_t tenant_vrf_id, struct in_addr mcast_grp, ifindex_t svi_ifindex,
+			   int number_ac)
 {
 	struct bgpevpn *vpn;
 	struct prefix_evpn p;
@@ -7531,12 +7530,10 @@ int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
 	/* Lookup VNI. If present and no change, exit. */
 	vpn = bgp_evpn_lookup_vni(bgp, vni);
 	if (vpn) {
-
-		if (is_vni_live(vpn)
-		    && ipaddr_is_same(&vpn->originator_ip, originator_ip)
-		    && IPV4_ADDR_SAME(&vpn->mcast_grp, &mcast_grp)
-		    && vpn->tenant_vrf_id == tenant_vrf_id
-		    && vpn->svi_ifindex == svi_ifindex)
+		if (is_vni_live(vpn) && ipaddr_is_same(&vpn->originator_ip, originator_ip) &&
+		    IPV4_ADDR_SAME(&vpn->mcast_grp, &mcast_grp) &&
+		    vpn->tenant_vrf_id == tenant_vrf_id && vpn->svi_ifindex == svi_ifindex &&
+		    vpn->number_ac == number_ac)
 			/* Probably some other param has changed that we don't
 			 * care about.
 			 */
@@ -7602,6 +7599,8 @@ int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
 		 */
 		handle_tunnel_ip_change(NULL, bgp, vpn, originator_ip);
 
+		vpn->number_ac = number_ac;
+
 		/* Update all routes with new endpoint IP and/or export RT
 		 * for VRFs
 		 */
@@ -7611,6 +7610,14 @@ int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
 		/* Create or update as appropriate. */
 		vpn = bgp_evpn_new(bgp, vni, originator_ip, tenant_vrf_id,
 				   mcast_grp, svi_ifindex);
+		vpn->number_ac = number_ac;
+	}
+
+	/* try run bgp evpn vpws */
+	evpn_vpws_count = bgp_evpn_vpws_vni_add(bgp, vpn, tenant_vrf_id);
+	if (evpn_vpws_count) {
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("%s: EVPN VPWS %u instance detected", __func__, evpn_vpws_count);
 	}
 
 	/* if the VNI is live already, there is nothing more to do */
@@ -7620,14 +7627,8 @@ int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni,
 	/* Mark as "live" */
 	SET_FLAG(vpn->flags, VNI_FLAG_LIVE);
 
-	/* try run bgp evpn vpws */
-	evpn_vpws_count = bgp_evpn_vpws_vni_add(bgp, vpn, tenant_vrf_id);
-	if (evpn_vpws_count) {
-		if (BGP_DEBUG(zebra, ZEBRA))
-			zlog_debug("%s: EVPN VPWS %u instance started", __func__,
-				   evpn_vpws_count);
+	if (CHECK_FLAG(vpn->flags, VNI_FLAG_VPWS))
 		return 0;
-	}
 
 	/* Tunnel is newly active.
 	 * Add TIP to tip_hash of the EVPN underlay instance (bgp_get_evpn()).
