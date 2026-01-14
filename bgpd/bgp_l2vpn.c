@@ -420,7 +420,8 @@ uint32_t bgp_evpn_vpws_vni_add(struct bgp *bgp, struct bgpevpn *vpn,
 			if (!CHECK_FLAG(vpn->flags, VNI_FLAG_VPWS)) {
 				count++;
 				SET_FLAG(vpn->flags, VNI_FLAG_VPWS);
-				/* XXX check if PW local_status can be refreshed */
+				/* check if PW local_status can be refreshed */
+				bgp_l2vpn_vpws_run(l2vpn_pw);
 			}
 		}
 

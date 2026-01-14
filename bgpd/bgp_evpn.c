@@ -7621,8 +7621,11 @@ int bgp_evpn_local_vni_add(struct bgp *bgp, vni_t vni, struct ipaddr *originator
 	}
 
 	/* if the VNI is live already, there is nothing more to do */
-	if (is_vni_live(vpn))
+	if (is_vni_live(vpn)) {
+		/* TODO: changing from VPWS to non VPWS should be considered */
+		zlog_debug("%s() XXXXX we are already on live ", __func__);
 		return 0;
+	}
 
 	/* Mark as "live" */
 	SET_FLAG(vpn->flags, VNI_FLAG_LIVE);
