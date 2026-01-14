@@ -1109,6 +1109,7 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 	struct zebra_l2info_brslave *br_slave;
 	struct zebra_ns *zns = NULL;
 	struct zebra_vrf *zvrf;
+	unsigned long number_ac_p = 0;
 	int number_ac = 0;
 
 	client = zserv_find_client(ZEBRA_ROUTE_BGP, 0);
@@ -1131,6 +1132,8 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 		zvrf = zevpn->bridge_if->vrf->info;
 		if (zvrf)
 			zns = zvrf->zns;
+		number_ac_p = stream_get_endp(s);
+		stream_putc(s, 0);
 		RB_FOREACH (vrf, vrf_name_head, &vrfs_by_name) {
 			FOR_ALL_INTERFACES (vrf, ifp) {
 				if (!IS_ZEBRA_IF_BRIDGE_SLAVE(ifp) ||
@@ -1144,10 +1147,11 @@ int zebra_evpn_send_add_to_client(struct zebra_evpn *zevpn)
 					continue;
 				if (br_slave->bridge_ifindex != zevpn->bridge_if->ifindex)
 					continue;
+				stream_putl(s, ifp->ifindex);
 				number_ac++;
 			}
 		}
-		stream_putc(s, number_ac);
+		stream_putc_at(s, number_ac_p, number_ac);
 
 	} else {
 		stream_putc(s, 0);
