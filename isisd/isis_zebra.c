@@ -1563,17 +1563,19 @@ static int handle_srv6_endx_sid_allocated(struct isis_area *area,
 	struct listnode *node, *nnode;
 
 	frr_each (isis_area_adj_list, &area->adjacency_list, adj) {
-		/* Check if the End.X SID is for this adjacency */
+		/* Check if the End.X SID is for this adjacecny */
 		if (adj->ll_ipv6_count == 0 ||
-		    memcmp(&adj->ll_ipv6_addrs[0], &ctx->nh6,
+		    memcmp(&adj->ll_ipv6_addrs[0],
+			   &ctx.nh6,
 			   sizeof(struct in6_addr)) != 0)
 			continue;
 
 		/* Remove old End.X SIDs, if any */
-		for (ALL_LIST_ELEMENTS(adj->srv6_endx_sids, node, nnode, sra)) {
-			if (!ctx->backup && sra->type == ISIS_SRV6_ADJ_BACKUP)
+		for (ALL_LIST_ELEMENTS(adj->srv6_endx_sids,
+				       node, nnode, sra)) {
+			if (!ctx.backup && sra->type == ISIS_SRV6_ADJ_BACKUP)
 				continue;
-			if (ctx->backup && sra->type != ISIS_SRV6_ADJ_BACKUP)
+			if (ctx.backup && sra->type != ISIS_SRV6_ADJ_BACKUP)
 				continue;
 			if (sra->type == ISIS_SRV6_ADJ_BACKUP &&
 			    IN6_IS_ADDR_UNSPECIFIED(&sra->sid) &&
@@ -1585,22 +1587,21 @@ static int handle_srv6_endx_sid_allocated(struct isis_area *area,
 			srv6_endx_sid_del(sra);
 		}
 		if (sra_to_update) {
-			IPV6_ADDR_COPY(&sra_to_update->sid, sid_addr);
+			IPV6_ADDR_COPY(&sra_to_update->sid, &sid_addr);
 			sra_to_update->allocation_in_progress = false;
 			isis_zebra_srv6_adj_sid_install(sra_to_update);
 			return 0;
 		}
-		if (ctx->backup) {
+		if (ctx.backup) {
 			sr_debug("SRv6 SID %pI6 %s: SRA not found",
-				 sid_addr,
-				 srv6_sid_ctx2str(buf, sizeof(buf), ctx));
+				 &sid_addr,
+				 srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 			return 0;
-		}
-		/*
-		 * For non backup adjacency: Allocate new End.X SID.
-		 * For backup adjacency: update the SID and install to zebra.
+		}	
+		/* For non backup adjacency: Allocate new End.X SID for the adjacency.
+		 * For backup adjacency, update the SID, and install to zebra.
 		 */
-		srv6_endx_sid_add_single(adj, ctx->backup, NULL, sid_addr);
+		srv6_endx_sid_add_single(adj, ctx.backup, NULL, &sid_addr);
 	}
 	return 0;
 }
@@ -1697,11 +1698,10 @@ static int isis_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 				return handle_srv6_endx_sid_allocated(area, &ctx,
 								      &sid_addr,
 								      buf);
-			} else {
-				zlog_warn("%s: unsupported behavior %u",
-					  __func__, ctx.behavior);
-				return -1;
 			}
+			zlog_warn("%s: unsupported behavior %u",
+				  __func__, ctx.behavior);
+			return -1;
 			break;
 		case ZAPI_SRV6_SID_RELEASED:
 			sr_debug("SRv6 SID %pI6 %s: RELEASED", &sid_addr,
