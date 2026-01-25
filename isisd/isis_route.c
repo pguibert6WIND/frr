@@ -542,6 +542,8 @@ static void isis_route_remove_previous_sid(struct isis_area *area, struct prefix
 		     route_info->sr_algo_previous[i].label != route_info->sr_algo[i].label))
 			isis_zebra_prefix_sid_uninstall(area, prefix, route_info,
 							&route_info->sr_algo_previous[i]);
+		/* XXX for switchover remove SRv6 seg6local entries
+                */
 	}
 }
 
