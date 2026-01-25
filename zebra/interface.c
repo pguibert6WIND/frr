@@ -174,6 +174,10 @@ static int if_zebra_new_hook(struct interface *ifp)
 	zebra_if->ipv4_subnets =
 		route_table_init_with_delegate(&zebra_if_table_delegate);
 
+	/* Initialize SRv6 seg6local fast reroute route lists */
+	zebra_seg6local_route_list_init(&zebra_if->seg6local_primary_routes);
+	zebra_seg6local_route_backup_list_init(&zebra_if->seg6local_backup_routes);
+
 	ifp->info = zebra_if;
 
 	return 0;
@@ -1049,6 +1053,9 @@ void if_up(struct interface *ifp, bool install_connected)
 
 	if_handle_bond_speed_change(ifp);
 
+	/* Revert SRv6 seg6local routes to primary nexthop */
+	zebra_seg6local_if_up(ifp);
+
 	rib_update_handle_vrf_all(RIB_UPDATE_KERNEL, ZEBRA_ROUTE_KERNEL);
 }
 
@@ -1065,6 +1072,9 @@ void if_down(struct interface *ifp)
 
 	rtadv_stop_ra(ifp, true);
 	if_down_nhg_dependents(ifp);
+
+	/* Trigger SRv6 seg6local fast reroute */
+	zebra_seg6local_if_down(ifp);
 
 	/* Handle interface down for specific types for EVPN. Non-VxLAN
 	 * interfaces
