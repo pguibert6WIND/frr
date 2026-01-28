@@ -1749,6 +1749,14 @@ if test "$ac_cv_have_decl_TCP_MD5SIG" = "no"; then
        AC_CHECK_DECLS([TCP_MD5SIG], [], [], MD5_INCLUDES)])
 fi
 
+dnl ------------------------
+dnl TCP-AO support checks
+dnl ------------------------
+AC_CHECK_TYPES([struct tcp_ao_add], [AC_DEFINE([HAVE_STRUCT_TCP_AO_ADD], [1],
+	[struct tcp_ao_add available])], [],
+	[AC_INCLUDES_DEFAULT
+	[#include <linux/tcp.h>]])
+
 LIBS_save="$LIBS"
 AC_CHECK_LIB([crypt], [crypt], [], [
   AC_CHECK_LIB([crypto], [DES_crypt])

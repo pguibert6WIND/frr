@@ -14,8 +14,25 @@
 #include "sockunion.h"
 #include "lib_errors.h"
 
-#ifdef __linux__
-#ifndef TCP_AO_ADD_KEY
+/*
+ * This is this way because the user space sockopt code
+ * has not caught up with the kernel space tcp_ao structures
+ * <at least on my machine yet>.  What is happening is that
+ * the kernel space linux/tcp.h inclusion causes problems
+ * with the net and netinet exposure of the equivalent
+ * structures in linux/tcp.h.  This is further exacerbated by
+ * the fact that we want to use the sockunion structure,
+ * which is how we talk about it in FRR.  Let's just add
+ * this here.  Once user space catches up with kernel space
+ * and exposes these structures we can then switch over
+ * to using userspace.
+ * Additionally this may need to change once FreeBSD gets
+ * in on the fun.
+ */
+#if CONFDATE > 20280201
+CPP_NOTICE("Please check to see if userspace has caught up, if so fix, if not extend this date as a reminder")
+#endif
+#ifdef HAVE_STRUCT_TCP_AO_ADD
 #define TCP_AO_ADD_KEY 38
 #define TCP_AO_DEL_KEY 39
 #define TCP_AO_MAXKEYLEN 80
@@ -47,7 +64,6 @@ struct tcp_ao_del {
 	uint8_t rnext;
 	uint8_t keyflags;
 } __attribute__((aligned(8)));
-#endif
 #endif
 
 #if (defined(__FreeBSD__) &&                                                   \
