@@ -14,6 +14,42 @@
 #include "sockunion.h"
 #include "lib_errors.h"
 
+#ifdef __linux__
+#ifndef TCP_AO_ADD_KEY
+#define TCP_AO_ADD_KEY 38
+#define TCP_AO_DEL_KEY 39
+#define TCP_AO_MAXKEYLEN 80
+
+struct tcp_ao_add {
+	struct sockaddr_storage addr;
+	char alg_name[64];
+	int32_t ifindex;
+	uint32_t set_current : 1, set_rnext : 1, reserved : 30;
+	uint16_t reserved2;
+	uint8_t prefix;
+	uint8_t sndid;
+	uint8_t rcvid;
+	uint8_t maclen;
+	uint8_t keyflags;
+	uint8_t keylen;
+	uint8_t key[TCP_AO_MAXKEYLEN];
+} __attribute__((aligned(8)));
+
+struct tcp_ao_del {
+	struct sockaddr_storage addr;
+	int32_t ifindex;
+	uint32_t set_current : 1, set_rnext : 1, del_async : 1, reserved : 29;
+	uint16_t reserved2;
+	uint8_t prefix;
+	uint8_t sndid;
+	uint8_t rcvid;
+	uint8_t current_key;
+	uint8_t rnext;
+	uint8_t keyflags;
+} __attribute__((aligned(8)));
+#endif
+#endif
+
 #if (defined(__FreeBSD__) &&                                                   \
      ((__FreeBSD_version >= 500022 && __FreeBSD_version < 700000) ||           \
       (__FreeBSD_version < 500000 && __FreeBSD_version >= 440000))) ||         \
@@ -654,6 +690,87 @@ int sockopt_tcp_signature_ext(int sock, union sockunion *su, uint16_t prefixlen,
 int sockopt_tcp_signature(int sock, union sockunion *su, const char *password)
 {
 	return sockopt_tcp_signature_ext(sock, su, 0, password);
+}
+
+int sockopt_tcp_ao_add(int sock, union sockunion *su, uint8_t prefixlen,
+		       const char *alg, const uint8_t *key, uint8_t keylen,
+		       uint8_t maclen, uint8_t send_id, uint8_t recv_id,
+		       int set_current, int set_rnext)
+{
+#ifdef TCP_AO_ADD_KEY
+	int ret;
+	struct tcp_ao_add ao;
+	union sockunion su2;
+
+	assert(sock >= 0);
+
+	memcpy(&su2, su, sizeof(union sockunion));
+	if (su2.sa.sa_family == AF_INET)
+		su2.sin.sin_port = 0;
+	else
+		su2.sin6.sin6_port = 0;
+
+	memset(&ao, 0, sizeof(ao));
+	memcpy(&ao.addr, &su2, sizeof(su2));
+	strlcpy(ao.alg_name, alg, sizeof(ao.alg_name));
+	ao.prefix = prefixlen;
+	ao.sndid = send_id;
+	ao.rcvid = recv_id;
+	ao.keylen = keylen;
+	ao.maclen = maclen;
+	ao.set_current = set_current ? 1 : 0;
+	ao.set_rnext = set_rnext ? 1 : 0;
+	if (keylen)
+		memcpy(ao.key, key, keylen);
+
+	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_ADD_KEY, &ao, sizeof(ao));
+	if (ret < 0)
+		flog_err_sys(EC_LIB_SYSTEM_CALL,
+			     "sockopt_tcp_ao_add: setsockopt(%d): %s", sock,
+			     safe_strerror(errno));
+
+	return ret;
+#else
+	return -2;
+#endif
+}
+
+int sockopt_tcp_ao_del(int sock, union sockunion *su, uint8_t prefixlen,
+		       uint8_t send_id, uint8_t recv_id)
+{
+#ifdef TCP_AO_DEL_KEY
+	int ret;
+	struct tcp_ao_del ao;
+	union sockunion su2;
+
+	assert(sock >= 0);
+
+	memcpy(&su2, su, sizeof(union sockunion));
+	if (su2.sa.sa_family == AF_INET)
+		su2.sin.sin_port = 0;
+	else
+		su2.sin6.sin6_port = 0;
+
+	memset(&ao, 0, sizeof(ao));
+	memcpy(&ao.addr, &su2, sizeof(su2));
+	ao.prefix = prefixlen;
+	ao.sndid = send_id;
+	ao.rcvid = recv_id;
+
+	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_DEL_KEY, &ao, sizeof(ao));
+	if (ret < 0) {
+		if (ENOENT == errno)
+			ret = 0;
+		else
+			flog_err_sys(EC_LIB_SYSTEM_CALL,
+				     "sockopt_tcp_ao_del: setsockopt(%d): %s",
+				     sock, safe_strerror(errno));
+	}
+
+	return ret;
+#else
+	return -2;
+#endif
 }
 
 /* set TCP mss value to socket */

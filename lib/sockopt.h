@@ -129,6 +129,32 @@ extern int sockopt_tcp_signature_ext(int sock, union sockunion *su,
 				     uint16_t prefixlen, const char *password);
 
 /*
+ * TCP-AO key management.
+ *
+ * sock
+ *    Socket to enable option on.
+ *
+ * su
+ *    Sockunion specifying address (or prefix) to enable option on.
+ *
+ * prefixlen
+ *    0    - su is an address; fall back to non-extended mode
+ *    Else - su is a prefix; prefixlen is the mask length
+ *
+ * alg
+ *    TCP-AO hashing algorithm name (e.g. "hmac(sha1)")
+ *
+ * key
+ *    TCP-AO key material
+ */
+extern int sockopt_tcp_ao_add(int sock, union sockunion *su, uint8_t prefixlen,
+			      const char *alg, const uint8_t *key,
+			      uint8_t keylen, uint8_t maclen, uint8_t send_id,
+			      uint8_t recv_id, int set_current, int set_rnext);
+extern int sockopt_tcp_ao_del(int sock, union sockunion *su, uint8_t prefixlen,
+			      uint8_t send_id, uint8_t recv_id);
+
+/*
  * set TCP max segment size. This option allows user to configure
  * max segment size for TCP session
  *
