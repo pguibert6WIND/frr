@@ -2195,6 +2195,20 @@ definitions and allows multiple neighbors to share a profile.
 
    Request this key as the next key for the peer.
 
+Key rotation
+------------
+
+TCP-AO key rotation is manual. Install the new key on both peers first, then
+use the ``rnext`` and ``current`` flags to coordinate the switch:
+
+1. Mark the new key ``rnext`` so the peer starts using it for its outbound
+   segments.
+2. When the peer has switched, mark the same key ``current`` (and clear
+   ``current`` from the old key) so you start using it for outbound segments.
+
+If either side switches before the other has the key installed, the peer can
+drop due to authentication failures.
+
 Example
 -------
 
