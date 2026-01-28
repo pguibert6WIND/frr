@@ -35,6 +35,7 @@ CPP_NOTICE("Please check to see if userspace has caught up, if so fix, if not ex
 #ifdef HAVE_STRUCT_TCP_AO_ADD
 #define TCP_AO_ADD_KEY 38
 #define TCP_AO_DEL_KEY 39
+#define TCP_AO_INFO 40
 #define TCP_AO_MAXKEYLEN 80
 
 struct tcp_ao_add {
@@ -63,6 +64,19 @@ struct tcp_ao_del {
 	uint8_t current_key;
 	uint8_t rnext;
 	uint8_t keyflags;
+} __attribute__((aligned(8)));
+
+struct tcp_ao_info_opt {
+	uint32_t set_current : 1, set_rnext : 1, ao_required : 1,
+		set_counters : 1, accept_icmps : 1, reserved : 27;
+	uint16_t reserved2;
+	uint8_t current_key;
+	uint8_t rnext;
+	uint64_t pkt_good;
+	uint64_t pkt_bad;
+	uint64_t pkt_key_not_found;
+	uint64_t pkt_ao_required;
+	uint64_t pkt_dropped_icmp;
 } __attribute__((aligned(8)));
 #endif
 
@@ -739,11 +753,19 @@ int sockopt_tcp_ao_add(int sock, union sockunion *su, uint8_t prefixlen,
 	if (keylen)
 		memcpy(ao.key, key, keylen);
 
+	zlog_debug(
+		"sockopt_tcp_ao_add: sock=%d prefixlen=%u send_id=%u recv_id=%u keylen=%u current=%u rnext=%u",
+		sock, prefixlen, send_id, recv_id, keylen, ao.set_current,
+		ao.set_rnext);
+
 	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_ADD_KEY, &ao, sizeof(ao));
-	if (ret < 0)
+	if (ret < 0) {
+		if (errno == EEXIST)
+			return 1;
 		flog_err_sys(EC_LIB_SYSTEM_CALL,
 			     "sockopt_tcp_ao_add: setsockopt(%d): %s", sock,
 			     safe_strerror(errno));
+	}
 
 	return ret;
 #else
@@ -767,11 +789,28 @@ int sockopt_tcp_ao_del(int sock, union sockunion *su, uint8_t prefixlen,
 	else
 		su2.sin6.sin6_port = 0;
 
+	{
+		struct tcp_ao_info_opt info;
+		socklen_t info_len = sizeof(info);
+
+		memset(&info, 0, sizeof(info));
+		ret = getsockopt(sock, IPPROTO_TCP, TCP_AO_INFO, &info,
+				 &info_len);
+		if (ret == 0)
+			zlog_debug(
+				"sockopt_tcp_ao_del: sock=%d current=%u rnext=%u",
+				sock, info.current_key, info.rnext);
+	}
+
 	memset(&ao, 0, sizeof(ao));
 	memcpy(&ao.addr, &su2, sizeof(su2));
 	ao.prefix = prefixlen;
 	ao.sndid = send_id;
 	ao.rcvid = recv_id;
+
+	zlog_debug(
+		"sockopt_tcp_ao_del: sock=%d prefixlen=%u send_id=%u recv_id=%u",
+		sock, prefixlen, send_id, recv_id);
 
 	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_DEL_KEY, &ao, sizeof(ao));
 	if (ret < 0) {
@@ -782,6 +821,36 @@ int sockopt_tcp_ao_del(int sock, union sockunion *su, uint8_t prefixlen,
 				     "sockopt_tcp_ao_del: setsockopt(%d): %s",
 				     sock, safe_strerror(errno));
 	}
+
+	return ret;
+#else
+	return -2;
+#endif
+}
+
+int sockopt_tcp_ao_info(int sock, uint8_t current_key, int set_current,
+			uint8_t rnext_key, int set_rnext)
+{
+#ifdef TCP_AO_INFO
+	int ret;
+	struct tcp_ao_info_opt info;
+
+	assert(sock >= 0);
+
+	memset(&info, 0, sizeof(info));
+	info.set_current = set_current ? 1 : 0;
+	info.set_rnext = set_rnext ? 1 : 0;
+	info.current_key = current_key;
+	info.rnext = rnext_key;
+
+	zlog_debug("sockopt_tcp_ao_info: sock=%d current key: %u current=%u rnext=%u",
+		   sock, info.current_key, info.set_current, info.set_rnext);
+
+	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_INFO, &info, sizeof(info));
+	if (ret < 0)
+		flog_err_sys(EC_LIB_SYSTEM_CALL,
+			     "sockopt_tcp_ao_info: setsockopt(%d): %s",
+			     sock, safe_strerror(errno));
 
 	return ret;
 #else
