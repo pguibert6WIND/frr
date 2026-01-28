@@ -109,6 +109,12 @@ static struct log_ref ferr_bgp_warn[] = {
 		.suggestion = "Please collect log files and open Issue",
 	},
 	{
+		.code = EC_BGP_NO_TCP_AO,
+		.title = "Unable to set TCP-AO option on socket",
+		.description = "BGP attempted to setup TCP-AO configuration on the socket as per configuration but was unable to",
+		.suggestion = "Please collect log files and open Issue",
+	},
+	{
 		.code = EC_BGP_EVPN_PMSI_PRESENT,
 		.title = "BGP Received a EVPN NLRI with PMSI included",
 		.description = "BGP has received a type-3 NLRI with PMSI information.  At this time FRR is not capable of properly handling this NLRI type",
