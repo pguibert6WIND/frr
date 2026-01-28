@@ -2154,6 +2154,14 @@ Configuring Peers
    modifying the `net.core.optmem_max` sysctl to a larger value to
    avoid out of memory errors from the linux kernel.
 
+Creating tcp-ao keys
+====================
+
+TCP Authentication Option (TCP-AO) provides per-segment authentication for
+TCP sessions. In FRR, TCP-AO keys are defined in a named profile and then
+referenced by BGP neighbors. This keeps key material separate from neighbor
+definitions and allows multiple neighbors to share a profile.
+
 .. clicmd:: tcp-ao profile NAME
 
    Enter TCP-AO profile configuration mode. The profile name is later
@@ -2186,6 +2194,40 @@ Configuring Peers
 .. clicmd:: rnext
 
    Request this key as the next key for the peer.
+
+Example
+-------
+
+.. code-block:: frr
+
+   tcp-ao profile blue
+    key key-1
+     send-id 1
+     recv-id 1
+     key-string more-test-keys
+     current
+    exit
+    key key-2
+     send-id 2
+     recv-id 2
+     key-string ao-test-key-2
+     rnext
+    exit
+   exit
+   !
+   tcp-ao profile green
+    key key-1
+     send-id 10
+     recv-id 10
+     key-string green-keys-1
+     current
+    exit
+   exit
+   !
+   router bgp 65001
+    neighbor 192.0.2.2 remote-as 65002
+    neighbor 192.0.2.2 tcp-ao blue
+   !
 
 .. clicmd:: neighbor PEER tcp-ao NAME
 
