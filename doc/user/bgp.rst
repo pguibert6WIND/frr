@@ -2154,6 +2154,48 @@ Configuring Peers
    modifying the `net.core.optmem_max` sysctl to a larger value to
    avoid out of memory errors from the linux kernel.
 
+.. clicmd:: tcp-ao profile NAME
+
+   Enter TCP-AO profile configuration mode. The profile name is later
+   referenced by BGP neighbors.
+
+.. clicmd:: no tcp-ao profile NAME
+
+   Remove a TCP-AO profile definition.
+
+.. clicmd:: key NAME
+
+   Enter a key definition under the TCP-AO profile.
+
+.. clicmd:: send-id ID
+
+   Set the TCP-AO SendID for this key.
+
+.. clicmd:: recv-id ID
+
+   Set the TCP-AO RecvID for this key.
+
+.. clicmd:: key-string KEY
+
+   Set the TCP-AO key material.
+
+.. clicmd:: current
+
+   Mark this key as current for outgoing segments.
+
+.. clicmd:: rnext
+
+   Request this key as the next key for the peer.
+
+.. clicmd:: neighbor PEER tcp-ao NAME
+
+   Reference a TCP-AO profile for the peer. TCP-AO and TCP-MD5 are mutually
+   exclusive on a single peer.
+
+.. clicmd:: no neighbor PEER tcp-ao
+
+   Remove the TCP-AO profile reference from the peer.
+
 .. clicmd:: neighbor PEER send-nexthop-characteristics
 
    Send the BGP Next Hop Dependent Characteristics Attribute (NHC) to the peer.

@@ -87,6 +87,8 @@ DEFINE_MTYPE_STATIC(BGPD, PEER_TX_SHUTDOWN_MSG, "Peer shutdown message (TX)");
 DEFINE_QOBJ_TYPE(bgp_master);
 DEFINE_QOBJ_TYPE(bgp);
 DEFINE_QOBJ_TYPE(peer);
+DEFINE_QOBJ_TYPE(bgp_tcp_ao_profile);
+DEFINE_QOBJ_TYPE(bgp_tcp_ao_key);
 DEFINE_HOOK(bgp_inst_delete, (struct bgp *bgp), (bgp));
 DEFINE_HOOK(bgp_instance_state, (struct bgp *bgp), (bgp));
 DEFINE_HOOK(bgp_routerid_update, (struct bgp *bgp, bool withdraw), (bgp, withdraw));
@@ -104,6 +106,10 @@ static uint32_t peer_clearing_hashfn(const struct peer *p1);
 DECLARE_HASH(bgp_clearing_hash, struct peer, clear_hash_link,
 	     peer_clearing_hash_cmp, peer_clearing_hashfn);
 
+static int bgp_tcp_ao_profile_hash_cmp(const struct bgp_tcp_ao_profile *a,
+				       const struct bgp_tcp_ao_profile *b);
+static uint32_t bgp_tcp_ao_profile_hashfn(const struct bgp_tcp_ao_profile *profile);
+
 /* BGP process wide configuration.  */
 static struct bgp_master bgp_master;
 
@@ -117,6 +123,17 @@ unsigned int multipath_num = MULTIPATH_NUM;
 
 /* Number of bgp instances configured for suppress fib config */
 unsigned int bgp_suppress_fib_count;
+
+int bgp_tcp_ao_profile_hash_cmp(const struct bgp_tcp_ao_profile *a,
+				const struct bgp_tcp_ao_profile *b)
+{
+	return strcmp(a->name, b->name);
+}
+
+uint32_t bgp_tcp_ao_profile_hashfn(const struct bgp_tcp_ao_profile *profile)
+{
+	return jhash(profile->name, strlen(profile->name), 0);
+}
 
 static void bgp_if_finish(struct bgp *bgp);
 static void peer_drop_dynamic_neighbor(struct peer *peer);
@@ -1505,6 +1522,8 @@ static void peer_free(struct peer *peer)
 	if (peer->as_pretty)
 		XFREE(MTYPE_BGP_NAME, peer->as_pretty);
 
+	XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer->tcp_ao_profile_name);
+
 	bgp_peer_connection_free(&peer->connection);
 
 	bgp_unlock(peer->bgp);
@@ -1763,6 +1782,49 @@ struct srv6_locator *bgp_srv6_locator_lookup(struct bgp *bgp_vrf, struct bgp *bg
 	return NULL;
 }
 
+struct bgp_tcp_ao_profile *bgp_tcp_ao_profile_lookup(const char *name)
+{
+	struct bgp_tcp_ao_profile lookup;
+
+	if (!name)
+		return NULL;
+
+	lookup.name = (char *)name;
+	return bgp_tcp_ao_profile_hash_find(&bm->tcp_ao_profile_hash, &lookup);
+}
+
+void bgp_tcp_ao_key_free(struct bgp_tcp_ao_key *key)
+{
+	if (!key)
+		return;
+
+	QOBJ_UNREG(key);
+	XFREE(MTYPE_PEER_TCP_AO_KEY, key->name);
+	XFREE(MTYPE_PEER_TCP_AO_KEY, key->key);
+	XFREE(MTYPE_PEER_TCP_AO_KEY, key);
+}
+
+static void bgp_tcp_ao_profile_clear_keys(struct bgp_tcp_ao_profile *profile)
+{
+	struct bgp_tcp_ao_key *key;
+
+	frr_each_safe (bgp_tcp_ao_key_list, &profile->keys, key) {
+		bgp_tcp_ao_key_list_del(&profile->keys, key);
+		bgp_tcp_ao_key_free(key);
+	}
+}
+
+void bgp_tcp_ao_profile_free(struct bgp_tcp_ao_profile *profile)
+{
+	if (!profile)
+		return;
+
+	bgp_tcp_ao_profile_clear_keys(profile);
+	QOBJ_UNREG(profile);
+	XFREE(MTYPE_BGP_TCP_AO_PROFILE, profile->name);
+	XFREE(MTYPE_BGP_TCP_AO_PROFILE, profile);
+}
+
 /* Allocate new peer object, implicitly locked.  */
 struct peer *peer_new(struct bgp *bgp, union sockunion *su, enum connection_direction dir)
 {
@@ -1789,6 +1851,7 @@ struct peer *peer_new(struct bgp *bgp, union sockunion *su, enum connection_dire
 	peer->local_role = ROLE_UNDEFINED;
 	peer->remote_role = ROLE_UNDEFINED;
 	peer->password = NULL;
+	peer->tcp_ao_profile_name = NULL;
 	peer->max_packet_size = BGP_STANDARD_MESSAGE_MAX_PACKET_SIZE;
 	peer->last_reset = PEER_DOWN_NONE;
 	peer->down_last_reset = PEER_DOWN_NONE;
@@ -1852,6 +1915,7 @@ struct peer *peer_new(struct bgp *bgp, union sockunion *su, enum connection_dire
 	return peer;
 }
 
+
 /*
  * This function is invoked when a duplicate peer structure associated with
  * a neighbor is being deleted. If this about-to-be-deleted structure is
@@ -1909,6 +1973,13 @@ void peer_xfer_config(struct peer *peer_dst, struct peer *peer_src)
 		XFREE(MTYPE_PEER_PASSWORD, peer_dst->password);
 		peer_dst->password =
 			XSTRDUP(MTYPE_PEER_PASSWORD, peer_src->password);
+	}
+	if (peer_src->tcp_ao_profile_name) {
+		XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer_dst->tcp_ao_profile_name);
+		peer_dst->tcp_ao_profile_name = XSTRDUP(MTYPE_BGP_TCP_AO_PROFILE,
+							peer_src->tcp_ao_profile_name);
+	} else {
+		XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer_dst->tcp_ao_profile_name);
 	}
 
 	FOREACH_AFI_SAFI (afi, safi) {
@@ -3236,6 +3307,13 @@ int peer_delete(struct peer *peer)
 			bgp_md5_unset(peer->connection);
 	}
 
+	if (CHECK_FLAG(peer->flags, PEER_FLAG_TCP_AO)) {
+		if (!accept_peer && !BGP_CONNECTION_SU_UNSPEC(peer->connection) &&
+		    !CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP) &&
+		    !CHECK_FLAG(peer->flags, PEER_FLAG_DYNAMIC_NEIGHBOR))
+			bgp_tcp_ao_unset(peer->connection);
+	}
+
 	bgp_timer_set(peer->connection); /* stops all timers for Deleted */
 
 	/* Delete from all peer list. */
@@ -3473,6 +3551,13 @@ static void peer_group2peer_config_copy(struct peer_group *group,
 
 	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
 		bgp_md5_set(peer->connection);
+
+	/* tcp-ao apply */
+	if (!CHECK_FLAG(peer->flags_override, PEER_FLAG_TCP_AO))
+		PEER_STR_ATTR_INHERIT(peer, group, tcp_ao_profile_name, MTYPE_BGP_TCP_AO_PROFILE);
+
+	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
+		bgp_tcp_ao_set(peer->connection);
 
 	/* update-source apply */
 	if (!CHECK_FLAG(peer->flags_override, PEER_FLAG_UPDATE_SOURCE)) {
@@ -5611,6 +5696,7 @@ static const struct peer_flag_action peer_flag_action_list[] = {
 	{ PEER_FLAG_TIMER_CONNECT, 0, peer_change_none },
 	{ PEER_FLAG_TIMER_DELAYOPEN, 0, peer_change_none },
 	{ PEER_FLAG_PASSWORD, 0, peer_change_none },
+	{ PEER_FLAG_TCP_AO, 0, peer_change_none },
 	{ PEER_FLAG_LOCAL_AS, 0, peer_change_reset },
 	{ PEER_FLAG_LOCAL_AS_NO_PREPEND, 0, peer_change_reset },
 	{ PEER_FLAG_LOCAL_AS_REPLACE_AS, 0, peer_change_reset },
@@ -7823,6 +7909,111 @@ int peer_local_as_unset(struct peer *peer)
 	return 0;
 }
 
+static int peer_tcp_ao_apply(struct peer *peer)
+{
+	if (BGP_CONNECTION_SU_UNSPEC(peer->connection))
+		return BGP_SUCCESS;
+
+	return (bgp_tcp_ao_set(peer->connection) >= 0) ? BGP_SUCCESS : BGP_ERR_TCPSIG_FAILED;
+}
+
+int peer_tcp_ao_profile_set(struct peer *peer, const char *name)
+{
+	struct peer *member;
+	struct listnode *node, *nnode;
+	int ret = BGP_SUCCESS;
+
+	if (CHECK_FLAG(peer->flags, PEER_FLAG_PASSWORD))
+		return BGP_ERR_INVALID_VALUE;
+
+	peer_flag_set(peer, PEER_FLAG_TCP_AO);
+	if (!peer->tcp_ao_profile_name || !strmatch(peer->tcp_ao_profile_name, name)) {
+		XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer->tcp_ao_profile_name);
+		peer->tcp_ao_profile_name = XSTRDUP(MTYPE_BGP_TCP_AO_PROFILE, name);
+	}
+
+	if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
+		peer_set_last_reset(peer, PEER_DOWN_PASSWORD_CHANGE);
+		if (!peer_notify_config_change(peer->connection))
+			bgp_session_reset(peer);
+		return peer_tcp_ao_apply(peer);
+	}
+
+	for (ALL_LIST_ELEMENTS(peer->group->peer, node, nnode, member)) {
+		if (CHECK_FLAG(member->flags_override, PEER_FLAG_TCP_AO))
+			continue;
+
+		if (CHECK_FLAG(member->flags, PEER_FLAG_PASSWORD))
+			continue;
+
+		SET_FLAG(member->flags, PEER_FLAG_TCP_AO);
+		if (!member->tcp_ao_profile_name || !strmatch(member->tcp_ao_profile_name, name)) {
+			XFREE(MTYPE_BGP_TCP_AO_PROFILE, member->tcp_ao_profile_name);
+			member->tcp_ao_profile_name = XSTRDUP(MTYPE_BGP_TCP_AO_PROFILE, name);
+		}
+
+		peer_set_last_reset(member, PEER_DOWN_PASSWORD_CHANGE);
+		if (!peer_notify_config_change(member->connection))
+			bgp_session_reset(member);
+
+		if (peer_tcp_ao_apply(member) != BGP_SUCCESS)
+			ret = BGP_ERR_TCPSIG_FAILED;
+	}
+
+	return ret;
+}
+
+int peer_tcp_ao_profile_unset(struct peer *peer)
+{
+	struct peer *member;
+	struct listnode *node, *nnode;
+
+	if (!CHECK_FLAG(peer->flags, PEER_FLAG_TCP_AO))
+		return 0;
+
+	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
+		bgp_tcp_ao_unset(peer->connection);
+
+	if (peer_group_active(peer)) {
+		peer_flag_inherit(peer, PEER_FLAG_TCP_AO);
+		PEER_STR_ATTR_INHERIT(peer, peer->group, tcp_ao_profile_name,
+				      MTYPE_BGP_TCP_AO_PROFILE);
+	} else {
+		peer_flag_unset(peer, PEER_FLAG_TCP_AO);
+		XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer->tcp_ao_profile_name);
+	}
+
+	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
+		bgp_tcp_ao_set(peer->connection);
+
+	if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
+		peer_set_last_reset(peer, PEER_DOWN_PASSWORD_CHANGE);
+		if (!peer_notify_config_change(peer->connection))
+			bgp_session_reset(peer);
+		return 0;
+	}
+
+	for (ALL_LIST_ELEMENTS(peer->group->peer, node, nnode, member)) {
+		if (CHECK_FLAG(member->flags_override, PEER_FLAG_TCP_AO))
+			continue;
+
+		if (!BGP_CONNECTION_SU_UNSPEC(member->connection))
+			bgp_tcp_ao_unset(member->connection);
+
+		UNSET_FLAG(member->flags, PEER_FLAG_TCP_AO);
+		XFREE(MTYPE_BGP_TCP_AO_PROFILE, member->tcp_ao_profile_name);
+
+		if (!BGP_CONNECTION_SU_UNSPEC(member->connection))
+			bgp_tcp_ao_set(member->connection);
+
+		peer_set_last_reset(member, PEER_DOWN_PASSWORD_CHANGE);
+		if (!peer_notify_config_change(member->connection))
+			bgp_session_reset(member);
+	}
+
+	return 0;
+}
+
 /* Set password for authenticating with the peer. */
 int peer_password_set(struct peer *peer, const char *password)
 {
@@ -7832,6 +8023,8 @@ int peer_password_set(struct peer *peer, const char *password)
 	int ret = BGP_SUCCESS;
 
 	if ((len < PEER_PASSWORD_MINLEN) || (len > PEER_PASSWORD_MAXLEN))
+		return BGP_ERR_INVALID_VALUE;
+	if (peer->tcp_ao_profile_name)
 		return BGP_ERR_INVALID_VALUE;
 
 	/* Set flag and configuration on peer. */
@@ -9565,6 +9758,8 @@ void bgp_master_init(struct event_loop *master, const int buffer_size,
 	zebra_announce_init(&bm->zebra_announce_head);
 	zebra_announce_init(&bm->zebra_announce_early_head);
 	zebra_l2_vni_init(&bm->zebra_l2_vni_head);
+	bgp_tcp_ao_profile_list_init(&bm->tcp_ao_profiles);
+	bgp_tcp_ao_profile_hash_init(&bm->tcp_ao_profile_hash);
 	bm->bgp = list_new();
 	bm->listen_sockets = list_new();
 	bm->port = BGP_PORT_DEFAULT;
@@ -9903,6 +10098,18 @@ void bgp_terminate(void)
 
 	if (bm->listen_sockets)
 		list_delete(&bm->listen_sockets);
+
+	if (bgp_tcp_ao_profile_list_count(&bm->tcp_ao_profiles) > 0) {
+		struct bgp_tcp_ao_profile *profile;
+
+		frr_each_safe (bgp_tcp_ao_profile_list, &bm->tcp_ao_profiles, profile) {
+			bgp_tcp_ao_profile_list_del(&bm->tcp_ao_profiles, profile);
+			bgp_tcp_ao_profile_hash_del(&bm->tcp_ao_profile_hash, profile);
+			bgp_tcp_ao_profile_free(profile);
+		}
+	}
+	bgp_tcp_ao_profile_list_fini(&bm->tcp_ao_profiles);
+	bgp_tcp_ao_profile_hash_fini(&bm->tcp_ao_profile_hash);
 
 	event_cancel(&bm->t_rmap_update);
 	event_cancel(&bm->t_bgp_sync_label_manager);

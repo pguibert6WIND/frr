@@ -38,6 +38,7 @@ struct bgp_bp_install_node {
 #include "sockunion.h"
 #include "routemap.h"
 #include "linklist.h"
+#include "typesafe.h"
 #include "defaults.h"
 #include "bgp_memory.h"
 #include "bitfield.h"
@@ -132,6 +133,39 @@ extern struct frr_pthread *bgp_pth_ka;
 /* FIFO list for peer connections */
 PREDECL_LIST(peer_connection_fifo);
 
+PREDECL_LIST(bgp_tcp_ao_profile_list);
+PREDECL_LIST(bgp_tcp_ao_key_list);
+PREDECL_HASH(bgp_tcp_ao_profile_hash);
+
+struct bgp_tcp_ao_key {
+	struct qobj_node qobj_node;
+	struct bgp_tcp_ao_key_list_item list_item;
+	char *name;
+	uint8_t send_id;
+	uint8_t recv_id;
+	bool set_current;
+	bool set_rnext;
+	char *key;
+};
+
+DECLARE_LIST(bgp_tcp_ao_key_list, struct bgp_tcp_ao_key, list_item);
+
+struct bgp_tcp_ao_profile {
+	struct qobj_node qobj_node;
+	struct bgp_tcp_ao_profile_list_item list_item;
+	struct bgp_tcp_ao_profile_hash_item hash_item;
+	char *name;
+	struct bgp_tcp_ao_key_list_head keys;
+};
+
+extern int bgp_tcp_ao_profile_hash_cmp(const struct bgp_tcp_ao_profile *a,
+				       const struct bgp_tcp_ao_profile *b);
+extern uint32_t bgp_tcp_ao_profile_hashfn(const struct bgp_tcp_ao_profile *profile);
+
+DECLARE_LIST(bgp_tcp_ao_profile_list, struct bgp_tcp_ao_profile, list_item);
+DECLARE_HASH(bgp_tcp_ao_profile_hash, struct bgp_tcp_ao_profile, hash_item,
+	     bgp_tcp_ao_profile_hash_cmp, bgp_tcp_ao_profile_hashfn);
+
 /* BGP master for system wide configurations and variables.  */
 struct bgp_master {
 	/* BGP instance list.  */
@@ -142,6 +176,10 @@ struct bgp_master {
 
 	/* Listening sockets */
 	struct list *listen_sockets;
+
+	/* TCP-AO profiles */
+	struct bgp_tcp_ao_profile_list_head tcp_ao_profiles;
+	struct bgp_tcp_ao_profile_hash_head tcp_ao_profile_hash;
 
 	/* BGP port number.  */
 	uint16_t port;
@@ -1910,6 +1948,7 @@ struct peer {
 #define PEER_FLAG_LS_LOCAL_LINK_ID  (1ULL << 49)
 #define PEER_FLAG_LS_REMOTE_LINK_ID (1ULL << 50)
 #define PEER_FLAG_EBGP_MULTIHOP	    (1ULL << 51) /* explicit ebgp-multihop config */
+#define PEER_FLAG_TCP_AO		      (1ULL << 52) /* tcp-ao keys */
 
 	/*
 	 *GR-Disabled mode means unset PEER_FLAG_GRACEFUL_RESTART
@@ -1998,6 +2037,9 @@ struct peer {
 
 	/* MD5 password */
 	char *password;
+
+	/* TCP-AO profile name */
+	char *tcp_ao_profile_name;
 
 	/* default-originate route-map.  */
 	struct {
@@ -2347,6 +2389,8 @@ struct peer {
 	QOBJ_FIELDS;
 };
 DECLARE_QOBJ_TYPE(peer);
+DECLARE_QOBJ_TYPE(bgp_tcp_ao_profile);
+DECLARE_QOBJ_TYPE(bgp_tcp_ao_key);
 
 /* Inherit peer attribute from peer-group. */
 #define PEER_ATTR_INHERIT(peer, group, attr)                                   \
@@ -2381,6 +2425,11 @@ DECLARE_QOBJ_TYPE(peer);
 
 #define PEER_PASSWORD_MINLEN	(1)
 #define PEER_PASSWORD_MAXLEN	(80)
+
+#define PEER_TCP_AO_KEY_MINLEN	   (1)
+#define PEER_TCP_AO_KEY_MAXLEN	   (80)
+#define PEER_TCP_AO_ALG_DEFAULT	   "hmac(sha1)"
+#define PEER_TCP_AO_MACLEN_DEFAULT 12
 
 /* This structure's member directly points incoming packet data
    stream. */
@@ -2947,6 +2996,11 @@ extern int peer_advertise_map_set(struct peer *peer, afi_t afi, safi_t safi,
 
 extern int peer_password_set(struct peer *peer, const char *password);
 extern int peer_password_unset(struct peer *peer);
+extern int peer_tcp_ao_profile_set(struct peer *peer, const char *name);
+extern int peer_tcp_ao_profile_unset(struct peer *peer);
+extern struct bgp_tcp_ao_profile *bgp_tcp_ao_profile_lookup(const char *name);
+extern void bgp_tcp_ao_profile_free(struct bgp_tcp_ao_profile *profile);
+extern void bgp_tcp_ao_key_free(struct bgp_tcp_ao_key *key);
 
 extern int peer_unsuppress_map_unset(struct peer *peer, afi_t afi, safi_t safi);
 

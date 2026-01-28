@@ -1638,6 +1638,20 @@ static struct cmd_node keychain_key_node = {
 	.prompt = "%s(config-keychain-key)# ",
 };
 
+static struct cmd_node bgp_tcp_ao_node = {
+	.name = "bgp tcp-ao",
+	.node = BGP_TCP_AO_NODE,
+	.parent_node = CONFIG_NODE,
+	.prompt = "%s(config-tcp-ao)# ",
+};
+
+static struct cmd_node bgp_tcp_ao_key_node = {
+	.name = "bgp tcp-ao key",
+	.node = BGP_TCP_AO_KEY_NODE,
+	.parent_node = BGP_TCP_AO_NODE,
+	.prompt = "%s(config-tcp-ao-key)# ",
+};
+
 struct cmd_node link_params_node = {
 	.name = "link-params",
 	.node = LINK_PARAMS_NODE,
@@ -2002,6 +2016,42 @@ DEFUNSH(VTYSH_BGPD,
 {
 	if (vty->node == BGP_SRV6_NODE)
 		vty->node = BGP_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD,
+        bgp_tcp_ao,
+        bgp_tcp_ao_cmd,
+        "tcp-ao profile WORD",
+        "TCP Authentication Option (TCP-AO)\n"
+        "TCP-AO profile\n"
+        "TCP-AO profile name\n")
+{
+	vty->node = BGP_TCP_AO_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD,
+        bgp_tcp_ao_key,
+        bgp_tcp_ao_key_cmd,
+        "key WORD",
+        "Configure a TCP-AO key\n"
+        "Key name\n")
+{
+	vty->node = BGP_TCP_AO_KEY_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUNSH(VTYSH_BGPD,
+        exit_bgp_tcp_ao,
+        exit_bgp_tcp_ao_cmd,
+        "exit",
+        "exit TCP-AO configuration\n")
+{
+	if (vty->node == BGP_TCP_AO_NODE)
+		vty->node = CONFIG_NODE;
+	else if (vty->node == BGP_TCP_AO_KEY_NODE)
+		vty->node = BGP_TCP_AO_NODE;
 	return CMD_SUCCESS;
 }
 
@@ -5353,6 +5403,8 @@ void vtysh_init_vty(void)
 	install_node(&bgp_evpn_vni_node);
 	install_node(&rpki_node);
 	install_node(&bmp_node);
+	install_node(&bgp_tcp_ao_node);
+	install_node(&bgp_tcp_ao_key_node);
 	install_node(&bgp_srv6_node);
 	install_node(&bgp_ls_node);
 	install_node(&rip_node);
@@ -5766,6 +5818,14 @@ void vtysh_init_vty(void)
 	install_element(KEYCHAIN_KEY_NODE, &vtysh_exit_keys_cmd);
 	install_element(KEYCHAIN_KEY_NODE, &vtysh_quit_keys_cmd);
 	install_element(KEYCHAIN_KEY_NODE, &vtysh_end_all_cmd);
+
+	/* tcp-ao profiles */
+	install_element(CONFIG_NODE, &bgp_tcp_ao_cmd);
+	install_element(BGP_TCP_AO_NODE, &bgp_tcp_ao_key_cmd);
+	install_element(BGP_TCP_AO_NODE, &exit_bgp_tcp_ao_cmd);
+	install_element(BGP_TCP_AO_NODE, &vtysh_end_all_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &exit_bgp_tcp_ao_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &vtysh_end_all_cmd);
 
 	/* nexthop-group */
 	install_element(CONFIG_NODE, &vtysh_nexthop_group_cmd);

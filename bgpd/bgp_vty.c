@@ -2807,6 +2807,30 @@ void bgp_config_write_rpkt_quanta(struct vty *vty, struct bgp *bgp)
 		vty_out(vty, " read-quanta %d\n", quanta);
 }
 
+static void bgp_tcp_ao_config_write(struct vty *vty)
+{
+	struct bgp_tcp_ao_profile *profile;
+	struct bgp_tcp_ao_key *key;
+
+	frr_each (bgp_tcp_ao_profile_list, &bm->tcp_ao_profiles, profile) {
+		vty_out(vty, "tcp-ao profile %s\n", profile->name);
+		frr_each (bgp_tcp_ao_key_list, &profile->keys, key) {
+			vty_out(vty, " key %s\n", key->name);
+			vty_out(vty, "  send-id %u\n", key->send_id);
+			vty_out(vty, "  recv-id %u\n", key->recv_id);
+			if (key->key)
+				vty_out(vty, "  key-string %s\n", key->key);
+			if (key->set_current)
+				vty_out(vty, "  current\n");
+			if (key->set_rnext)
+				vty_out(vty, "  rnext\n");
+			vty_out(vty, " exit\n");
+		}
+		vty_out(vty, "exit\n");
+		vty_out(vty, "!\n");
+	}
+}
+
 /* Packet quanta configuration
  *
  * XXX: The value set here controls the size of a stack buffer in the IO
@@ -6166,6 +6190,330 @@ DEFUN (no_neighbor_password,
 		return CMD_WARNING_CONFIG_FAILED;
 
 	ret = peer_password_unset(peer);
+	return bgp_vty_return(vty, ret);
+}
+
+static struct bgp_tcp_ao_profile *bgp_tcp_ao_profile_create(const char *name)
+{
+	struct bgp_tcp_ao_profile *profile;
+
+	profile = XCALLOC(MTYPE_BGP_TCP_AO_PROFILE, sizeof(*profile));
+	profile->name = XSTRDUP(MTYPE_BGP_TCP_AO_PROFILE, name);
+	bgp_tcp_ao_key_list_init(&profile->keys);
+	QOBJ_REG(profile, bgp_tcp_ao_profile);
+	bgp_tcp_ao_profile_list_add_tail(&bm->tcp_ao_profiles, profile);
+	bgp_tcp_ao_profile_hash_add(&bm->tcp_ao_profile_hash, profile);
+
+	return profile;
+}
+
+static struct bgp_tcp_ao_key *bgp_tcp_ao_key_create(struct bgp_tcp_ao_profile *profile,
+						    const char *name)
+{
+	struct bgp_tcp_ao_key *key;
+
+	key = XCALLOC(MTYPE_PEER_TCP_AO_KEY, sizeof(*key));
+	key->name = XSTRDUP(MTYPE_PEER_TCP_AO_KEY, name);
+	QOBJ_REG(key, bgp_tcp_ao_key);
+	bgp_tcp_ao_key_list_add_tail(&profile->keys, key);
+
+	return key;
+}
+
+static struct bgp_tcp_ao_key *bgp_tcp_ao_key_lookup(struct bgp_tcp_ao_profile *profile,
+						    const char *name)
+{
+	struct bgp_tcp_ao_key *key;
+
+	frr_each (bgp_tcp_ao_key_list, &profile->keys, key)
+		if (strmatch(key->name, name))
+			return key;
+
+	return NULL;
+}
+
+static void bgp_tcp_ao_profile_reapply(struct bgp_tcp_ao_profile *profile)
+{
+	struct bgp *bgp;
+	struct peer *peer;
+	struct listnode *node;
+	struct listnode *pnode;
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, pnode, peer)) {
+			if (!peer->tcp_ao_profile_name)
+				continue;
+			if (!strmatch(peer->tcp_ao_profile_name, profile->name))
+				continue;
+			if (BGP_CONNECTION_SU_UNSPEC(peer->connection))
+				continue;
+			bgp_tcp_ao_unset(peer->connection);
+			bgp_tcp_ao_set(peer->connection);
+		}
+	}
+}
+
+static void bgp_tcp_ao_profile_detach_peers(struct bgp_tcp_ao_profile *profile)
+{
+	struct bgp *bgp;
+	struct peer *peer;
+	struct listnode *node;
+	struct listnode *pnode;
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, pnode, peer)) {
+			if (!peer->tcp_ao_profile_name)
+				continue;
+			if (!strmatch(peer->tcp_ao_profile_name, profile->name))
+				continue;
+			peer_tcp_ao_profile_unset(peer);
+		}
+	}
+}
+
+DEFUN_NOSH (bgp_tcp_ao_profile,
+       bgp_tcp_ao_profile_cmd,
+       "tcp-ao profile WORD",
+       "TCP Authentication Option (TCP-AO)\n"
+       "TCP-AO profile\n"
+       "TCP-AO profile name\n")
+{
+	int idx_name = 2;
+	struct bgp_tcp_ao_profile *profile;
+
+	profile = bgp_tcp_ao_profile_lookup(argv[idx_name]->arg);
+	if (!profile)
+		profile = bgp_tcp_ao_profile_create(argv[idx_name]->arg);
+
+	VTY_PUSH_CONTEXT(BGP_TCP_AO_NODE, profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_bgp_tcp_ao_profile,
+       no_bgp_tcp_ao_profile_cmd,
+       "no tcp-ao profile WORD",
+       NO_STR
+       "TCP Authentication Option (TCP-AO)\n"
+       "TCP-AO profile\n"
+       "TCP-AO profile name\n")
+{
+	int idx_name = 3;
+	struct bgp_tcp_ao_profile *profile;
+
+	profile = bgp_tcp_ao_profile_lookup(argv[idx_name]->arg);
+	if (!profile)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_tcp_ao_profile_detach_peers(profile);
+	bgp_tcp_ao_profile_list_del(&bm->tcp_ao_profiles, profile);
+	bgp_tcp_ao_profile_hash_del(&bm->tcp_ao_profile_hash, profile);
+	bgp_tcp_ao_profile_free(profile);
+
+	return CMD_SUCCESS;
+}
+
+DEFUN_NOSH (bgp_tcp_ao_key,
+       bgp_tcp_ao_key_cmd,
+       "key WORD",
+       "Configure a TCP-AO key\n"
+       "Key name\n")
+{
+	int idx_name = 1;
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	struct bgp_tcp_ao_key *key;
+
+	key = bgp_tcp_ao_key_lookup(profile, argv[idx_name]->arg);
+	if (!key)
+		key = bgp_tcp_ao_key_create(profile, argv[idx_name]->arg);
+
+	VTY_PUSH_CONTEXT_SUB(BGP_TCP_AO_KEY_NODE, key);
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_bgp_tcp_ao_key,
+       no_bgp_tcp_ao_key_cmd,
+       "no key WORD",
+       NO_STR
+       "Delete a TCP-AO key\n"
+       "Key name\n")
+{
+	int idx_name = 2;
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	struct bgp_tcp_ao_key *key;
+
+	key = bgp_tcp_ao_key_lookup(profile, argv[idx_name]->arg);
+	if (!key)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	bgp_tcp_ao_key_list_del(&profile->keys, key);
+	bgp_tcp_ao_key_free(key);
+	bgp_tcp_ao_profile_reapply(profile);
+
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_tcp_ao_key_string,
+       bgp_tcp_ao_key_string_cmd,
+       "key-string LINE",
+       "Set key string\n"
+       "The key\n")
+{
+	int idx_line = 1;
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+	int len = strlen(argv[idx_line]->arg);
+
+	if ((len < PEER_TCP_AO_KEY_MINLEN) || (len > PEER_TCP_AO_KEY_MAXLEN))
+		return CMD_WARNING_CONFIG_FAILED;
+
+	XFREE(MTYPE_PEER_TCP_AO_KEY, key->key);
+	key->key = XSTRDUP(MTYPE_PEER_TCP_AO_KEY, argv[idx_line]->arg);
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_bgp_tcp_ao_key_string,
+       no_bgp_tcp_ao_key_string_cmd,
+       "no key-string [LINE]",
+       NO_STR
+       "Unset key string\n"
+       "The key\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	XFREE(MTYPE_PEER_TCP_AO_KEY, key->key);
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_tcp_ao_send_id,
+       bgp_tcp_ao_send_id_cmd,
+       "send-id (0-255)",
+       "Send key ID\n"
+       "Key ID\n")
+{
+	int idx_id = 1;
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->send_id = strtoul(argv[idx_id]->arg, NULL, 10);
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_tcp_ao_recv_id,
+       bgp_tcp_ao_recv_id_cmd,
+       "recv-id (0-255)",
+       "Receive key ID\n"
+       "Key ID\n")
+{
+	int idx_id = 1;
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->recv_id = strtoul(argv[idx_id]->arg, NULL, 10);
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_tcp_ao_current,
+       bgp_tcp_ao_current_cmd,
+       "current",
+       "Set as current key\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->set_current = true;
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_bgp_tcp_ao_current,
+       no_bgp_tcp_ao_current_cmd,
+       "no current",
+       NO_STR
+       "Unset current key\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->set_current = false;
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (bgp_tcp_ao_rnext,
+       bgp_tcp_ao_rnext_cmd,
+       "rnext",
+       "Request as RNext key\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->set_rnext = true;
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (no_bgp_tcp_ao_rnext,
+       no_bgp_tcp_ao_rnext_cmd,
+       "no rnext",
+       NO_STR
+       "Unset RNext key request\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp_tcp_ao_profile, profile);
+	VTY_DECLVAR_CONTEXT_SUB(bgp_tcp_ao_key, key);
+
+	key->set_rnext = false;
+	bgp_tcp_ao_profile_reapply(profile);
+	return CMD_SUCCESS;
+}
+
+DEFUN (neighbor_tcp_ao,
+       neighbor_tcp_ao_cmd,
+       "neighbor <A.B.C.D|X:X::X:X|WORD> tcp-ao WORD",
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       "TCP Authentication Option (TCP-AO)\n"
+       "TCP-AO profile name\n")
+{
+	int idx_peer = 1;
+	int idx_name = 3;
+	struct peer *peer;
+	int ret;
+	struct bgp_tcp_ao_profile *profile;
+
+	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
+	if (!peer)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	profile = bgp_tcp_ao_profile_lookup(argv[idx_name]->arg);
+	if (!profile)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	ret = peer_tcp_ao_profile_set(peer, argv[idx_name]->arg);
+	return bgp_vty_return(vty, ret);
+}
+
+DEFUN (no_neighbor_tcp_ao,
+       no_neighbor_tcp_ao_cmd,
+       "no neighbor <A.B.C.D|X:X::X:X|WORD> tcp-ao",
+       NO_STR
+       NEIGHBOR_STR
+       NEIGHBOR_ADDR_STR2
+       "TCP Authentication Option (TCP-AO)\n")
+{
+	int idx_peer = 2;
+	struct peer *peer;
+	int ret;
+
+	peer = peer_and_group_lookup_vty(vty, argv[idx_peer]->arg);
+	if (!peer)
+		return CMD_WARNING_CONFIG_FAILED;
+
+	ret = peer_tcp_ao_profile_unset(peer);
 	return bgp_vty_return(vty, ret);
 }
 
@@ -21474,6 +21822,9 @@ static void bgp_config_write_peer_global(struct vty *vty, struct bgp *bgp,
 		vty_out(vty, " neighbor %s password %s\n", addr,
 			peer->password);
 
+	if (peergroup_flag_check(peer, PEER_FLAG_TCP_AO) && peer->tcp_ao_profile_name)
+		vty_out(vty, " neighbor %s tcp-ao %s\n", addr, peer->tcp_ao_profile_name);
+
 	/* neighbor solo */
 	if (peergroup_flag_check(peer, PEER_FLAG_LONESOUL))
 		vty_out(vty, " neighbor %s solo\n", addr);
@@ -22329,6 +22680,8 @@ int bgp_config_write(struct vty *vty)
 	if (bm->outq_limit != BM_DEFAULT_Q_LIMIT)
 		vty_out(vty, "bgp output-queue-limit %u\n", bm->outq_limit);
 
+	bgp_tcp_ao_config_write(vty);
+
 	vty_out(vty, "!\n");
 
 	/* BGP configuration. */
@@ -23005,6 +23358,20 @@ static struct cmd_node bgp_ls_node = {
 	.no_xpath = true,
 };
 
+static struct cmd_node bgp_tcp_ao_node = {
+	.name = "bgp tcp-ao",
+	.node = BGP_TCP_AO_NODE,
+	.parent_node = CONFIG_NODE,
+	.prompt = "%s(config-tcp-ao)# ",
+};
+
+static struct cmd_node bgp_tcp_ao_key_node = {
+	.name = "bgp tcp-ao key",
+	.node = BGP_TCP_AO_KEY_NODE,
+	.parent_node = BGP_TCP_AO_NODE,
+	.prompt = "%s(config-tcp-ao-key)# ",
+};
+
 static void community_list_vty(void);
 
 static void bgp_ac_peergroup(vector comps, struct cmd_token *token)
@@ -23457,6 +23824,8 @@ void bgp_vty_init(void)
 	install_node(&bgp_ipv6_unreachability_node);
 	install_node(&bgp_srv6_node);
 	install_node(&bgp_ls_node);
+	install_node(&bgp_tcp_ao_node);
+	install_node(&bgp_tcp_ao_key_node);
 
 	/* Install default VTY commands to new nodes.  */
 	install_default(BGP_NODE);
@@ -23476,6 +23845,23 @@ void bgp_vty_init(void)
 	install_default(BGP_EVPN_VNI_NODE);
 	install_default(BGP_SRV6_NODE);
 	install_default(BGP_LS_NODE);
+	install_default(BGP_TCP_AO_NODE);
+	install_default(BGP_TCP_AO_KEY_NODE);
+
+	/* "tcp-ao" profile commands. */
+	install_element(CONFIG_NODE, &bgp_tcp_ao_profile_cmd);
+	install_element(CONFIG_NODE, &no_bgp_tcp_ao_profile_cmd);
+	install_element(BGP_TCP_AO_NODE, &bgp_tcp_ao_profile_cmd);
+	install_element(BGP_TCP_AO_NODE, &bgp_tcp_ao_key_cmd);
+	install_element(BGP_TCP_AO_NODE, &no_bgp_tcp_ao_key_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &bgp_tcp_ao_key_string_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &no_bgp_tcp_ao_key_string_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &bgp_tcp_ao_send_id_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &bgp_tcp_ao_recv_id_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &bgp_tcp_ao_current_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &no_bgp_tcp_ao_current_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &bgp_tcp_ao_rnext_cmd);
+	install_element(BGP_TCP_AO_KEY_NODE, &no_bgp_tcp_ao_rnext_cmd);
 
 	/* "global bgp inq-limit command */
 	install_element(CONFIG_NODE, &bgp_inq_limit_cmd);
@@ -23866,6 +24252,10 @@ void bgp_vty_init(void)
 	/* "neighbor password" commands. */
 	install_element(BGP_NODE, &neighbor_password_cmd);
 	install_element(BGP_NODE, &no_neighbor_password_cmd);
+
+	/* "neighbor tcp-ao" commands. */
+	install_element(BGP_NODE, &neighbor_tcp_ao_cmd);
+	install_element(BGP_NODE, &no_neighbor_tcp_ao_cmd);
 
 	/* "neighbor activate" commands. */
 	install_element(BGP_NODE, &neighbor_activate_hidden_cmd);
