@@ -121,6 +121,8 @@ enum node_type {
 	BGP_EVPN_NODE,		 /* BGP EVPN node. */
 	BGP_SRV6_NODE,		 /* BGP SRv6 node. */
 	BGP_LS_NODE,		 /* BGP Link-State node. */
+	BGP_TCP_AO_NODE,	 /* BGP TCP-AO profile node. */
+	BGP_TCP_AO_KEY_NODE,	 /* BGP TCP-AO key node. */
 	OSPF_NODE,		 /* OSPF protocol mode */
 	OSPF6_NODE,		 /* OSPF protocol for IPv6 mode */
 	LDP_NODE,		 /* LDP protocol mode */
