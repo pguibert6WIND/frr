@@ -31,6 +31,15 @@ extern int bgp_md5_set(struct peer_connection *connection);
 extern int bgp_md5_unset(struct peer_connection *connection);
 extern int bgp_tcp_ao_set(struct peer_connection *connection);
 extern int bgp_tcp_ao_unset(struct peer_connection *connection);
+extern int bgp_tcp_ao_key_del(struct peer_connection *connection,
+			      const struct bgp_tcp_ao_key *key);
+extern int bgp_tcp_ao_key_add(struct peer_connection *connection,
+			      const struct bgp_tcp_ao_key *key);
+extern int bgp_tcp_ao_set_current_rnext(struct peer_connection *connection,
+					struct bgp_tcp_ao_key_list_head *keys);
+extern int bgp_tcp_ao_apply_keys_connection(struct peer_connection *connection,
+					    struct bgp_tcp_ao_key_list_head *keys,
+					    int set_current_rnext);
 extern int bgp_set_socket_ttl(struct peer_connection *connection);
 extern int bgp_tcp_mss_set(struct peer *peer);
 extern int bgp_update_address(struct interface *ifp, const union sockunion *dst,

@@ -119,6 +119,9 @@ static int bgp_tcp_ao_set_socket(int socket, union sockunion *su, uint8_t prefix
 				 set_current, set_rnext);
 	en = errno;
 
+	if (ret == 1)
+		return 0;
+
 	if (ret < 0) {
 		switch (ret) {
 		case -2:
@@ -267,8 +270,26 @@ int bgp_md5_set(struct peer_connection *connection)
 	return bgp_md5_set_password(connection, connection->peer->password);
 }
 
-static void bgp_tcp_ao_select_keys(struct bgp_tcp_ao_key_list_head *keys,
-				   struct bgp_tcp_ao_key **current, struct bgp_tcp_ao_key **rnext)
+static bool bgp_tcp_ao_key_ready(const struct bgp_tcp_ao_key *key)
+{
+	return key->key && key->key[0] != '\0';
+}
+
+static struct bgp_tcp_ao_key *bgp_tcp_ao_key_first_ready(struct bgp_tcp_ao_key_list_head *keys)
+{
+	struct bgp_tcp_ao_key *entry;
+
+	frr_each (bgp_tcp_ao_key_list, keys, entry) {
+		if (bgp_tcp_ao_key_ready(entry))
+			return entry;
+	}
+
+	return NULL;
+}
+
+static void bgp_tcp_ao_select_flags(struct bgp_tcp_ao_key_list_head *keys,
+				    struct bgp_tcp_ao_key **current,
+				    struct bgp_tcp_ao_key **rnext)
 {
 	struct bgp_tcp_ao_key *entry;
 
@@ -276,16 +297,13 @@ static void bgp_tcp_ao_select_keys(struct bgp_tcp_ao_key_list_head *keys,
 	*rnext = NULL;
 
 	frr_each (bgp_tcp_ao_key_list, keys, entry) {
+		if (!bgp_tcp_ao_key_ready(entry))
+			continue;
 		if (!*current && entry->set_current)
 			*current = entry;
 		if (!*rnext && entry->set_rnext)
 			*rnext = entry;
 	}
-
-	if (!*current)
-		*current = bgp_tcp_ao_key_list_first(keys);
-	if (!*rnext)
-		*rnext = bgp_tcp_ao_key_list_first(keys);
 }
 
 static int bgp_tcp_ao_apply_keys_on_socket(int socket, union sockunion *su,
@@ -293,20 +311,28 @@ static int bgp_tcp_ao_apply_keys_on_socket(int socket, union sockunion *su,
 					   int set_current_rnext)
 {
 	struct bgp_tcp_ao_key *entry;
-	struct bgp_tcp_ao_key *current = NULL;
-	struct bgp_tcp_ao_key *rnext = NULL;
 	int ret = 0;
 	uint8_t prefixlen = su->sa.sa_family == AF_INET ? IPV4_MAX_BITLEN : IPV6_MAX_BITLEN;
+	bool have_ready = false;
 
 	if (bgp_tcp_ao_key_list_count(keys) == 0)
 		return 0;
 
-	if (set_current_rnext)
-		bgp_tcp_ao_select_keys(keys, &current, &rnext);
+	frr_each (bgp_tcp_ao_key_list, keys, entry) {
+		if (bgp_tcp_ao_key_ready(entry)) {
+			have_ready = true;
+			break;
+		}
+	}
+
+	if (!have_ready)
+		return 0;
 
 	frr_each (bgp_tcp_ao_key_list, keys, entry) {
-		int set_current = set_current_rnext && (entry == current);
-		int set_rnext = set_current_rnext && (entry == rnext);
+		if (!bgp_tcp_ao_key_ready(entry))
+			continue;
+		int set_current = 0;
+		int set_rnext = 0;
 
 		ret = bgp_tcp_ao_set_socket(socket, su, prefixlen, entry, set_current, set_rnext);
 		if (ret < 0)
@@ -327,6 +353,8 @@ static int bgp_tcp_ao_clear_keys_on_socket(int socket, union sockunion *su,
 		return 0;
 
 	frr_each (bgp_tcp_ao_key_list, keys, entry) {
+		if (!bgp_tcp_ao_key_ready(entry))
+			continue;
 		ret = bgp_tcp_ao_del_socket(socket, su, prefixlen, entry);
 		if (ret < 0)
 			return ret;
@@ -404,6 +432,183 @@ int bgp_tcp_ao_unset(struct peer_connection *connection)
 								      &profile->keys);
 				break;
 			}
+	}
+
+	return ret;
+}
+
+int bgp_tcp_ao_key_del(struct peer_connection *connection,
+		       const struct bgp_tcp_ao_key *key)
+{
+	struct listnode *node;
+	int ret = 0;
+	struct bgp_listener *listener;
+	struct peer *peer = connection->peer;
+	uint8_t prefixlen;
+
+	if (!peer->tcp_ao_profile_name)
+		return 0;
+
+	if (!key)
+		return 0;
+
+	if (BGP_CONNECTION_SU_UNSPEC(connection))
+		return 0;
+
+	prefixlen = connection->su.sa.sa_family == AF_INET ? IPV4_MAX_BITLEN
+							   : IPV6_MAX_BITLEN;
+
+	/* Unset key from the listen socket(s). */
+	frr_with_privs (&bgpd_privs) {
+		for (ALL_LIST_ELEMENTS_RO(bm->listen_sockets, node, listener))
+			if (listener->su.sa.sa_family == connection->su.sa.sa_family) {
+				if (!listener->bgp) {
+					if (peer->bgp->vrf_id != VRF_DEFAULT)
+						continue;
+				} else if (listener->bgp != peer->bgp)
+					continue;
+
+				ret = bgp_tcp_ao_del_socket(listener->fd, &connection->su,
+							    prefixlen, key);
+				break;
+			}
+
+		if (connection->fd >= 0) {
+			int fd_ret = bgp_tcp_ao_del_socket(connection->fd, &connection->su,
+							   prefixlen, key);
+			if (fd_ret < 0)
+				ret = fd_ret;
+		}
+	}
+
+	return ret;
+}
+
+int bgp_tcp_ao_key_add(struct peer_connection *connection,
+		       const struct bgp_tcp_ao_key *key)
+{
+	struct listnode *node;
+	int ret = 0;
+	struct bgp_listener *listener;
+	struct peer *peer = connection->peer;
+	uint8_t prefixlen;
+
+	if (!peer->tcp_ao_profile_name)
+		return 0;
+
+	if (!key || !key->key || key->key[0] == '\0')
+		return 0;
+
+	if (BGP_CONNECTION_SU_UNSPEC(connection))
+		return 0;
+
+	prefixlen = connection->su.sa.sa_family == AF_INET ? IPV4_MAX_BITLEN
+							   : IPV6_MAX_BITLEN;
+
+	/* Add/update key on the listen socket(s) without flags. */
+	frr_with_privs (&bgpd_privs) {
+		for (ALL_LIST_ELEMENTS_RO(bm->listen_sockets, node, listener))
+			if (listener->su.sa.sa_family == connection->su.sa.sa_family) {
+				if (!listener->bgp) {
+					if (peer->bgp->vrf_id != VRF_DEFAULT)
+						continue;
+				} else if (listener->bgp != peer->bgp)
+					continue;
+
+				bgp_tcp_ao_del_socket(listener->fd, &connection->su,
+						      prefixlen, key);
+				ret = bgp_tcp_ao_set_socket(listener->fd, &connection->su,
+							    prefixlen, key, 0, 0);
+				break;
+			}
+
+		if (connection->fd >= 0) {
+			int delret = bgp_tcp_ao_del_socket(connection->fd, &connection->su,
+							   prefixlen, key);
+			if (delret < 0 && errno == EBUSY)
+				return 0;
+
+			ret = bgp_tcp_ao_set_socket(connection->fd, &connection->su,
+						    prefixlen, key,
+						    0, 0);
+		}
+	}
+
+	return ret;
+}
+
+int bgp_tcp_ao_set_current_rnext(struct peer_connection *connection,
+				 struct bgp_tcp_ao_key_list_head *keys)
+{
+	int ret = 0;
+	struct peer *peer;
+	struct bgp_tcp_ao_key *current = NULL;
+	struct bgp_tcp_ao_key *rnext = NULL;
+	bool set_current = false;
+	bool set_rnext = false;
+
+	if (!connection || !keys)
+		return 0;
+
+	peer = connection->peer;
+	if (!peer || !peer->tcp_ao_profile_name)
+		return 0;
+
+	if (BGP_CONNECTION_SU_UNSPEC(connection))
+		return 0;
+
+	if (connection->fd < 0)
+		return 0;
+
+	if (bgp_tcp_ao_key_list_count(keys) == 0)
+		return 0;
+
+	bgp_tcp_ao_select_flags(keys, &current, &rnext);
+	if (!current)
+		current = bgp_tcp_ao_key_first_ready(keys);
+	if (!current)
+		return 0;
+
+	set_current = (current != NULL);
+	if (rnext) {
+		set_rnext = true;
+	} else {
+		/*
+		 * TCP_AO_INFO has no "clear rnext" operation. Use current to
+		 * ensure we don't keep a stale rnext key in the kernel.
+		 */
+		rnext = current;
+		set_rnext = true;
+	}
+
+	frr_with_privs (&bgpd_privs) {
+		ret = sockopt_tcp_ao_info(connection->fd,
+					  current ? current->send_id : 0,
+					  set_current,
+					  rnext ? rnext->recv_id : 0,
+					  set_rnext);
+	}
+
+	return ret;
+}
+int bgp_tcp_ao_apply_keys_connection(struct peer_connection *connection,
+				     struct bgp_tcp_ao_key_list_head *keys,
+				     int set_current_rnext)
+{
+	int ret = 0;
+
+	if (!keys || bgp_tcp_ao_key_list_count(keys) == 0)
+		return 0;
+
+	if (!connection || BGP_CONNECTION_SU_UNSPEC(connection))
+		return 0;
+
+	if (connection->fd < 0)
+		return 0;
+
+	frr_with_privs (&bgpd_privs) {
+		ret = bgp_tcp_ao_apply_keys_on_socket(connection->fd, &connection->su,
+						      keys, set_current_rnext);
 	}
 
 	return ret;
@@ -740,9 +945,12 @@ static void bgp_accept(struct event *event)
 				struct bgp_tcp_ao_profile *profile = bgp_tcp_ao_profile_lookup(
 					dynamic_peer->tcp_ao_profile_name);
 
-				if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0)
+				if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0) {
 					bgp_tcp_ao_apply_keys_on_socket(incoming->fd, &su,
-									&profile->keys, 1);
+									&profile->keys, 0);
+					bgp_tcp_ao_set_current_rnext(peer->connection,
+								     &profile->keys);
+				}
 			}
 
 			if (bgp_set_socket_ttl(incoming) < 0) {
@@ -921,8 +1129,12 @@ static void bgp_accept(struct event *event)
 		struct bgp_tcp_ao_profile *profile =
 			bgp_tcp_ao_profile_lookup(doppelganger->tcp_ao_profile_name);
 
-		if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0)
-			bgp_tcp_ao_apply_keys_on_socket(incoming->fd, &su, &profile->keys, 1);
+		if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0) {
+				bgp_tcp_ao_apply_keys_on_socket(incoming->fd, &su,
+								&profile->keys, 0);
+				bgp_tcp_ao_set_current_rnext(peer->connection,
+							     &profile->keys);
+		}
 	}
 
 	if (bgp_set_socket_ttl(incoming) < 0)
@@ -1169,7 +1381,8 @@ enum connect_result bgp_connect(struct peer_connection *connection)
 				bgp_tcp_ao_set(connection);
 
 			bgp_tcp_ao_apply_keys_on_socket(connection->fd, &connection->su,
-							&profile->keys, 1);
+							&profile->keys, 0);
+			bgp_tcp_ao_set_current_rnext(connection, &profile->keys);
 		}
 	}
 
