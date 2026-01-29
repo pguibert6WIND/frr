@@ -155,6 +155,21 @@ extern int sockopt_tcp_ao_del(int sock, union sockunion *su, uint8_t prefixlen,
 			      uint8_t send_id, uint8_t recv_id);
 extern int sockopt_tcp_ao_info(int sock, uint8_t current_key, int set_current,
 			       uint8_t rnext_key, int set_rnext);
+extern int sockopt_tcp_ao_info_get(int sock, uint8_t *current_key,
+				   uint8_t *rnext_key);
+struct tcp_ao_key_info {
+	uint8_t send_id;
+	uint8_t recv_id;
+	uint8_t is_current;
+	uint8_t is_rnext;
+	uint8_t prefix;
+	struct sockaddr_storage addr;
+};
+
+extern int sockopt_tcp_ao_get_keys(int sock, union sockunion *su,
+				   uint8_t prefixlen,
+				   struct tcp_ao_key_info **out,
+				   uint32_t *nkeys);
 
 /*
  * set TCP max segment size. This option allows user to configure

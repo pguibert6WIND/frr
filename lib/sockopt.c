@@ -36,6 +36,7 @@ CPP_NOTICE("Please check to see if userspace has caught up, if so fix, if not ex
 #define TCP_AO_ADD_KEY 38
 #define TCP_AO_DEL_KEY 39
 #define TCP_AO_INFO 40
+#define TCP_AO_GET_KEYS 41
 #define TCP_AO_MAXKEYLEN 80
 
 struct tcp_ao_add {
@@ -77,6 +78,25 @@ struct tcp_ao_info_opt {
 	uint64_t pkt_key_not_found;
 	uint64_t pkt_ao_required;
 	uint64_t pkt_dropped_icmp;
+} __attribute__((aligned(8)));
+
+#include <linux/socket.h>
+
+struct tcp_ao_getsockopt {
+	struct __kernel_sockaddr_storage addr;
+	char alg_name[64];
+	__u8 key[TCP_AO_MAXKEYLEN];
+	__u32 nkeys;
+	__u16 is_current : 1, is_rnext : 1, get_all : 1, reserved : 13;
+	__u8 sndid;
+	__u8 rcvid;
+	__u8 prefix;
+	__u8 maclen;
+	__u8 keyflags;
+	__u8 keylen;
+	__s32 ifindex;
+	__u64 pkt_good;
+	__u64 pkt_bad;
 } __attribute__((aligned(8)));
 #endif
 
@@ -853,6 +873,121 @@ int sockopt_tcp_ao_info(int sock, uint8_t current_key, int set_current,
 			     sock, safe_strerror(errno));
 
 	return ret;
+#else
+	return -2;
+#endif
+}
+
+int sockopt_tcp_ao_info_get(int sock, uint8_t *current_key, uint8_t *rnext_key)
+{
+#ifdef TCP_AO_INFO
+	int ret;
+	struct tcp_ao_info_opt info;
+	socklen_t info_len = sizeof(info);
+
+	assert(sock >= 0);
+
+	memset(&info, 0, sizeof(info));
+	ret = getsockopt(sock, IPPROTO_TCP, TCP_AO_INFO, &info, &info_len);
+	if (ret < 0) {
+		flog_err_sys(EC_LIB_SYSTEM_CALL,
+			     "sockopt_tcp_ao_info: getsockopt(%d): %s",
+			     sock, safe_strerror(errno));
+		return ret;
+	}
+
+	if (current_key)
+		*current_key = info.current_key;
+	if (rnext_key)
+		*rnext_key = info.rnext;
+
+	return 0;
+#else
+	return -2;
+#endif
+}
+
+int sockopt_tcp_ao_get_keys(int sock, union sockunion *su, uint8_t prefixlen,
+			    struct tcp_ao_key_info **out, uint32_t *nkeys)
+{
+#ifdef TCP_AO_GET_KEYS
+	const uint32_t max_keys = 64;
+	size_t buflen = sizeof(struct tcp_ao_getsockopt) * (1 + max_keys);
+	struct tcp_ao_getsockopt *buf = NULL;
+	struct tcp_ao_getsockopt *hdr = NULL;
+	struct tcp_ao_key_info *result = NULL;
+	socklen_t len = (socklen_t)sizeof(struct tcp_ao_getsockopt);
+	int user_len = (int)sizeof(struct tcp_ao_getsockopt);
+	int ret;
+
+	assert(sock >= 0);
+
+	if (out)
+		*out = NULL;
+	if (nkeys)
+		*nkeys = 0;
+
+	buf = calloc(1, buflen);
+	if (!buf)
+		return -1;
+
+	hdr = buf;
+	hdr->get_all = 1;
+	memset(&hdr->addr, 0, sizeof(hdr->addr));
+	hdr->addr.ss_family = AF_UNSPEC;
+	hdr->prefix = 0;
+	hdr->nkeys = max_keys;
+	hdr->get_all = 1;
+	hdr->nkeys = max_keys;
+
+	ret = getsockopt(sock, IPPROTO_TCP, TCP_AO_GET_KEYS, buf, &len);
+	if (ret < 0) {
+		zlog_debug(
+			"sockopt_tcp_ao_get_keys: family=%u prefix=%u get_all=%u nkeys=%u optlen=%u buflen=%u sndid=%u rcvid=%u keyflags=%u ifindex=%d",
+			   hdr->addr.ss_family, hdr->prefix, hdr->get_all,
+			   hdr->nkeys, (unsigned int)len, (unsigned int)buflen,
+			   hdr->sndid, hdr->rcvid, hdr->keyflags, hdr->ifindex);
+		zlog_debug("sockopt_tcp_ao_get_keys: sizeof(tcp_ao_getsockopt)=%u",
+			   (unsigned int)sizeof(struct tcp_ao_getsockopt));
+		flog_err_sys(EC_LIB_SYSTEM_CALL,
+			     "sockopt_tcp_ao_get_keys: getsockopt(%d): %s",
+			     sock, safe_strerror(errno));
+		free(buf);
+		return ret;
+	}
+
+	zlog_debug("LEN returned: %u keys: %u", len, hdr->nkeys);
+	if (len >= sizeof(struct tcp_ao_getsockopt))
+		user_len = (int)len;
+
+	if (nkeys)
+		*nkeys = hdr->nkeys;
+
+	if (hdr->nkeys > 0) {
+		result = calloc(hdr->nkeys, sizeof(*result));
+		if (!result) {
+			free(buf);
+			return -1;
+		}
+		for (uint32_t i = 0; i < hdr->nkeys; i++) {
+			struct tcp_ao_getsockopt *entry =
+				(struct tcp_ao_getsockopt *)((uint8_t *)buf +
+							     user_len * (i));
+
+			result[i].send_id = entry->sndid;
+			result[i].recv_id = entry->rcvid;
+			result[i].is_current = entry->is_current ? 1 : 0;
+			result[i].is_rnext = entry->is_rnext ? 1 : 0;
+			result[i].prefix = entry->prefix;
+			memcpy(&result[i].addr, &entry->addr, sizeof(entry->addr));
+		}
+	}
+
+	free(buf);
+	if (out)
+		*out = result;
+
+	return 0;
 #else
 	return -2;
 #endif
