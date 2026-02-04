@@ -253,8 +253,54 @@ def test_verify_vpn_leak_detached_locator():
         pytest.skip(tgen.errors)
 
     r1 = tgen.gears["r1"]
+    r2 = tgen.gears["r2"]
 
     check_vpn_leak(r1, "r1/expected_step3.json")
+    check_vpn_leak(r2, "r2/expected_step3.json")
+    out = r1.vtysh_cmd("show segment-routing srv6 sid")
+    logger.info("test_verify_vpn_leak_detached_locator: " + out)
+
+
+def test_verify_vpn_leak_remove_192_168_1_0():
+    step("Check vpn-leak after removing network 192.168.1.0/24")
+    tgen = get_topogen()
+
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    r1 = tgen.gears["r1"]
+    r2 = tgen.gears["r2"]
+
+    logger.info("r1: Unconfiguring 192.168.1.1/24 network from eth2")
+    r1.vtysh_cmd(
+        "conf t\ninterface eth2\nno ip address 192.168.1.1/24\n"
+    )
+
+    check_vpn_leak(r1, "r1/expected_step3_5.json")
+    check_vpn_leak(r2, "r2/expected_step3_5.json")
+
+    out = r1.vtysh_cmd("show segment-routing srv6 sid")
+    logger.info("test_verify_vpn_leak_detached_locator: " + out)
+
+
+def test_verify_vpn_leak_readd_192_168_1_0():
+    step("Check vpn-leak after re-adding network 192.168.1.0/24")
+    tgen = get_topogen()
+
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    r1 = tgen.gears["r1"]
+    r2 = tgen.gears["r2"]
+
+    logger.info("r1: Reconfiguring 192.168.1.1/24 network from eth2")
+    r1.vtysh_cmd(
+        "conf t\ninterface eth2\nip address 192.168.1.1/24\n"
+    )
+
+    check_vpn_leak(r1, "r1/expected_step3.json")
+    check_vpn_leak(r2, "r2/expected_step3.json")
+
     out = r1.vtysh_cmd("show segment-routing srv6 sid")
     logger.info("test_verify_vpn_leak_detached_locator: " + out)
 
