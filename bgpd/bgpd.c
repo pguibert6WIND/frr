@@ -3557,7 +3557,7 @@ static void peer_group2peer_config_copy(struct peer_group *group,
 		PEER_STR_ATTR_INHERIT(peer, group, tcp_ao_profile_name, MTYPE_BGP_TCP_AO_PROFILE);
 
 	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
-		bgp_tcp_ao_set(peer->connection);
+		bgp_tcp_ao_set_listener(peer->connection);
 
 	/* update-source apply */
 	if (!CHECK_FLAG(peer->flags_override, PEER_FLAG_UPDATE_SOURCE)) {
@@ -7914,7 +7914,7 @@ static int peer_tcp_ao_apply(struct peer *peer)
 	if (BGP_CONNECTION_SU_UNSPEC(peer->connection))
 		return BGP_SUCCESS;
 
-	return (bgp_tcp_ao_set(peer->connection) >= 0) ? BGP_SUCCESS : BGP_ERR_TCPSIG_FAILED;
+	return (bgp_tcp_ao_set_listener(peer->connection) >= 0) ? BGP_SUCCESS : BGP_ERR_TCPSIG_FAILED;
 }
 
 int peer_tcp_ao_profile_set(struct peer *peer, const char *name)
@@ -7971,7 +7971,7 @@ int peer_tcp_ao_profile_unset(struct peer *peer)
 	if (!CHECK_FLAG(peer->flags, PEER_FLAG_TCP_AO))
 		return 0;
 
-	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
+	if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP) && !BGP_CONNECTION_SU_UNSPEC(peer->connection))
 		bgp_tcp_ao_unset(peer->connection);
 
 	if (peer_group_active(peer)) {
@@ -7983,10 +7983,10 @@ int peer_tcp_ao_profile_unset(struct peer *peer)
 		XFREE(MTYPE_BGP_TCP_AO_PROFILE, peer->tcp_ao_profile_name);
 	}
 
-	if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
-		bgp_tcp_ao_set(peer->connection);
-
 	if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
+		if (!BGP_CONNECTION_SU_UNSPEC(peer->connection))
+			bgp_tcp_ao_set_listener(peer->connection);
+
 		peer_set_last_reset(peer, PEER_DOWN_PASSWORD_CHANGE);
 		if (!peer_notify_config_change(peer->connection))
 			bgp_session_reset(peer);
@@ -8004,7 +8004,7 @@ int peer_tcp_ao_profile_unset(struct peer *peer)
 		XFREE(MTYPE_BGP_TCP_AO_PROFILE, member->tcp_ao_profile_name);
 
 		if (!BGP_CONNECTION_SU_UNSPEC(member->connection))
-			bgp_tcp_ao_set(member->connection);
+			bgp_tcp_ao_set_listener(member->connection);
 
 		peer_set_last_reset(member, PEER_DOWN_PASSWORD_CHANGE);
 		if (!peer_notify_config_change(member->connection))

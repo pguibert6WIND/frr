@@ -863,8 +863,8 @@ int sockopt_tcp_ao_info(int sock, uint8_t current_key, int set_current,
 	info.current_key = current_key;
 	info.rnext = rnext_key;
 
-	zlog_debug("sockopt_tcp_ao_info: sock=%d current key: %u current=%u rnext=%u",
-		   sock, info.current_key, info.set_current, info.set_rnext);
+zlog_debug("sockopt_tcp_ao_info: sock=%d current_key=%u rnext_key=%u set_current=%u set_rnext=%u",
+	   sock, info.current_key, info.rnext, info.set_current, info.set_rnext);
 
 	ret = setsockopt(sock, IPPROTO_TCP, TCP_AO_INFO, &info, sizeof(info));
 	if (ret < 0)

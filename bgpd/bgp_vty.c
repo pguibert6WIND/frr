@@ -17142,6 +17142,266 @@ static void bgp_tcp_ao_show_keys(const struct peer *p, const char **current,
 	}
 }
 
+static const char *bgp_tcp_ao_key_by_send_id(struct bgp_tcp_ao_profile *profile,
+					     uint8_t send_id)
+{
+	struct bgp_tcp_ao_key *key;
+
+	frr_each (bgp_tcp_ao_key_list, &profile->keys, key)
+		if (key->send_id == send_id)
+			return key->name;
+
+	return NULL;
+}
+
+static const char *bgp_tcp_ao_key_by_recv_id(struct bgp_tcp_ao_profile *profile,
+					     uint8_t recv_id)
+{
+	struct bgp_tcp_ao_key *key;
+
+	frr_each (bgp_tcp_ao_key_list, &profile->keys, key)
+		if (key->recv_id == recv_id)
+			return key->name;
+
+	return NULL;
+}
+
+DEFUN (show_bgp_tcp_ao,
+       show_bgp_tcp_ao_cmd,
+       "show bgp tcp-ao [json]",
+       SHOW_STR
+       BGP_STR
+       "TCP Authentication Option (TCP-AO)\n"
+       JSON_STR)
+{
+	struct listnode *bnode;
+	struct listnode *pnode;
+	struct bgp *bgp;
+	struct peer *peer;
+	bool uj = use_json(argc, argv);
+	json_object *json = NULL;
+
+	if (uj)
+		json = json_object_new_object();
+
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, bnode, bgp)) {
+		const char *instance = bgp->name ? bgp->name : VRF_DEFAULT_NAME;
+		json_object *json_instance = NULL;
+		json_object *json_peers = NULL;
+		bool instance_has_peers = false;
+
+		if (uj) {
+			json_instance = json_object_new_object();
+			json_peers = json_object_new_object();
+		}
+
+		for (ALL_LIST_ELEMENTS_RO(bgp->peer, pnode, peer)) {
+			struct bgp_tcp_ao_profile *profile;
+			struct bgp_tcp_ao_key *key;
+			struct tcp_ao_key_info *kernel_keys = NULL;
+			uint32_t kernel_count = 0;
+			uint8_t current_id = 0;
+			uint8_t rnext_id = 0;
+			const char *current_name = NULL;
+			const char *rnext_name = NULL;
+			int info_ret = -2;
+
+			if (!peer_is_config_node(peer))
+				continue;
+			if (!peer->tcp_ao_profile_name)
+				continue;
+
+			profile = bgp_tcp_ao_profile_lookup(peer->tcp_ao_profile_name);
+			if (!profile)
+				continue;
+
+			if (!BGP_CONNECTION_SU_UNSPEC(peer->connection) &&
+			    peer->connection->fd >= 0) {
+				info_ret = sockopt_tcp_ao_info_get(
+					peer->connection->fd, &current_id, &rnext_id);
+			}
+
+			if (info_ret == 0) {
+				current_name = bgp_tcp_ao_key_by_send_id(profile, current_id);
+				rnext_name = bgp_tcp_ao_key_by_recv_id(profile, rnext_id);
+			}
+
+			if (uj) {
+				json_object *json_peer = json_object_new_object();
+				json_object *json_keys = json_object_new_array();
+				json_object *json_kernel_keys = json_object_new_array();
+				json_object_string_add(json_peer, "tcpAoProfile",
+						       peer->tcp_ao_profile_name);
+				if (info_ret == 0) {
+					json_object_int_add(json_peer, "kernelCurrentId",
+							    current_id);
+					json_object_int_add(json_peer, "kernelRnextId",
+							    rnext_id);
+					if (current_name)
+						json_object_string_add(
+							json_peer, "kernelCurrentKey",
+							current_name);
+					if (rnext_name)
+						json_object_string_add(
+							json_peer, "kernelRnextKey",
+							rnext_name);
+				}
+
+				frr_each (bgp_tcp_ao_key_list, &profile->keys, key) {
+					json_object *json_key = json_object_new_object();
+					json_object_string_add(json_key, "name", key->name);
+					json_object_int_add(json_key, "sendId", key->send_id);
+					json_object_int_add(json_key, "recvId", key->recv_id);
+					json_object_boolean_add(json_key, "current",
+								key->set_current);
+					json_object_boolean_add(json_key, "rnext",
+								key->set_rnext);
+					json_object_array_add(json_keys, json_key);
+				}
+
+				if (info_ret == 0) {
+					if (bgp_tcp_ao_get_kernel_keys(
+						    peer->connection, &kernel_keys,
+						    &kernel_count) == 0 &&
+					    kernel_keys) {
+						for (uint32_t i = 0; i < kernel_count; i++) {
+							union sockunion su_key;
+							union sockunion su_peer;
+
+							memset(&su_key, 0, sizeof(su_key));
+							memcpy(&su_key, &kernel_keys[i].addr,
+							       sizeof(kernel_keys[i].addr));
+							su_peer = peer->connection->su;
+							if (su_peer.sa.sa_family == AF_INET)
+								su_peer.sin.sin_port = 0;
+							else if (su_peer.sa.sa_family == AF_INET6)
+								su_peer.sin6.sin6_port = 0;
+
+							if (!sockunion_same(&su_key, &su_peer))
+								continue;
+							const char *name =
+								bgp_tcp_ao_key_by_send_id(
+									profile,
+									kernel_keys[i].send_id);
+							json_object *json_key =
+								json_object_new_object();
+							if (name)
+								json_object_string_add(
+									json_key, "name", name);
+							json_object_int_add(json_key, "sendId",
+									    kernel_keys[i].send_id);
+							json_object_int_add(json_key, "recvId",
+									    kernel_keys[i].recv_id);
+							json_object_boolean_add(
+								json_key, "isCurrent",
+								kernel_keys[i].is_current);
+							json_object_boolean_add(
+								json_key, "isRnext",
+								kernel_keys[i].is_rnext);
+							json_object_array_add(
+								json_kernel_keys, json_key);
+						}
+					}
+				}
+
+				json_object_object_add(json_peer, "keys", json_keys);
+				json_object_object_add(json_peer, "kernelKeys",
+						       json_kernel_keys);
+				json_object_object_add(json_peers, peer->host, json_peer);
+				instance_has_peers = true;
+			} else {
+				if (!instance_has_peers) {
+					vty_out(vty, "BGP instance %s\n",
+						instance);
+					instance_has_peers = true;
+				}
+				vty_out(vty, "Peer %s (profile %s)\n",
+					peer->host, peer->tcp_ao_profile_name);
+				if (info_ret == 0) {
+					vty_out(vty,
+						" Kernel current id: %u (%s)\n",
+						current_id,
+						current_name ? current_name : "unknown");
+					vty_out(vty,
+						" Kernel rnext id: %u (%s)\n",
+						rnext_id,
+						rnext_name ? rnext_name : "unknown");
+				} else {
+					vty_out(vty,
+						" Kernel info: unavailable\n");
+				}
+				frr_each (bgp_tcp_ao_key_list, &profile->keys, key) {
+					vty_out(vty,
+						"  Key %s send-id %u recv-id %u%s%s password: %s\n",
+						key->name, key->send_id, key->recv_id,
+						key->set_current ? " current" : "",
+						key->set_rnext ? " rnext" : "", key->key);
+				}
+				if (info_ret == 0) {
+					if (bgp_tcp_ao_get_kernel_keys(
+						    peer->connection, &kernel_keys,
+						    &kernel_count) == 0 &&
+					    kernel_keys) {
+						vty_out(vty, " Kernel keys:\n");
+						for (uint32_t i = 0; i < kernel_count; i++) {
+							union sockunion su_key;
+							union sockunion su_peer;
+
+							memset(&su_key, 0, sizeof(su_key));
+							memcpy(&su_key, &kernel_keys[i].addr,
+							       sizeof(kernel_keys[i].addr));
+							su_peer = peer->connection->su;
+							if (su_peer.sa.sa_family == AF_INET)
+								su_peer.sin.sin_port = 0;
+							else if (su_peer.sa.sa_family == AF_INET6)
+								su_peer.sin6.sin6_port = 0;
+
+							if (!sockunion_same(&su_key, &su_peer))
+								continue;
+							const char *name =
+								bgp_tcp_ao_key_by_send_id(
+									profile,
+									kernel_keys[i].send_id);
+							vty_out(vty,
+								"  - %s send-id %u recv-id %u%s%s\n",
+								name ? name : "unknown",
+								kernel_keys[i].send_id,
+								kernel_keys[i].recv_id,
+								kernel_keys[i].is_current
+									? " current"
+									: "",
+								kernel_keys[i].is_rnext
+									? " rnext"
+									: "");
+						}
+					}
+				}
+			}
+
+			if (kernel_keys)
+				free(kernel_keys);
+		}
+
+		if (uj && instance_has_peers) {
+			json_object_object_add(json_instance, "peers", json_peers);
+			json_object_object_add(json, instance, json_instance);
+		} else if (uj) {
+			json_object_free(json_peers);
+			json_object_free(json_instance);
+		} else if (instance_has_peers) {
+			vty_out(vty, "\n");
+		}
+	}
+
+	if (uj) {
+		vty_out(vty, "%s\n", json_object_to_json_string_ext(
+					     json, JSON_C_TO_STRING_PRETTY));
+		json_object_free(json);
+	}
+
+	return CMD_SUCCESS;
+}
+
 static void bgp_show_peer(struct vty *vty, struct peer *p, uint16_t sh_flags, bool use_json,
 			  json_object *json)
 {
@@ -25579,6 +25839,7 @@ void bgp_vty_init(void)
 	/* "show [ip] bgp neighbors" commands. */
 	install_element(VIEW_NODE, &show_ip_bgp_neighbors_cmd);
 	install_element(VIEW_NODE, &show_bgp_neighbor_orf_prefix_list_cmd);
+	install_element(VIEW_NODE, &show_bgp_tcp_ao_cmd);
 
 	/* "show [ip] bgp peer-group" commands. */
 	install_element(VIEW_NODE, &show_ip_bgp_peer_groups_cmd);

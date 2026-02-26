@@ -331,10 +331,8 @@ static int bgp_tcp_ao_apply_keys_on_socket(int socket, union sockunion *su,
 	frr_each (bgp_tcp_ao_key_list, keys, entry) {
 		if (!bgp_tcp_ao_key_ready(entry))
 			continue;
-		int set_current = 0;
-		int set_rnext = 0;
 
-		ret = bgp_tcp_ao_set_socket(socket, su, prefixlen, entry, set_current, set_rnext);
+		ret = bgp_tcp_ao_set_socket(socket, su, prefixlen, entry, 0, 0);
 		if (ret < 0)
 			return ret;
 	}
@@ -363,7 +361,7 @@ static int bgp_tcp_ao_clear_keys_on_socket(int socket, union sockunion *su,
 	return ret;
 }
 
-int bgp_tcp_ao_set(struct peer_connection *connection)
+int bgp_tcp_ao_set_listener(struct peer_connection *connection)
 {
 	struct listnode *node;
 	int ret = 0;
@@ -393,6 +391,9 @@ int bgp_tcp_ao_set(struct peer_connection *connection)
 
 				ret = bgp_tcp_ao_apply_keys_on_socket(listener->fd, &connection->su,
 								      &profile->keys, 0);
+				if (bgp_debug_neighbor_events(peer))
+					zlog_debug("%s: TCP-AO keys applied to listener fd=%d (TCP_AO_INFO not supported on TCP_LISTEN)",
+						   peer->host, listener->fd);
 				break;
 			}
 	}
@@ -569,6 +570,11 @@ int bgp_tcp_ao_set_current_rnext(struct peer_connection *connection,
 	if (!current)
 		return 0;
 
+	if (bgp_debug_neighbor_events(peer))
+		zlog_debug("%s: TCP-AO select current=%u rnext=%u",
+			   peer->host, current->send_id,
+			   rnext ? rnext->recv_id : current->recv_id);
+
 	set_current = (current != NULL);
 	if (rnext) {
 		set_rnext = true;
@@ -587,6 +593,14 @@ int bgp_tcp_ao_set_current_rnext(struct peer_connection *connection,
 					  set_current,
 					  rnext ? rnext->recv_id : 0,
 					  set_rnext);
+	}
+
+	if (ret < 0) {
+		flog_warn(
+			EC_BGP_NO_TCP_AO,
+			"TCP-AO INFO failed for peer %s (current=%u rnext=%u): %s",
+			peer->host, current ? current->send_id : 0,
+			rnext ? rnext->recv_id : 0, safe_strerror(errno));
 	}
 
 	return ret;
@@ -609,6 +623,34 @@ int bgp_tcp_ao_apply_keys_connection(struct peer_connection *connection,
 	frr_with_privs (&bgpd_privs) {
 		ret = bgp_tcp_ao_apply_keys_on_socket(connection->fd, &connection->su,
 						      keys, set_current_rnext);
+	}
+
+	return ret;
+}
+
+int bgp_tcp_ao_get_kernel_keys(struct peer_connection *connection,
+			       struct tcp_ao_key_info **out, uint32_t *nkeys)
+{
+	int ret = 0;
+	uint8_t prefixlen;
+
+	if (out)
+		*out = NULL;
+	if (nkeys)
+		*nkeys = 0;
+
+	if (!connection || BGP_CONNECTION_SU_UNSPEC(connection))
+		return 0;
+
+	if (connection->fd < 0)
+		return 0;
+
+	prefixlen = connection->su.sa.sa_family == AF_INET ? IPV4_MAX_BITLEN
+							   : IPV6_MAX_BITLEN;
+
+	frr_with_privs (&bgpd_privs) {
+		ret = sockopt_tcp_ao_get_keys(connection->fd, &connection->su,
+					      prefixlen, out, nkeys);
 	}
 
 	return ret;
@@ -948,7 +990,7 @@ static void bgp_accept(struct event *event)
 				if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0) {
 					bgp_tcp_ao_apply_keys_on_socket(incoming->fd, &su,
 									&profile->keys, 0);
-					bgp_tcp_ao_set_current_rnext(peer->connection,
+					bgp_tcp_ao_set_current_rnext(incoming,
 								     &profile->keys);
 				}
 			}
@@ -1132,7 +1174,7 @@ static void bgp_accept(struct event *event)
 		if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0) {
 				bgp_tcp_ao_apply_keys_on_socket(incoming->fd, &su,
 								&profile->keys, 0);
-				bgp_tcp_ao_set_current_rnext(peer->connection,
+				bgp_tcp_ao_set_current_rnext(incoming,
 							     &profile->keys);
 		}
 	}
@@ -1377,9 +1419,6 @@ enum connect_result bgp_connect(struct peer_connection *connection)
 			bgp_tcp_ao_profile_lookup(peer->tcp_ao_profile_name);
 
 		if (profile && bgp_tcp_ao_key_list_count(&profile->keys) > 0) {
-			if (!BGP_CONNECTION_SU_UNSPEC(connection))
-				bgp_tcp_ao_set(connection);
-
 			bgp_tcp_ao_apply_keys_on_socket(connection->fd, &connection->su,
 							&profile->keys, 0);
 			bgp_tcp_ao_set_current_rnext(connection, &profile->keys);

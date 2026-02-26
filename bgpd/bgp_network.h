@@ -6,6 +6,8 @@
 #ifndef _QUAGGA_BGP_NETWORK_H
 #define _QUAGGA_BGP_NETWORK_H
 
+#include "lib/sockopt.h"
+
 #define BGP_SOCKET_SNDBUF_SIZE 65536
 
 struct bgp_listener {
@@ -29,7 +31,7 @@ extern int bgp_md5_set_prefix(struct bgp *bgp, struct prefix *p,
 extern int bgp_md5_unset_prefix(struct bgp *bgp, struct prefix *p);
 extern int bgp_md5_set(struct peer_connection *connection);
 extern int bgp_md5_unset(struct peer_connection *connection);
-extern int bgp_tcp_ao_set(struct peer_connection *connection);
+extern int bgp_tcp_ao_set_listener(struct peer_connection *connection);
 extern int bgp_tcp_ao_unset(struct peer_connection *connection);
 extern int bgp_tcp_ao_key_del(struct peer_connection *connection,
 			      const struct bgp_tcp_ao_key *key);
@@ -37,6 +39,9 @@ extern int bgp_tcp_ao_key_add(struct peer_connection *connection,
 			      const struct bgp_tcp_ao_key *key);
 extern int bgp_tcp_ao_set_current_rnext(struct peer_connection *connection,
 					struct bgp_tcp_ao_key_list_head *keys);
+extern int bgp_tcp_ao_get_kernel_keys(struct peer_connection *connection,
+				      struct tcp_ao_key_info **out,
+				      uint32_t *nkeys);
 extern int bgp_tcp_ao_apply_keys_connection(struct peer_connection *connection,
 					    struct bgp_tcp_ao_key_list_head *keys,
 					    int set_current_rnext);

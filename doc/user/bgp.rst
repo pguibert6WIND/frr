@@ -2173,7 +2173,9 @@ definitions and allows multiple neighbors to share a profile.
 
 .. clicmd:: key NAME
 
-   Enter a key definition under the TCP-AO profile.
+   Enter a key definition under the TCP-AO profile.  If a key is the Current
+   key it may not be removed.  This is because the underlying kernel implementation
+   does not allow key removal of the current if the session is up.
 
 .. clicmd:: send-id ID
 
