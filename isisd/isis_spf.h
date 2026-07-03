@@ -64,8 +64,8 @@ int _isis_spf_schedule(struct isis_area *area, int level,
 		       const char *func, const char *file, int line);
 void isis_print_spftree(struct vty *vty, struct isis_spftree *spftree,
 			struct json_object **json);
-void isis_print_routes(struct vty *vty, struct isis_spftree *spftree,
-		       json_object **json, bool prefix_sid, bool backup);
+void isis_print_routes(struct vty *vty, struct isis_spftree *spftree, json_object **json,
+		       bool prefix_sid, bool backup, bool srv6_enabled);
 void isis_spf_init(void);
 void isis_spf_print(struct isis_spftree *spftree, struct vty *vty);
 void isis_spf_print_json(struct isis_spftree *spftree,

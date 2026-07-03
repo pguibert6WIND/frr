@@ -59,7 +59,7 @@ static void test_run_spf(struct vty *vty, const struct isis_topology *topology,
 
 	/* Print the SPT and the corresponding routing table. */
 	isis_print_spftree(vty, spftree, NULL);
-	isis_print_routes(vty, spftree, NULL, false, false);
+	isis_print_routes(vty, spftree, NULL, false, false, area->srv6db.config.enabled);
 
 	/* Cleanup SPF tree. */
 	isis_spftree_del(spftree);
@@ -88,9 +88,9 @@ static void test_run_lfa(struct vty *vty, const struct isis_topology *topology,
 	/* Print the SPT and the corresponding main/backup routing tables. */
 	isis_print_spftree(vty, spftree_self, NULL);
 	vty_out(vty, "Main:\n");
-	isis_print_routes(vty, spftree_self, NULL, false, false);
+	isis_print_routes(vty, spftree_self, NULL, false, false, area->srv6db.config.enabled);
 	vty_out(vty, "Backup:\n");
-	isis_print_routes(vty, spftree_self, NULL, false, true);
+	isis_print_routes(vty, spftree_self, NULL, false, true, area->srv6db.config.enabled);
 
 	/* Cleanup everything. */
 	isis_spftree_del(spftree_self);
@@ -162,9 +162,9 @@ static void test_run_rlfa(struct vty *vty, const struct isis_topology *topology,
 	/* Print the SPT and the corresponding main/backup routing tables. */
 	isis_print_spftree(vty, spftree_self, NULL);
 	vty_out(vty, "Main:\n");
-	isis_print_routes(vty, spftree_self, NULL, false, false);
+	isis_print_routes(vty, spftree_self, NULL, false, false, area->srv6db.config.enabled);
 	vty_out(vty, "Backup:\n");
-	isis_print_routes(vty, spftree_self, NULL, false, true);
+	isis_print_routes(vty, spftree_self, NULL, false, true, area->srv6db.config.enabled);
 
 	/* Cleanup everything. */
 	isis_spftree_del(spftree_self);
@@ -220,7 +220,7 @@ static void test_run_ti_lfa(struct vty *vty, const struct isis_topology *topolog
 	 * Print the post-convergence SPT and the corresponding routing table.
 	 */
 	isis_print_spftree(vty, spftree_pc, NULL);
-	isis_print_routes(vty, spftree_self, NULL, false, true);
+	isis_print_routes(vty, spftree_self, NULL, false, true, area->srv6db.config.enabled);
 
 	/* Cleanup everything. */
 	isis_spftree_del(spftree_self);
@@ -358,7 +358,7 @@ static void test_run_grid_spf(struct vty *vty, const struct isis_grid_topology *
 
 	/* Print the SPT and routing table */
 	isis_print_spftree(vty, spftree, NULL);
-	isis_print_routes(vty, spftree, NULL, false, false);
+	isis_print_routes(vty, spftree, NULL, false, false, area->srv6db.config.enabled);
 
 	isis_spftree_del(spftree);
 }
@@ -408,7 +408,7 @@ static void test_run_grid_ti_lfa(struct vty *vty, const struct isis_grid_topolog
 	vty_out(vty, "P-space size: %u, Q-space size: %u\n", p_count, q_count);
 
 	/* Print backup routes */
-	isis_print_routes(vty, spftree_self, NULL, false, true);
+	isis_print_routes(vty, spftree_self, NULL, false, true, area->srv6db.config.enabled);
 
 	/* Cleanup */
 	isis_spftree_del(spftree_self);

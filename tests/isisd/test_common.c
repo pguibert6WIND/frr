@@ -218,25 +218,15 @@ static void lsp_add_router_capability(struct isis_lsp *lsp, const struct isis_te
 	}
 }
 
-static void lsp_add_srv6_locator_with_algo(struct isis_lsp *lsp, const char *locator_str,
+static void lsp_add_srv6_locator_with_algo(struct isis_lsp *lsp, struct prefix_ipv6 *locator_prefix,
 					   const char *end_sid_str, uint8_t algorithm)
 {
 	struct isis_srv6_locator *loc;
 	struct isis_srv6_sid *sid;
-	struct prefix_ipv6 locator_prefix;
-
-	if (!locator_str || !end_sid_str)
-		return;
-
-	/* Parse locator prefix */
-	if (str2prefix_ipv6(locator_str, &locator_prefix) != 1) {
-		zlog_debug("%s: invalid SRv6 locator: %s", __func__, locator_str);
-		return;
-	}
 
 	/* Create SRv6 locator (use MTYPE_TMP for test purposes) */
 	loc = XCALLOC(MTYPE_TMP, sizeof(*loc));
-	loc->prefix = locator_prefix;
+	prefix_copy(&loc->prefix, locator_prefix);
 	loc->metric = 1;
 	loc->algorithm = algorithm;
 	isis_srv6_sid_list_init(&loc->srv6_sid);
@@ -266,25 +256,46 @@ static void lsp_add_srv6_locator_with_algo(struct isis_lsp *lsp, const char *loc
 	XFREE(MTYPE_TMP, loc);
 }
 
-static void lsp_add_srv6_locator(struct isis_lsp *lsp, const struct isis_test_node *tnode,
-				 size_t tnode_index)
+static bool lsp_add_srv6_locator(struct isis_lsp *lsp, struct isis_area *area,
+				 const struct isis_test_node *tnode, size_t tnode_index)
 {
 	int i;
+	struct prefix_ipv6 locator_prefix;
+	bool ret = false;
 
 	if (!CHECK_FLAG(tnode->flags, F_ISIS_TEST_NODE_SRV6))
-		return;
+		return ret;
+
+	if (!tnode->srv6.locator || !tnode->srv6.end_sid)
+		return ret;
+
+	/* Parse locator prefix */
+	if (str2prefix_ipv6(tnode->srv6.locator, &locator_prefix) != 1) {
+		zlog_debug("%s: invalid SRv6 locator: %s", __func__, tnode->srv6.locator);
+		return ret;
+	}
+
+	ret = true;
 
 	/* Add primary locator with algorithm 0 (SPF) */
-	lsp_add_srv6_locator_with_algo(lsp, tnode->srv6.locator, tnode->srv6.end_sid,
-				       SR_ALGORITHM_SPF);
+	lsp_add_srv6_locator_with_algo(lsp, &locator_prefix, tnode->srv6.end_sid, SR_ALGORITHM_SPF);
 
 	/* Add extra locators with their specified algorithms */
 	for (i = 0; i < tnode->srv6.extra_locator_count && i < MAX_SRV6_LOCATORS; i++) {
 		const struct isis_test_srv6_locator *extra = &tnode->srv6.extra_locators[i];
 
-		lsp_add_srv6_locator_with_algo(lsp, extra->locator, extra->end_sid,
+		if (!extra || !extra->locator || !extra->end_sid)
+			return ret;
+
+		/* Parse locator prefix */
+		if (str2prefix_ipv6(extra->locator, &locator_prefix) != 1) {
+			zlog_debug("%s: invalid SRv6 locator: %s", __func__, extra->locator);
+			return ret;
+		}
+		lsp_add_srv6_locator_with_algo(lsp, &locator_prefix, extra->end_sid,
 					       extra->algorithm);
 	}
+	return ret;
 }
 
 static void lsp_add_mt_router_info(struct isis_lsp *lsp, const struct isis_test_node *tnode)
@@ -334,7 +345,11 @@ static int topology_load_node_level(const struct isis_topology *topology,
 	lsp_add_mt_router_info(lsp, tnode);
 	lsp_add_protocols_supported(lsp, tnode);
 	lsp_add_router_capability(lsp, tnode);
-	lsp_add_srv6_locator(lsp, tnode, tnode_index);
+
+	if (lsp_add_srv6_locator(lsp, area, tnode, tnode_index))
+		area->srv6db.config.enabled = true;
+	else
+		area->srv6db.config.enabled = false;
 
 	/* Add IP Reachability Information. */
 	for (size_t i = 0; tnode->networks[i]; i++) {

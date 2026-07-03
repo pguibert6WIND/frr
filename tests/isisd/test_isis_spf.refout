@@ -5037,11 +5037,11 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.1/32  0       -          -        -         
- 10.0.255.2/32  20      -          rt2      -         
- 10.0.255.3/32  20      -          rt3      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.1/32  0       -          -        -       
+ 10.0.255.2/32  20      -          rt2      -       
+ 10.0.255.3/32  20      -          rt3      -       
 
 IS-IS paths to level-1 routers that speak IPv6
  Vertex           Type          Metric  Next-Hop  Interface  Parent  
@@ -5058,13 +5058,13 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::1/128  0       -          -        -         
- 2001:db8::2/128  20      -          rt2      -         
- 2001:db8::3/128  20      -          rt3      -         
- fc00:0:2::/48    11      -          rt2      -         
- fc00:0:3::/48    11      -          rt3      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::1/128  0       -          -        -       
+ 2001:db8::2/128  20      -          rt2      -       
+ 2001:db8::3/128  20      -          rt3      -       
+ fc00:0:2::/48    11      -          rt2      -       
+ fc00:0:3::/48    11      -          rt3      -       
 
 test# test isis topology 16 root rt1 spf
 IS-IS paths to level-1 routers that speak IP
@@ -5131,9 +5131,9 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.2/32  30      -          rt3      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.2/32  30      -          rt3      -       
 
 P-space (self):
  rt3
@@ -5161,10 +5161,10 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::2/128  30      -          rt3      -         
- fc00:0:2::/48    21      -          rt3      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::2/128  30      -          rt3      -       
+ fc00:0:2::/48    21      -          rt3      -       
 
 test# test isis topology 15 root rt1 ti-lfa system-id rt3
 P-space (self):
@@ -5191,9 +5191,9 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.3/32  30      -          rt2      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.3/32  30      -          rt2      -       
 
 P-space (self):
  rt2
@@ -5221,10 +5221,10 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::3/128  30      -          rt2      -         
- fc00:0:3::/48    21      -          rt2      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::3/128  30      -          rt2      -       
+ fc00:0:3::/48    21      -          rt2      -       
 
 test# test isis topology 16 root rt1 ti-lfa system-id rt2
 P-space (self):
@@ -5363,15 +5363,15 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.1/32  0       -          -        -         
- 10.0.255.2/32  20      -          rt2      -         
- 10.0.255.3/32  20      -          rt3      -         
- 10.0.255.4/32  30      -          rt2      -         
- 10.0.255.5/32  30      -          rt3      -         
- 10.0.255.6/32  40      -          rt2      -         
-                        -          rt3      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.1/32  0       -          -        -       
+ 10.0.255.2/32  20      -          rt2      -       
+ 10.0.255.3/32  20      -          rt3      -       
+ 10.0.255.4/32  30      -          rt2      -       
+ 10.0.255.5/32  30      -          rt3      -       
+ 10.0.255.6/32  40      -          rt2      -       
+                        -          rt3      -       
 
 IS-IS paths to level-1 routers that speak IPv6
  Vertex           Type          Metric  Next-Hop  Interface  Parent  
@@ -5400,21 +5400,21 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::1/128  0       -          -        -         
- 2001:db8::2/128  20      -          rt2      -         
- 2001:db8::3/128  20      -          rt3      -         
- 2001:db8::4/128  30      -          rt2      -         
- 2001:db8::5/128  30      -          rt3      -         
- 2001:db8::6/128  40      -          rt2      -         
-                          -          rt3      -         
- fc00:0:2::/48    11      -          rt2      -         
- fc00:0:3::/48    11      -          rt3      -         
- fc00:0:4::/48    21      -          rt2      -         
- fc00:0:5::/48    21      -          rt3      -         
- fc00:0:6::/48    31      -          rt2      -         
-                          -          rt3      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::1/128  0       -          -        -       
+ 2001:db8::2/128  20      -          rt2      -       
+ 2001:db8::3/128  20      -          rt3      -       
+ 2001:db8::4/128  30      -          rt2      -       
+ 2001:db8::5/128  30      -          rt3      -       
+ 2001:db8::6/128  40      -          rt2      -       
+                          -          rt3      -       
+ fc00:0:2::/48    11      -          rt2      -       
+ fc00:0:3::/48    11      -          rt3      -       
+ fc00:0:4::/48    21      -          rt2      -       
+ fc00:0:5::/48    21      -          rt3      -       
+ fc00:0:6::/48    31      -          rt2      -       
+                          -          rt3      -       
 
 test# test isis topology 17 root rt4 spf
 IS-IS paths to level-1 routers that speak IP
@@ -5436,14 +5436,14 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.1/32  30      -          rt2      -         
- 10.0.255.2/32  20      -          rt2      -         
- 10.0.255.3/32  30      -          rt2      -         
- 10.0.255.4/32  0       -          -        -         
- 10.0.255.5/32  30      -          rt6      -         
- 10.0.255.6/32  20      -          rt6      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.1/32  30      -          rt2      -       
+ 10.0.255.2/32  20      -          rt2      -       
+ 10.0.255.3/32  30      -          rt2      -       
+ 10.0.255.4/32  0       -          -        -       
+ 10.0.255.5/32  30      -          rt6      -       
+ 10.0.255.6/32  20      -          rt6      -       
 
 IS-IS paths to level-1 routers that speak IPv6
  Vertex           Type          Metric  Next-Hop  Interface  Parent  
@@ -5469,19 +5469,19 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::1/128  30      -          rt2      -         
- 2001:db8::2/128  20      -          rt2      -         
- 2001:db8::3/128  30      -          rt2      -         
- 2001:db8::4/128  0       -          -        -         
- 2001:db8::5/128  30      -          rt6      -         
- 2001:db8::6/128  20      -          rt6      -         
- fc00:0:1::/48    21      -          rt2      -         
- fc00:0:2::/48    11      -          rt2      -         
- fc00:0:3::/48    21      -          rt2      -         
- fc00:0:5::/48    21      -          rt6      -         
- fc00:0:6::/48    11      -          rt6      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::1/128  30      -          rt2      -       
+ 2001:db8::2/128  20      -          rt2      -       
+ 2001:db8::3/128  30      -          rt2      -       
+ 2001:db8::4/128  0       -          -        -       
+ 2001:db8::5/128  30      -          rt6      -       
+ 2001:db8::6/128  20      -          rt6      -       
+ fc00:0:1::/48    21      -          rt2      -       
+ fc00:0:2::/48    11      -          rt2      -       
+ fc00:0:3::/48    21      -          rt2      -       
+ fc00:0:5::/48    21      -          rt6      -       
+ fc00:0:6::/48    11      -          rt6      -       
 
 test# 
 test# test isis topology 17 root rt4 ti-lfa system-id rt2
@@ -5519,7 +5519,7 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)       
+ Prefix         Metric  Interface  Nexthop  SID(s)         
  ----------------------------------------------------------
  10.0.255.1/32  50      -          rt6      implicit-null  
  10.0.255.2/32  50      -          rt6      implicit-null  
@@ -5564,7 +5564,7 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)       
+ Prefix           Metric  Interface  Nexthop  SID(s)         
  ------------------------------------------------------------
  2001:db8::1/128  50      -          rt6      implicit-null  
  2001:db8::2/128  50      -          rt6      implicit-null  
@@ -5609,7 +5609,7 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)       
+ Prefix         Metric  Interface  Nexthop  SID(s)         
  ----------------------------------------------------------
  10.0.255.5/32  40      -          rt2      -              
  10.0.255.6/32  50      -          rt2      implicit-null  
@@ -5654,7 +5654,7 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)       
+ Prefix           Metric  Interface  Nexthop  SID(s)         
  ------------------------------------------------------------
  2001:db8::5/128  40      -          rt2      -              
  2001:db8::6/128  50      -          rt2      implicit-null  
@@ -5696,7 +5696,7 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)       
+ Prefix         Metric  Interface  Nexthop  SID(s)         
  ----------------------------------------------------------
  10.0.255.1/32  50      -          rt6      implicit-null  
  10.0.255.2/32  40      -          rt6      -              
@@ -5741,7 +5741,7 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)       
+ Prefix           Metric  Interface  Nexthop  SID(s)         
  ------------------------------------------------------------
  2001:db8::1/128  50      -          rt6      implicit-null  
  2001:db8::2/128  40      -          rt6      -              
@@ -5786,7 +5786,7 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)       
+ Prefix         Metric  Interface  Nexthop  SID(s)         
  ----------------------------------------------------------
  10.0.255.4/32  40      -          rt3      -              
  10.0.255.6/32  50      -          rt3      implicit-null  
@@ -5831,7 +5831,7 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)       
+ Prefix           Metric  Interface  Nexthop  SID(s)         
  ------------------------------------------------------------
  2001:db8::4/128  40      -          rt3      -              
  2001:db8::6/128  50      -          rt3      implicit-null  
@@ -5938,11 +5938,11 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.1/32  0       -          -        -         
- 10.0.255.2/32  20      -          rt2      -         
- 10.0.255.3/32  20      -          rt3      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.1/32  0       -          -        -       
+ 10.0.255.2/32  20      -          rt2      -       
+ 10.0.255.3/32  20      -          rt3      -       
 
 IS-IS paths to level-1 routers that speak IPv6
  Vertex           Type          Metric  Next-Hop  Interface  Parent  
@@ -5959,13 +5959,13 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::1/128  0       -          -        -         
- 2001:db8::2/128  20      -          rt2      -         
- 2001:db8::3/128  20      -          rt3      -         
- fc00:0:2::/48    11      -          rt2      -         
- fc00:0:3::/48    11      -          rt3      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::1/128  0       -          -        -       
+ 2001:db8::2/128  20      -          rt2      -       
+ 2001:db8::3/128  20      -          rt3      -       
+ fc00:0:2::/48    11      -          rt2      -       
+ fc00:0:3::/48    11      -          rt3      -       
 
 test# test isis topology 18 root rt1 ti-lfa system-id rt2
 P-space (self):
@@ -5992,9 +5992,9 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.2/32  30      -          rt3      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.2/32  30      -          rt3      -       
 
 P-space (self):
  rt3
@@ -6022,10 +6022,10 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::2/128  30      -          rt3      -         
- fc00:0:2::/48    21      -          rt3      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::2/128  30      -          rt3      -       
+ fc00:0:2::/48    21      -          rt3      -       
 
 test# test isis topology 18 root rt1 ti-lfa system-id rt3
 P-space (self):
@@ -6052,9 +6052,9 @@ IS-IS paths to level-1 routers that speak IP
 
 IS-IS L1 IPv4 routing table:
 
- Prefix         Metric  Interface  Nexthop  Label(s)  
- -----------------------------------------------------
- 10.0.255.3/32  30      -          rt2      -         
+ Prefix         Metric  Interface  Nexthop  SID(s)  
+ ---------------------------------------------------
+ 10.0.255.3/32  30      -          rt2      -       
 
 P-space (self):
  rt2
@@ -6082,10 +6082,10 @@ IS-IS paths to level-1 routers that speak IPv6
 
 IS-IS L1 IPv6 routing table:
 
- Prefix           Metric  Interface  Nexthop  Label(s)  
- -------------------------------------------------------
- 2001:db8::3/128  30      -          rt2      -         
- fc00:0:3::/48    21      -          rt2      -         
+ Prefix           Metric  Interface  Nexthop  SID(s)  
+ -----------------------------------------------------
+ 2001:db8::3/128  30      -          rt2      -       
+ fc00:0:3::/48    21      -          rt2      -       
 
 test# 
 end.

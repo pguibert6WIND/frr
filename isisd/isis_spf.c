@@ -2710,7 +2710,7 @@ static void isis_print_route(struct ttable *tt, const struct prefix *prefix,
 }
 
 void isis_print_routes(struct vty *vty, struct isis_spftree *spftree, struct json_object **json,
-		       bool prefix_sid, bool backup)
+		       bool prefix_sid, bool backup, bool srv6_enabled)
 {
 	struct route_table *route_table;
 	struct ttable *tt;
@@ -2744,6 +2744,8 @@ void isis_print_routes(struct vty *vty, struct isis_spftree *spftree, struct jso
 	tt = ttable_new(&ttable_styles[TTSTYLE_BLANK]);
 	if (prefix_sid)
 		ttable_add_row(tt, "Prefix|Metric|Interface|Nexthop|SID|Label Op.|Algo");
+	else if (srv6_enabled)
+		ttable_add_row(tt, "Prefix|Metric|Interface|Nexthop|SID(s)");
 	else
 		ttable_add_row(tt, "Prefix|Metric|Interface|Nexthop|Label(s)");
 	tt->style.cell.rpad = 2;
@@ -2859,7 +2861,7 @@ static void show_isis_route_common(struct vty *vty, int levels, struct isis *isi
 				}
 
 				isis_print_routes(vty, spftree, json ? &json_val : NULL,
-						  prefix_sid, backup);
+						  prefix_sid, backup, area->srv6db.config.enabled);
 				if (json && json_val)
 					json_object_object_add(json_level, "ipv4", json_val);
 			}
@@ -2879,7 +2881,7 @@ static void show_isis_route_common(struct vty *vty, int levels, struct isis *isi
 				}
 
 				isis_print_routes(vty, spftree, json ? &json_val : NULL,
-						  prefix_sid, backup);
+						  prefix_sid, backup, area->srv6db.config.enabled);
 				if (json && json_val)
 					json_object_object_add(json_level, "ipv6", json_val);
 			}
@@ -2899,7 +2901,7 @@ static void show_isis_route_common(struct vty *vty, int levels, struct isis *isi
 					json_val = NULL;
 				}
 				isis_print_routes(vty, spftree, json ? &json_val : NULL,
-						  prefix_sid, backup);
+						  prefix_sid, backup, area->srv6db.config.enabled);
 				if (json && json_val)
 					json_object_object_add(json_level, "ipv6-dstsrc", json_val);
 			}
