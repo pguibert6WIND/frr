@@ -106,10 +106,6 @@ static uint32_t peer_clearing_hashfn(const struct peer *p1);
 DECLARE_HASH(bgp_clearing_hash, struct peer, clear_hash_link,
 	     peer_clearing_hash_cmp, peer_clearing_hashfn);
 
-static int bgp_tcp_ao_profile_hash_cmp(const struct bgp_tcp_ao_profile *a,
-				       const struct bgp_tcp_ao_profile *b);
-static uint32_t bgp_tcp_ao_profile_hashfn(const struct bgp_tcp_ao_profile *profile);
-
 /* BGP process wide configuration.  */
 static struct bgp_master bgp_master;
 
