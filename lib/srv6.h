@@ -90,6 +90,22 @@ enum seg6local_flavor_op {
 	ZEBRA_SEG6_LOCAL_FLV_OP_NEXT_CSID    = 4,
 };
 
+/* MSD SRv6 values from RFC9352 */
+/* RFC 9352 section #4.1 */
+#define SRV6_MSD_TYPE_SEGS_LEFT 41
+/* RFC 9352 section #4.2 */
+#define SRV6_MSD_TYPE_END_POP 42
+/* RFC 9352 section #4.3 */
+#define SRV6_MSD_TYPE_H_ENCAPS 44
+/* RFC 9352 section #4.4 */
+#define SRV6_MSD_TYPE_END_D 45
+
+/* SRv6 MSD default values */
+#define SRV6_MSD_DEFAULT_SEGS_LEFT 3
+#define SRV6_MSD_DEFAULT_END_POP 3
+#define SRV6_MSD_DEFAULT_H_ENCAPS 2
+#define SRV6_MSD_DEFAULT_END_D 5
+
 #define SRV6_SEG_STRLEN 1024
 
 struct seg6_segs {

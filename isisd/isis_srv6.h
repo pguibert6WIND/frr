@@ -13,10 +13,7 @@
 #include "lib/srv6.h"
 #include "isisd/isis_tlvs.h"
 
-#define ISIS_DEFAULT_SRV6_MAX_SEG_LEFT_MSD 3
-#define ISIS_DEFAULT_SRV6_MAX_END_POP_MSD  3
-#define ISIS_DEFAULT_SRV6_MAX_H_ENCAPS_MSD 2
-#define ISIS_DEFAULT_SRV6_MAX_END_D_MSD	   5
+/* MSD default values are defined in lib/srv6.h */
 
 #define IS_SRV6_ENABLED(area) ((area) && (area)->srv6db.config.enabled)
 
