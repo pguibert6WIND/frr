@@ -289,6 +289,7 @@ Configuration Commands
 .. clicmd:: index INDEX nai prefix A.B.C.D/M algorithm <0|1>
 .. clicmd:: index INDEX nai prefix A.B.C.D/M iface (0-65535)
 .. clicmd:: index INDEX ipv6-address X:X::X:X
+.. clicmd:: index INDEX nai adjacency-srv6 X:X::X:X X:X::X:X
 
    Delete or specify a segment in a segment list definition.
 

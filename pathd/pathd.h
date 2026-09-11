@@ -19,6 +19,24 @@
 	((or == SRTE_ORIGIN_PCEP && (ts == MPLS_LABEL_NONE || es != ts))       \
 	 || (or == SRTE_ORIGIN_LOCAL && ts == MPLS_LABEL_NONE))
 
+
+enum srte_protocol_origin {
+	SRTE_ORIGIN_UNDEFINED = 0,
+	SRTE_ORIGIN_PCEP = 1,
+	SRTE_ORIGIN_BGP = 2,
+	SRTE_ORIGIN_LOCAL = 3,
+};
+
+static inline bool _pathd_check_sid_srv6(enum srte_protocol_origin or, struct in6_addr *ts,
+					 struct in6_addr *es)
+{
+	return ((or == SRTE_ORIGIN_PCEP &&
+			    (IPV6_ADDR_SAME(ts, &in6addr_any) || !IPV6_ADDR_SAME(ts, es))) ||
+		(or == SRTE_ORIGIN_LOCAL && IPV6_ADDR_SAME(ts, &in6addr_any)));
+}
+
+#define CHECK_SID_SRV6(or, ts, es) _pathd_check_sid_srv6(or, ts, es)
+
 DECLARE_MGROUP(PATHD);
 
 /*
@@ -31,13 +49,6 @@ DECLARE_HOOK(pathd_srte_check_config_not_empty, (), ());
 DECLARE_HOOK(pathd_srte_config_write, (struct vty *vty), (vty));
 /* Sent when user requests 'no traffic-eng', please clean configuration */
 DECLARE_HOOK(pathd_srte_no_srte, (), ());
-
-enum srte_protocol_origin {
-	SRTE_ORIGIN_UNDEFINED = 0,
-	SRTE_ORIGIN_PCEP = 1,
-	SRTE_ORIGIN_BGP = 2,
-	SRTE_ORIGIN_LOCAL = 3,
-};
 
 extern struct debug path_policy_debug;
 
@@ -112,7 +123,8 @@ enum srte_segment_nai_type {
 	SRTE_SEGMENT_NAI_TYPE_IPV4_LOCAL_IFACE = 7,
 	SRTE_SEGMENT_NAI_TYPE_IPV6_LOCAL_IFACE = 8,
 	SRTE_SEGMENT_NAI_TYPE_IPV4_ALGORITHM = 9,
-	SRTE_SEGMENT_NAI_TYPE_IPV6_ALGORITHM = 10
+	SRTE_SEGMENT_NAI_TYPE_IPV6_ALGORITHM = 10,
+	SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY = 11
 };
 
 enum objfun_type {
@@ -397,8 +409,8 @@ int srte_segment_entry_set_nai(struct srte_segment_entry *segment,
 			       struct ipaddr *remote_ip, uint32_t remote_iface,
 			       uint8_t algo, uint8_t pref_len);
 void srte_segment_set_local_modification(struct srte_segment_list *s_list,
-					 struct srte_segment_entry *s_entry,
-					 uint32_t ted_sid);
+					 struct srte_segment_entry *s_entry, uint32_t ted_sid,
+					 struct in6_addr *ted_sid_srv6);
 struct srte_policy *srte_policy_add(uint32_t color, struct ipaddr *endpoint,
 				    enum srte_protocol_origin origin,
 				    const char *originator);
@@ -488,4 +500,17 @@ int32_t srte_ted_do_query_type_e(struct srte_segment_entry *entry,
  */
 int32_t srte_ted_do_query_type_f(struct srte_segment_entry *entry,
 				 struct ipaddr *local, struct ipaddr *remote);
+
+/**
+ * Search for SRv6 sid based in local and remote ip
+ *
+ * @param entry		entry to update
+ * @param local		Local addr for query
+ * @param remote	Local addr for query
+ *
+ * @return		void
+ */
+int32_t srte_ted_do_query_type_k(struct srte_segment_entry *entry, struct ipaddr *local,
+				 struct ipaddr *remote);
+
 #endif /* _FRR_PATHD_H_ */
