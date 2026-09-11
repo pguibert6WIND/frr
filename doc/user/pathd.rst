@@ -220,10 +220,10 @@ Example:
       index 20 mpls label 16030
      !
      segment-list SL2
-      index 10  nai prefix 10.1.2.1/32 iface 1
-      index 20  nai adjacency 10.1.20.1 10.1.20.2
-      index 30  nai prefix 10.10.10.5/32 algorithm 0
-      index 40  mpls label 18001
+      index 10 nai prefix 10.1.2.1/32 iface 1
+      index 20 nai adjacency 10.1.20.1 10.1.20.2
+      index 30 nai prefix 10.10.10.5/32 algorithm 0
+      index 40 mpls label 18001
      !
      policy color 1 endpoint 192.0.2.1
       name default
@@ -286,6 +286,7 @@ Configuration Commands
 
 .. clicmd:: index INDEX mpls label LABEL
 .. clicmd:: index INDEX nai adjacency A.B.C.D A.B.C.D
+.. clicmd:: index INDEX nai adjacency X:X::X:X X:X::X:X
 .. clicmd:: index INDEX nai prefix A.B.C.D/M algorithm <0|1>
 .. clicmd:: index INDEX nai prefix A.B.C.D/M iface (0-65535)
 .. clicmd:: index INDEX ipv6-address X:X::X:X
