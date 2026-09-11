@@ -49,6 +49,7 @@ static void _format_pcep_object_ro_details(int ps,
 static void _format_pcep_object_ro_ipv4(int ps,
 					struct pcep_ro_subobj_ipv4 *obj);
 static void _format_pcep_object_ro_sr(int ps, struct pcep_ro_subobj_sr *obj);
+static void _format_pcep_object_ro_srv6(int ps, struct pcep_ro_subobj_srv6 *obj);
 static void _format_pcep_object_tlvs(int ps, struct pcep_object_header *obj);
 static void _format_pcep_object_tlv(int ps,
 				    struct pcep_object_tlv_header *tlv_header);
@@ -849,6 +850,8 @@ const char *pcep_ro_type_name(enum pcep_ro_subobj_types ro_type)
 		return "ASN";
 	case RO_SUBOBJ_TYPE_SR:
 		return "SR";
+	case RO_SUBOBJ_TYPE_SRV6:
+		return "SRV6";
 	case RO_SUBOBJ_UNKNOWN:
 		return "UNKNOWN";
 	}
@@ -1595,6 +1598,9 @@ void _format_pcep_object_ro_details(int ps, struct pcep_object_ro_subobj *ro)
 	case RO_SUBOBJ_TYPE_SR:
 		_format_pcep_object_ro_sr(ps, (struct pcep_ro_subobj_sr *)ro);
 		break;
+	case RO_SUBOBJ_TYPE_SRV6:
+		_format_pcep_object_ro_srv6(ps, (struct pcep_ro_subobj_srv6 *)ro);
+		break;
 	case RO_SUBOBJ_TYPE_IPV6:
 	case RO_SUBOBJ_TYPE_LABEL:
 	case RO_SUBOBJ_TYPE_UNNUM:
@@ -1694,6 +1700,11 @@ void _format_pcep_object_ro_sr(int ps, struct pcep_ro_subobj_sr *obj)
 			break;
 		}
 	}
+}
+
+void _format_pcep_object_ro_srv6(int ps, struct pcep_ro_subobj_srv6 *obj)
+{
+	/* TODO */
 }
 
 void _format_pcep_object_tlvs(int ps, struct pcep_object_header *obj)
