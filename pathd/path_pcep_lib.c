@@ -81,6 +81,7 @@ static void pcep_lib_parse_vendor_info(struct path *path,
 				       struct pcep_object_vendor_info *obj);
 static void pcep_lib_parse_ero(struct path *path, struct pcep_object_ro *ero);
 static struct path_hop *pcep_lib_parse_ero_sr(struct pcep_ro_subobj_sr *sr);
+static struct path_hop *pcep_lib_parse_ero_srv6(struct pcep_ro_subobj_srv6 *sr);
 static struct counters_group *copy_counter_group(struct counters_group *from);
 static struct counters_subgroup *
 copy_counter_subgroup(struct counters_subgroup *from);
@@ -1194,6 +1195,15 @@ void pcep_lib_parse_ero(struct path *path, struct pcep_object_ro *ero)
 					  pcep_ro_type_name(obj->ro_subobj_type),
 					  obj->ro_subobj_type);
 			break;
+		case RO_SUBOBJ_TYPE_SRV6:
+			hop = pcep_lib_parse_ero_srv6((struct pcep_ro_subobj_srv6 *)obj);
+			/* Warn if invalid */
+			if (hop == NULL)
+				flog_warn(EC_PATH_PCEP_UNEXPECTED_PCEP_ERO_SUBOBJ,
+					  "Invalid ERO sub-object %s (%u)",
+					  pcep_ro_type_name(obj->ro_subobj_type),
+					  obj->ro_subobj_type);
+			break;
 		case RO_SUBOBJ_TYPE_IPV4:
 		case RO_SUBOBJ_TYPE_IPV6:
 		case RO_SUBOBJ_TYPE_LABEL:
@@ -1344,6 +1354,14 @@ done:
 		/* Free allocated object (and set to NULL) */
 		XFREE(MTYPE_PCEP, hop);
 	}
+
+	return hop;
+}
+
+/* Return a path_hop, or NULL if there's an error */
+struct path_hop *pcep_lib_parse_ero_srv6(struct pcep_ro_subobj_srv6 *srv6)
+{
+	struct path_hop *hop = NULL;
 
 	return hop;
 }

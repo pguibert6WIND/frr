@@ -478,9 +478,10 @@ enum pcep_ro_subobj_types {
 	RO_SUBOBJ_TYPE_LABEL = 3, /* RFC 3209 */
 	RO_SUBOBJ_TYPE_UNNUM = 4, /* RFC 3477 */
 	RO_SUBOBJ_TYPE_ASN = 32,  /* RFC 3209, Section 4.3.3.4 */
-	RO_SUBOBJ_TYPE_SR = 36, /* RFC 8408, draft-ietf-pce-segment-routing-16.
+	RO_SUBOBJ_TYPE_SR = 36,	  /* RFC 8408, draft-ietf-pce-segment-routing-16.
 				   Type 5 for draft07 has been assigned to
 				   something else. */
+	RO_SUBOBJ_TYPE_SRV6 = 40, /* RFC 9603, Section 4.3.1 */
 	RO_SUBOBJ_UNKNOWN
 };
 
@@ -580,6 +581,57 @@ struct pcep_ro_subobj_sr {
 #define GET_SR_ERO_SID_TC(SID) ((SID & 0x00000e00) >> 9)
 #define GET_SR_ERO_SID_S(SID) ((SID & 0x00000100) >> 8)
 #define GET_SR_ERO_SID_TTL(SID) ((SID & 0x000000ff))
+
+/* The SRv6 ERO object
+ * Defined in RFC 9603
+ */
+enum pcep_srv6_subobj_nai {
+	PCEP_SRV6_SUBOBJ_NAI_ABSENT = 0,
+	PCEP_SRV6_SUBOBJ_NAI_IPV6_NODE = 2,
+	PCEP_SRV6_SUBOBJ_NAI_IPV6_ADJACENCY_GLOBAL = 4,
+	PCEP_SRV6_SUBOBJ_NAI_IPV6_ADJACENCY_LOCAL = 6,
+};
+
+#define OBJECT_SUBOBJ_SR_FLAG_M 0x01
+#define OBJECT_SUBOBJ_SR_FLAG_C 0x02
+#define OBJECT_SUBOBJ_SR_FLAG_S 0x04
+#define OBJECT_SUBOBJ_SR_FLAG_F 0x08
+
+struct pcep_ro_subobj_srv6 {
+	struct pcep_object_ro_subobj ro_subobj;
+	enum pcep_srv6_subobj_nai nai_type;
+	bool flag_v;
+	bool flag_t;
+	bool flag_f;
+	bool flag_s;
+
+	/* mapped over lib/srv6.h, enum srv6_endpoint_behavior_codepoint
+	 * link state information is available in lib/link_state.h
+	 */
+	uint16_t endpoint_behavior;
+
+	/* The SID and NAI are optional depending on the flags,
+	 * and the NAI can be variable length */
+	struct in6_addr sid;
+	/* NAI associated with SID - as per RFC 8664 ch. 4.3.2 */
+	union {
+		/* NT value is 2 : IPv6 Node ID */
+		struct in6_addr node_id;
+		/* NT value is 4 : IPv6 Global adjacency */
+		struct {
+			struct in6_addr local_ipv6;
+			struct in6_addr remote_ipv6;
+		} ipv6_adjacency;
+		/* NT value is 6 : IPv6 link-local adjacency - TODO - */
+	};
+	/* optional : SRv6 structure
+	 * link state information is available in lib/link_state.h
+	 */
+	uint8_t lb_len;
+	uint8_t ln_len;
+	uint8_t fn_len;
+	uint8_t arg_len;
+};
 
 /*
  * All created objects will be in Host byte order, except for IPs.

@@ -625,6 +625,25 @@ pcep_obj_create_ro_subobj_sr_common(enum pcep_sr_subobj_nai nai_type,
 	return obj;
 }
 
+static struct pcep_ro_subobj_srv6 *
+pcep_obj_create_ro_subobj_srv6_common(enum pcep_srv6_subobj_nai nai_type, bool loose_hop,
+				      bool v_flag, bool t_flag, bool f_flag, bool s_flag)
+{
+	struct pcep_ro_subobj_srv6 *obj = (struct pcep_ro_subobj_srv6 *)
+		pcep_obj_create_ro_subobj_common(sizeof(struct pcep_ro_subobj_srv6),
+						 RO_SUBOBJ_TYPE_SRV6, loose_hop);
+
+	/* Flag logic according to draft-ietf-pce-segment-routing-16 */
+
+	obj->nai_type = nai_type;
+	obj->flag_v = f_flag;
+	obj->flag_t = t_flag;
+	obj->flag_f = f_flag;
+	obj->flag_s = s_flag;
+
+	return obj;
+}
+
 struct pcep_ro_subobj_sr *pcep_obj_create_ro_subobj_sr_nonai(bool loose_hop,
 							     uint32_t sid,
 							     bool c_flag,
