@@ -1785,7 +1785,9 @@ static int ls_format_msg(struct stream *s, struct ls_message *msg)
 	case LS_MSG_TYPE_ATTRIBUTES:
 		/* Add remote node first */
 		stream_put(s, &msg->remote_id, sizeof(struct ls_node_id));
-		return ls_format_attributes(s, msg->data.attr);
+                if (msg->data.attr)
+			return ls_format_attributes(s, msg->data.attr);
+		return 0;
 	case LS_MSG_TYPE_PREFIX:
 		return ls_format_prefix(s, msg->data.prefix);
 	default:
