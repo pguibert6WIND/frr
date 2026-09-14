@@ -30,7 +30,8 @@ enum srte_protocol_origin {
 static inline bool _pathd_check_sid_srv6(enum srte_protocol_origin or, struct in6_addr *ts,
 					 struct in6_addr *es)
 {
-	return ((or == SRTE_ORIGIN_PCEP &&
+  zlog_debug("%s() XXXX ts %pI6 es %pI6", __func__, ts, es);
+  return ((or == SRTE_ORIGIN_PCEP &&
 			    (IPV6_ADDR_SAME(ts, &in6addr_any) || !IPV6_ADDR_SAME(ts, es))) ||
 		(or == SRTE_ORIGIN_LOCAL && IPV6_ADDR_SAME(ts, &in6addr_any)));
 }

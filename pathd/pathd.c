@@ -251,6 +251,7 @@ int srte_segment_entry_set_nai(struct srte_segment_entry *segment,
 	case SRTE_SEGMENT_NAI_TYPE_IPV6_SRV6_ADJACENCY:
 		memcpy(&segment->nai_remote_addr, remote_ip, sizeof(struct ipaddr));
 		status = srte_ted_do_query_type_k(segment, local_ip, remote_ip);
+                zlog_debug("%s() XXXXXXXXXX result is %u", __func__, status);
 		break;
 	case SRTE_SEGMENT_NAI_TYPE_IPV4_UNNUMBERED_ADJACENCY:
 		memcpy(&segment->nai_remote_addr, remote_ip,
@@ -450,6 +451,7 @@ int srte_policy_update_ted_sid(void)
 				number_of_sid_clashed +=
 					srte_ted_do_query_type_k(s_entry, &s_entry->nai_local_addr,
 								 &s_entry->nai_remote_addr);
+                                zlog_debug("%s() XXXXXXXXXX result is %u", __func__, number_of_sid_clashed);
 				break;
 			case SRTE_SEGMENT_NAI_TYPE_IPV6_LOCAL_IFACE:
 				prefix_cli.family = AF_INET6;
@@ -1597,10 +1599,12 @@ int32_t srte_ted_do_query_type_k(struct srte_segment_entry *entry, struct ipaddr
 	} else {
 		PATH_TED_DEBUG("%s:SL: Success query K : ted-sid (%pI6)", __func__, &ted_sid);
 	}
-	if (CHECK_SID_SRV6(entry->segment_list->protocol_origin, &ted_sid, &entry->srv6_sid_value)) {
+	if (CHECK_SID_SRV6(entry->segment_list->protocol_origin, &ted_sid, &entry->srv6_sid_value))
 		status = PATH_SID_ERROR;
-	} else
+	else {
 		srte_segment_set_local_modification(entry->segment_list, entry, 0, &ted_sid);
+                zlog_debug("%s() XXXX called sid %pI6", __func__, &ted_sid);
+        }
 	return status;
 }
 
