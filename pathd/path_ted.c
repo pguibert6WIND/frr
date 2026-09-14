@@ -219,17 +219,10 @@ int path_ted_query_type_k(struct ipaddr *local, struct ipaddr *remote, struct in
 		key.family = AF_INET6;
 		IPV6_ADDR_COPY(&key.k.addr6, &local->ip._v6_addr);
 		edge = ls_find_edge_by_key(ted_state_g.ted, key);
-		if (edge) {
-			if ((0 == memcmp(&edge->attributes->standard.remote6, &remote->ip._v6_addr,
-					 sizeof(remote->ip._v6_addr)) &&
-			     CHECK_FLAG(edge->attributes->flags, LS_ATTR_ADJ_SRV6SID))) {
-				if (sid_srv6)
-					memcpy(sid_srv6,
-					       &edge->attributes->adj_sid[ADJ_SRV6_PRI_IPV6].sid,
-					       sizeof(struct in6_addr)); /* from primary */
-				ret = 0;
-				break;
-			}
+		if (edge && edge->attributes && IPV6_ADDR_SAME(&edge->attributes->standard.remote6, &remote->ip._v6_addr)
+		    &&  CHECK_FLAG(edge->attributes->flags, LS_ATTR_ADJ_SRV6SID) && sid_srv6) {
+			IPV6_ADDR_COPY(sid_srv6, &edge->attributes->adj_srv6_sid[ADJ_SRV6_PRI_IPV6].sid);
+			ret = 0;
 		}
 		break;
 	case IPADDR_V4:

@@ -282,7 +282,7 @@ def test_isis_adjacencies_step1():
         )
 
 
-def test_configure_srv6_locators():
+def test_configure_srv6_locators_and_segment_list():
     tgen = get_topogen()
     tgen.gears["rt1"].vtysh_cmd(
         """
@@ -631,6 +631,50 @@ def test_srv6_end_b6_encaps_removal():
             "step6/show_ipv6_route.ref",
         )
 
+
+def test_configure_segment_list_type_k():
+    logger.info("Test (step 4): verify SRv6 TE policy with NAI SRv6 activated")
+    tgen = get_topogen()
+    tgen.gears["rt1"].vtysh_cmd(
+        """
+        configure
+        segment-routing
+        traffic-eng
+        mpls-te on
+        mpls-te import isis
+        segment-list srv6-header-2
+        index 1 nai adjacency-srv6 2001:db8:1::1 2001:db8:1::3
+        index 2 nai adjacency-srv6 2001:db8:5::3 2001:db8:5::5
+        index 3 nai adjacency-srv6 2001:db8:8::5 2001:db8:8::6
+        exit
+        exit
+        exit
+        """
+    )
+
+    # Skip if previous fatal error condition is raised
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    tgen.gears["rt1"].vtysh_cmd(
+        """
+        configure
+        segment-routing
+        traffic-eng
+        policy color 1 endpoint fc00:0:6::
+        candidate-path preference 1 name srv6 explicit segment-list srv6-header-2
+        exit
+        exit
+        exit
+        """
+    )
+
+    for rname in ["rt1"]:
+        router_compare_json_output(
+            rname,
+            "show ipv6 route static json",
+            "step2/show_srv6_route.ref",
+        )
 
 # Memory leak test template
 def test_memory_leak():
