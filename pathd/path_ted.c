@@ -363,6 +363,13 @@ DEFPY (debug_path_ted,
 	return CMD_SUCCESS;
 }
 
+ALIAS(debug_path_ted, debug_path_ted_alias_cmd,
+       "[no] debug pathd ted",
+       NO_STR
+       DEBUG_STR
+       "path debugging\n"
+       "ted debugging\n")
+
 /*
  * Following are vty command functions.
  */
@@ -532,10 +539,12 @@ static void path_ted_register_vty(void)
 	install_element(VIEW_NODE, &show_pathd_ted_db_cmd);
 	install_element(SR_TRAFFIC_ENG_NODE, &path_ted_on_cmd);
 	install_element(SR_TRAFFIC_ENG_NODE, &no_path_ted_cmd);
-	install_element(SR_TRAFFIC_ENG_NODE, &path_ted_import_cmd);
 
+	install_element(SR_TRAFFIC_ENG_NODE, &path_ted_import_cmd);
 	install_element(CONFIG_NODE, &debug_path_ted_cmd);
 	install_element(ENABLE_NODE, &debug_path_ted_cmd);
+	install_element(CONFIG_NODE, &debug_path_ted_alias_cmd);
+	install_element(ENABLE_NODE, &debug_path_ted_alias_cmd);
 
 	debug_install(&ted_state_g.dbg);
 }
