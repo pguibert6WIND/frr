@@ -3824,6 +3824,11 @@ route_set_aigp_metric(void *rule, const struct prefix *pfx, void *object)
 	struct bgp_path_info *path = object;
 	uint64_t aigp;
 
+	if (strmatch(aigp_metric, "none")) {
+		bgp_attr_unset_aigp_metric(path->attr);
+		return RMAP_OKAY;
+	}
+
 	/* Note: the metric is stored as MED for a locally redistributed. */
 	if (strmatch(aigp_metric, "igp-metric"))
 		aigp = path->nexthop ? path->nexthop->metric : path->attr->med;
@@ -7910,10 +7915,11 @@ DEFUN_YANG (no_set_atomic_aggregate,
 
 DEFPY_YANG (set_aigp_metric,
 	    set_aigp_metric_cmd,
-	    "set aigp-metric <igp-metric|(0-4294967295)>$aigp_metric",
+	    "set aigp-metric <igp-metric|none|(0-4294967295)>$aigp_metric",
 	    SET_STR
 	    "BGP AIGP attribute (AIGP Metric TLV)\n"
 	    "AIGP Metric value from IGP protocol\n"
+	    "Remove the AIGP attribute\n"
 	    "Manual AIGP Metric value (use + for an addition)\n")
 {
 	const char *xpath =
@@ -7930,11 +7936,12 @@ DEFPY_YANG (set_aigp_metric,
 
 DEFPY_YANG (no_set_aigp_metric,
 	    no_set_aigp_metric_cmd,
-	    "no set aigp-metric [<igp-metric|(0-4294967295)>]",
+	    "no set aigp-metric [<igp-metric|none|(0-4294967295)>]",
 	    NO_STR
 	    SET_STR
 	    "BGP AIGP attribute (AIGP Metric TLV)\n"
 	    "AIGP Metric value from IGP protocol\n"
+	    "Remove the AIGP attribute\n"
 	    "Manual AIGP Metric value (use + for an addition)\n")
 {
 	const char *xpath =

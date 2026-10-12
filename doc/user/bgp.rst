@@ -2847,10 +2847,11 @@ Capability Negotiation
 
    This command does not add the AIGP attribute to the advertised routes: only
    the routes that already carry it are sent with it. A route gets the AIGP
-   attribute from :clicmd:`set aigp-metric \<igp-metric|[+](0-4294967295)\>`,
-   or from a neighbor with AIGP enabled. When the nexthop is changed to the
-   local address, the AIGP metric is increased by the IGP metric to the
-   previous nexthop.
+   attribute from
+   :clicmd:`set aigp-metric \<igp-metric|none|[+](0-4294967295)\>`, or from a
+   neighbor with AIGP enabled, and loses it with ``set aigp-metric none``.
+   When the nexthop is changed to the local address, the AIGP metric is
+   increased by the IGP metric to the previous nexthop.
 
    When the previous nexthop is resolved by a static route, the AIGP metric is
    increased by the metric of the static route, which is 0 by default, and not
