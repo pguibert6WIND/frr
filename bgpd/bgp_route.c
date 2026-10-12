@@ -4429,6 +4429,11 @@ void bgp_process_main_one(struct bgp *bgp, struct bgp_dest *dest, afi_t afi, saf
 	old_select = old_and_new.old;
 	new_select = old_and_new.new;
 
+	if (CHECK_FLAG(dest->flags, BGP_NODE_NHT_RESOLVED_NODE) &&
+	    (old_select != new_select ||
+	     (new_select && CHECK_FLAG(new_select->flags, BGP_PATH_ATTR_CHANGED))))
+		bgp_aigp_nexthop_route_update(bgp, afi, dest);
+
 	if (safi == SAFI_UNICAST && is_srv6_unicast_enabled(bgp, afi))
 		bgp_srv6_unicast_register_route(bgp, afi, dest, new_select);
 

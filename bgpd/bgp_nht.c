@@ -1499,6 +1499,29 @@ bool bgp_aigp_metric_total(struct bgp_path_info *bpi, const struct attr *attr, u
 	return true;
 }
 
+/* The AIGP metric of the paths resolved by this route depends on its AIGP */
+void bgp_aigp_nexthop_route_update(struct bgp *bgp, afi_t afi, struct bgp_dest *dest)
+{
+	const struct prefix *p = bgp_dest_get_prefix(dest);
+	struct bgp_nexthop_cache *bnc;
+	struct bgp_path_info *path;
+	struct bgp_table *table;
+
+	frr_each (bgp_nexthop_cache, &bgp->nexthop_cache_table[afi], bnc) {
+		if (bnc->resolved_type != ZEBRA_ROUTE_BGP || !prefix_same(&bnc->resolved_prefix, p))
+			continue;
+
+		LIST_FOREACH (path, &bnc->paths, nh_thread) {
+			if (!bgp_attr_exists(path->attr, BGP_ATTR_AIGP))
+				continue;
+
+			table = bgp_dest_table(path->net);
+			SET_FLAG(path->flags, BGP_PATH_IGP_CHANGED);
+			bgp_process(table->bgp, path->net, path, table->afi, table->safi);
+		}
+	}
+}
+
 /**
  * evaluate_paths - Evaluate the paths/nets associated with a nexthop.
  * ARGUMENTS:
