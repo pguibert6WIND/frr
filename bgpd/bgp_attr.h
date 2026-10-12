@@ -729,6 +729,11 @@ static inline void bgp_attr_set_aigp_metric(struct attr *attr, uint64_t aigp)
 	bgp_attr_set(attr, BGP_ATTR_AIGP);
 }
 
+static inline uint64_t bgp_aigp_metric_add(uint64_t aigp, uint64_t value)
+{
+	return aigp > UINT64_MAX - value ? UINT64_MAX : aigp + value;
+}
+
 static inline uint64_t bgp_aigp_metric_total(struct bgp_path_info *bpi, const struct attr *attr)
 {
 	uint64_t aigp = bgp_attr_get_aigp_metric(attr);
@@ -737,7 +742,7 @@ static inline uint64_t bgp_aigp_metric_total(struct bgp_path_info *bpi, const st
 	if (bpi->peer == bpi->peer->bgp->peer_self)
 		return aigp;
 
-	return bpi->extra ? (aigp + bpi->extra->igpmetric) : aigp;
+	return bpi->extra ? bgp_aigp_metric_add(aigp, bpi->extra->igpmetric) : aigp;
 }
 
 static inline void bgp_attr_set_med(struct attr *attr, uint32_t med)
