@@ -704,7 +704,7 @@ static inline void bgp_attr_unset_aigp_metric(struct attr *attr)
 	if (!bgp_attr_exists(attr, BGP_ATTR_AIGP))
 		return;
 
-	if (attr->extra) {
+	if (bgp_attr_get_aigp_metric(attr)) {
 		attr->extra->aigp_metric = 0;
 		bgp_attr_extra_put(attr);
 	}
@@ -712,17 +712,19 @@ static inline void bgp_attr_unset_aigp_metric(struct attr *attr)
 	bgp_attr_unset(attr, BGP_ATTR_AIGP);
 }
 
+/* A metric of 0 is not stored in attr->extra: the AIGP flag is enough */
 static inline void bgp_attr_set_aigp_metric(struct attr *attr, uint64_t aigp)
 {
-	if (aigp == 0) {
-		bgp_attr_unset_aigp_metric(attr);
-		return;
-	}
+	uint64_t old = bgp_attr_get_aigp_metric(attr);
 
-	if (!bgp_attr_exists(attr, BGP_ATTR_AIGP) || !attr->extra)
+	if (aigp && !old)
 		bgp_attr_extra_get(attr)->aigp_metric = aigp;
-	else
+	else if (aigp && old)
 		attr->extra->aigp_metric = aigp;
+	else if (!aigp && old) {
+		attr->extra->aigp_metric = 0;
+		bgp_attr_extra_put(attr);
+	}
 
 	bgp_attr_set(attr, BGP_ATTR_AIGP);
 }
