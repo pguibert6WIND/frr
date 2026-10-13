@@ -11897,6 +11897,13 @@ static inline struct bgp_path_info *bgp_find_redistributed_route(struct bgp *bgp
 	return NULL;
 }
 
+/* The IGP metric of a redistributed route, used by "set aigp-metric igp-metric" */
+static void bgp_redistribute_set_igpmetric(struct bgp_path_info *bpi, uint32_t metric)
+{
+	if (metric || bpi->extra)
+		bgp_path_info_extra_get(bpi)->igpmetric = metric;
+}
+
 void bgp_redistribute_add(struct bgp *bgp, struct prefix *p, const union g_addr *nexthop,
 			  ifindex_t ifindex, enum nexthop_types_t nhtype, uint8_t distance,
 			  enum blackhole_type bhtype, uint32_t metric, uint8_t type,
@@ -12010,6 +12017,8 @@ void bgp_redistribute_add(struct bgp *bgp, struct prefix *p, const union g_addr 
 		struct bgp_path_info_extra rmap_extra = {};
 		struct bgp_path_info rmap_path = { .extra = &rmap_extra };
 
+		rmap_extra.igpmetric = metric;
+
 		/* Copy attribute for modification. */
 		attr_new = attr;
 
@@ -12048,7 +12057,8 @@ void bgp_redistribute_add(struct bgp *bgp, struct prefix *p, const union g_addr 
 		if (bpi) {
 			if (!CHECK_FLAG(bpi->flags, BGP_PATH_REMOVED) &&
 			    attrhash_cmp(bpi->attr, new_attr) &&
-			    bgp_path_info_extra_same(bpi, &rmap_path)) {
+			    bgp_path_info_extra_same(bpi, &rmap_path) &&
+			    (bpi->extra ? bpi->extra->igpmetric : 0) == metric) {
 				bgp_attr_unintern(&new_attr);
 				aspath_unintern(&attr.aspath);
 				return;
@@ -12067,6 +12077,7 @@ void bgp_redistribute_add(struct bgp *bgp, struct prefix *p, const union g_addr 
 				bpi->attr = new_attr;
 				bpi->uptime = monotime(NULL);
 				bgp_path_info_extra_propagate(bpi, &rmap_path);
+				bgp_redistribute_set_igpmetric(bpi, metric);
 
 				/* Process change. */
 				bgp_aggregate_increment(bgp, p, bpi, afi,
@@ -12094,6 +12105,7 @@ void bgp_redistribute_add(struct bgp *bgp, struct prefix *p, const union g_addr 
 				bgp->peer_self, new_attr, bn);
 		SET_FLAG(new->flags, BGP_PATH_VALID);
 		bgp_path_info_extra_propagate(new, &rmap_path);
+		bgp_redistribute_set_igpmetric(new, metric);
 
 		bgp_path_info_add(bn, new);
 		bgp_aggregate_increment(bgp, p, new, afi, SAFI_UNICAST);

@@ -345,7 +345,10 @@ Route Map Set Command
 .. clicmd:: set aigp-metric <igp-metric|med|none|[+](0-4294967295)>
 
    Set the BGP attribute AIGP to a specific value. If ``igp-metric`` is specified,
-   then the value is taken from the IGP protocol, otherwise an arbitrary value.
+   then the value is the IGP metric: for a redistributed route, the metric of
+   the route in the RIB, and for a BGP route, the IGP metric to its nexthop.
+   The IGP metric to the nexthop is only known in an outbound route-map: in an
+   inbound route-map, it is 0. Otherwise, the value is an arbitrary value.
    A value of 0 is valid: the route carries the AIGP attribute with a metric
    of 0, which is compared in the best path selection.
 

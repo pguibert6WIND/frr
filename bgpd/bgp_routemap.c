@@ -3829,9 +3829,8 @@ route_set_aigp_metric(void *rule, const struct prefix *pfx, void *object)
 		return RMAP_OKAY;
 	}
 
-	/* Note: the metric is stored as MED for a locally redistributed. */
 	if (strmatch(aigp_metric, "igp-metric"))
-		aigp = path->nexthop ? path->nexthop->metric : path->attr->med;
+		aigp = path->extra ? path->extra->igpmetric : 0;
 	else if (strmatch(aigp_metric, "med"))
 		aigp = path->attr->med;
 	else if (aigp_metric[0] == '+') {
