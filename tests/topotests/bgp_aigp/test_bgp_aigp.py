@@ -11,10 +11,11 @@ r7 sets aigp-metric for 10.0.0.71/32 to 71, and 72 for 10.0.0.72/32.
 
 r6 receives those routes with aigp-metric TLV.
 
-r2 and r3 receives those routes with aigp-metric TLV increased by 20,
-and 10 appropriately.
+r2 and r3 receive those routes from r6 over direct links without IGP:
+the aigp-metric TLV is not increased.
 
-r1 receives routes with aigp-metric TLV 81, 91 and 82, 92 respectively.
+r1 receives routes with aigp-metric TLV 71 and 72 from r2 and r3, and
+selects the path from r2, whose nexthop is closer.
 
 r1 advertises MED from IGP protocol (set metric igp) to r8.
 
@@ -37,9 +38,9 @@ r7 removes the aigp-metric action for 10.0.0.72/32, and r6 receives it
 without the AIGP attribute.
 
 r6 sets aigp-metric 100 in the outbound route-map that changes the
-nexthop towards r4, and r4 receives 10.0.0.71/32 with this AIGP metric.
+nexthop towards r2, and r2 receives 10.0.0.71/32 with this AIGP metric.
 
-r6 sets aigp-metric none in this route-map, and r4 receives 10.0.0.71/32
+r6 sets aigp-metric none in this route-map, and r2 receives 10.0.0.71/32
 without the AIGP attribute.
 """
 
@@ -61,7 +62,7 @@ pytestmark = [pytest.mark.bgpd, pytest.mark.ospfd]
 
 
 def build_topo(tgen):
-    for routern in range(1, 9):
+    for routern in (1, 2, 3, 6, 7, 8):
         tgen.add_router("r{}".format(routern))
 
     switch = tgen.add_switch("s1")
@@ -74,18 +75,10 @@ def build_topo(tgen):
 
     switch = tgen.add_switch("s3")
     switch.add_link(tgen.gears["r2"])
-    switch.add_link(tgen.gears["r4"])
+    switch.add_link(tgen.gears["r6"])
 
     switch = tgen.add_switch("s4")
     switch.add_link(tgen.gears["r3"])
-    switch.add_link(tgen.gears["r5"])
-
-    switch = tgen.add_switch("s5")
-    switch.add_link(tgen.gears["r4"])
-    switch.add_link(tgen.gears["r6"])
-
-    switch = tgen.add_switch("s6")
-    switch.add_link(tgen.gears["r5"])
     switch.add_link(tgen.gears["r6"])
 
     switch = tgen.add_switch("s7")
@@ -157,8 +150,6 @@ def test_bgp_aigp():
     r1 = tgen.gears["r1"]
     r2 = tgen.gears["r2"]
     r3 = tgen.gears["r3"]
-    r4 = tgen.gears["r4"]
-    r5 = tgen.gears["r5"]
     r8 = tgen.gears["r8"]
 
     def _bgp_converge():
@@ -166,7 +157,7 @@ def test_bgp_aigp():
         expected = {
             "paths": [
                 {
-                    "aigpMetric": 81,
+                    "aigpMetric": 71,
                     "valid": True,
                     "nexthops": [
                         {
@@ -178,7 +169,7 @@ def test_bgp_aigp():
                     ],
                 },
                 {
-                    "aigpMetric": 91,
+                    "aigpMetric": 71,
                     "valid": True,
                     "bestpath": {"selectionReason": "IGP Metric"},
                     "nexthops": [
@@ -208,7 +199,7 @@ def test_bgp_aigp():
         expected = {
             "routes": {
                 "10.0.0.71/32": [{"valid": True, "metric": 10, "aigpMetric": None}],
-                "10.0.0.72/32": [{"valid": True, "metric": 92, "aigpMetric": None}],
+                "10.0.0.72/32": [{"valid": True, "metric": 72, "aigpMetric": None}],
             }
         }
         return topotest.json_cmp(output, expected)
@@ -224,7 +215,7 @@ def test_bgp_aigp():
                 "10.0.0.71/32": {
                     "paths": [
                         {
-                            "aigpMetric": 81,
+                            "aigpMetric": 71,
                             "valid": True,
                             "nexthops": [
                                 {
@@ -236,7 +227,7 @@ def test_bgp_aigp():
                             ],
                         },
                         {
-                            "aigpMetric": 91,
+                            "aigpMetric": 71,
                             "valid": True,
                             "bestpath": {"selectionReason": "AIGP"},
                             "nexthops": [
@@ -253,7 +244,7 @@ def test_bgp_aigp():
                 "10.0.0.72/32": {
                     "paths": [
                         {
-                            "aigpMetric": 82,
+                            "aigpMetric": 72,
                             "valid": True,
                             "nexthops": [
                                 {
@@ -265,7 +256,7 @@ def test_bgp_aigp():
                             ],
                         },
                         {
-                            "aigpMetric": 92,
+                            "aigpMetric": 72,
                             "valid": True,
                             "bestpath": {"selectionReason": "AIGP"},
                             "nexthops": [
@@ -297,30 +288,15 @@ def test_bgp_aigp():
     """
     )
 
-    # r4, 10.0.6.6/32 with aigp-metric 20
-    test_func = functools.partial(_bgp_check_aigp_metric, r4, "10.0.6.6/32", 20)
-    _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
-    assert result is None, "aigp-metric for 10.0.6.6/32 is not 20"
-
-    # r4, 10.0.0.71/32 with aigp-metric 71
-    test_func = functools.partial(_bgp_check_aigp_metric, r4, "10.0.0.71/32", 71)
+    # r2, 10.0.0.71/32 with aigp-metric 71
+    test_func = functools.partial(_bgp_check_aigp_metric, r2, "10.0.0.71/32", 71)
     _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
     assert result is None, "aigp-metric for 10.0.0.71/32 is not 71"
 
-    # r5, 10.0.0.72/32 with aigp-metric 72
-    test_func = functools.partial(_bgp_check_aigp_metric, r5, "10.0.0.72/32", 72)
+    # r3, 10.0.0.72/32 with aigp-metric 72
+    test_func = functools.partial(_bgp_check_aigp_metric, r3, "10.0.0.72/32", 72)
     _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
     assert result is None, "aigp-metric for 10.0.0.72/32 is not 72"
-
-    # r2, 10.0.0.71/32 with aigp-metric 101 (71 + 20)
-    test_func = functools.partial(_bgp_check_aigp_metric, r2, "10.0.0.71/32", 91)
-    _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
-    assert result is None, "aigp-metric for 10.0.0.71/32 is not 91"
-
-    # r3, 10.0.0.72/32 with aigp-metric 92 (72 + 10)
-    test_func = functools.partial(_bgp_check_aigp_metric, r3, "10.0.0.72/32", 82)
-    _, result = topotest.run_and_expect(test_func, None, count=60, wait=1)
-    assert result is None, "aigp-metric for 10.0.0.72/32 is not 82"
 
     # r1, check if AIGP is considered in best-path selection (lowest wins: aigp + nexthop-metric)
     test_func = functools.partial(_bgp_check_aigp_metric_bestpath)
@@ -424,7 +400,7 @@ def test_bgp_aigp_outbound_route_map():
     if tgen.routers_have_failure():
         pytest.skip(tgen.errors)
 
-    r4 = tgen.gears["r4"]
+    r2 = tgen.gears["r2"]
     r6 = tgen.gears["r6"]
 
     r6.vtysh_cmd(
@@ -435,7 +411,7 @@ def test_bgp_aigp_outbound_route_map():
     """
     )
 
-    result = check_aigp_metric(r4, "10.0.0.71/32", 100)
+    result = check_aigp_metric(r2, "10.0.0.71/32", 100)
     assert result is True, result
 
 
@@ -445,7 +421,7 @@ def test_bgp_aigp_set_metric_none():
     if tgen.routers_have_failure():
         pytest.skip(tgen.errors)
 
-    r4 = tgen.gears["r4"]
+    r2 = tgen.gears["r2"]
     r6 = tgen.gears["r6"]
 
     r6.vtysh_cmd(
@@ -456,7 +432,7 @@ def test_bgp_aigp_set_metric_none():
     """
     )
 
-    result = check_aigp_metric(r4, "10.0.0.71/32", None)
+    result = check_aigp_metric(r2, "10.0.0.71/32", None)
     assert result is True, result
     result = check_aigp_metric(r6, "10.0.0.71/32", 71)
     assert result is True, result
