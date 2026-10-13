@@ -7,7 +7,8 @@
 #
 
 """
-r7 sets aigp-metric for 10.0.0.71/32 to 71, and 72 for 10.0.0.72/32.
+r7 sets aigp-metric for 10.0.0.71/32 to its MED (71), and 72 for
+10.0.0.72/32.
 
 r6 receives those routes with aigp-metric TLV.
 
@@ -343,7 +344,7 @@ def test_bgp_aigp_running_config():
     output = r7.vtysh_cmd("show running-config")
     for line in (
         " neighbor 192.168.7.101 aigp\n",
-        " set aigp-metric igp-metric\n",
+        " set aigp-metric med\n",
         " set aigp-metric 72\n",
     ):
         assert line in output, "r7, {} not displayed".format(line.strip())
