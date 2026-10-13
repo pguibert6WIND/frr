@@ -793,6 +793,7 @@ struct bgp {
 #define BGP_FLAG_BESTPATH_USE_IMPORTED_ATTRS (1ULL << 47)
 /* Shutdown without sending notification (for HA standby transition) */
 #define BGP_FLAG_SHUTDOWN_NO_NOTIFY (1ULL << 48)
+#define BGP_FLAG_COMPARE_AIGP_STRICT (1ULL << 49)
 
 	/* BGP default address-families.
 	 * New peers inherit enabled afi/safis from bgp instance.

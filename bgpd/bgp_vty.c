@@ -4449,6 +4449,26 @@ DEFPY (bgp_bestpath_aigp,
 	return CMD_SUCCESS;
 }
 
+DEFPY (bgp_bestpath_aigp_strict,
+       bgp_bestpath_aigp_strict_cmd,
+       "[no$no] bgp bestpath aigp-strict",
+       NO_STR
+       BGP_STR
+       "Change the default bestpath selection\n"
+       "Remove the paths without the AIGP attribute when another path has it\n")
+{
+	VTY_DECLVAR_CONTEXT(bgp, bgp);
+
+	if (no)
+		UNSET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP_STRICT);
+	else
+		SET_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP_STRICT);
+
+	bgp_recalculate_all_bestpaths(bgp);
+
+	return CMD_SUCCESS;
+}
+
 /* "bgp bestpath compare-routerid" configuration.  */
 DEFUN (bgp_bestpath_compare_router_id,
        bgp_bestpath_compare_router_id_cmd,
@@ -22753,6 +22773,8 @@ int bgp_config_write(struct vty *vty)
 		if (!!CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP) != SAVE_BGP_COMPARE_AIGP)
 			vty_out(vty, " %sbgp bestpath aigp\n",
 				CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP) ? "" : "no ");
+		if (CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP_STRICT))
+			vty_out(vty, " bgp bestpath aigp-strict\n");
 
 		if (CHECK_FLAG(bgp->flags, BGP_FLAG_MED_CONFED)
 		    || CHECK_FLAG(bgp->flags, BGP_FLAG_MED_MISSING_AS_WORST)) {
@@ -23821,6 +23843,7 @@ void bgp_vty_init(void)
 
 	/* "bgp bestpath aigp" commands */
 	install_element(BGP_NODE, &bgp_bestpath_aigp_cmd);
+	install_element(BGP_NODE, &bgp_bestpath_aigp_strict_cmd);
 
 	/* "bgp bestpath compare-routerid" commands */
 	install_element(BGP_NODE, &bgp_bestpath_compare_router_id_cmd);

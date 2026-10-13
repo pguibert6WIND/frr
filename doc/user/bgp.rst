@@ -183,7 +183,8 @@ bottom until one of the factors can be used.
    AIGP attribute, BGP uses AIGP tie-breaking. This means that the AIGP
    attribute is not evaluated during the best path selection process between
    two paths when one path does not have the AIGP attribute or AIGP is
-   disabled.
+   disabled, unless ``bgp bestpath aigp-strict`` is enabled: then, a path
+   with the AIGP attribute is preferred over a path without it.
 
 5. **AS path length check**
 
@@ -445,6 +446,15 @@ Route Selection
    attribute.
 
    When bgp bestpath aigp is disabled, BGP does not use AIGP tie-breaking.
+
+   Disabled by default.
+
+.. clicmd:: bgp bestpath aigp-strict
+
+   When bgp bestpath aigp is enabled, prefer a path with the AIGP attribute
+   over a path without it, as required by RFC 7311 section 4.1: when a path
+   has the AIGP attribute, the paths without it are removed from
+   consideration.
 
    Disabled by default.
 

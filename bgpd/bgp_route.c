@@ -1376,6 +1376,22 @@ int bgp_path_info_cmp(struct bgp *bgp, struct bgp_path_info *new,
 	}
 
 	/* 4. Tie-breaker - AIGP (Metric TLV) attribute */
+	if (CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP) &&
+	    CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP_STRICT) &&
+	    bgp_attr_exists(newattr, BGP_ATTR_AIGP) != bgp_attr_exists(existattr, BGP_ATTR_AIGP)) {
+		*reason = bgp_path_selection_aigp;
+		if (bgp_attr_exists(newattr, BGP_ATTR_AIGP)) {
+			if (debug)
+				zlog_debug("%s: %s wins over %s due to AIGP attribute", pfx_buf,
+					   new_buf, exist_buf);
+			return 1;
+		}
+		if (debug)
+			zlog_debug("%s: %s loses to %s due to AIGP attribute", pfx_buf, new_buf,
+				   exist_buf);
+		return 0;
+	}
+
 	if (bgp_attr_exists(newattr, BGP_ATTR_AIGP) && bgp_attr_exists(existattr, BGP_ATTR_AIGP) &&
 	    CHECK_FLAG(bgp->flags, BGP_FLAG_COMPARE_AIGP)) {
 		uint64_t new_aigp;
