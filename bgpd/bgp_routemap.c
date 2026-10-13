@@ -3832,6 +3832,8 @@ route_set_aigp_metric(void *rule, const struct prefix *pfx, void *object)
 	/* Note: the metric is stored as MED for a locally redistributed. */
 	if (strmatch(aigp_metric, "igp-metric"))
 		aigp = path->nexthop ? path->nexthop->metric : path->attr->med;
+	else if (strmatch(aigp_metric, "med"))
+		aigp = path->attr->med;
 	else if (aigp_metric[0] == '+') {
 		if (!bgp_attr_exists(path->attr, BGP_ATTR_AIGP))
 			return RMAP_OKAY;
@@ -7915,10 +7917,11 @@ DEFUN_YANG (no_set_atomic_aggregate,
 
 DEFPY_YANG (set_aigp_metric,
 	    set_aigp_metric_cmd,
-	    "set aigp-metric <igp-metric|none|(0-4294967295)>$aigp_metric",
+	    "set aigp-metric <igp-metric|med|none|(0-4294967295)>$aigp_metric",
 	    SET_STR
 	    "BGP AIGP attribute (AIGP Metric TLV)\n"
 	    "AIGP Metric value from IGP protocol\n"
+	    "AIGP Metric value from the MED\n"
 	    "Remove the AIGP attribute\n"
 	    "Manual AIGP Metric value (use + for an addition)\n")
 {
@@ -7936,11 +7939,12 @@ DEFPY_YANG (set_aigp_metric,
 
 DEFPY_YANG (no_set_aigp_metric,
 	    no_set_aigp_metric_cmd,
-	    "no set aigp-metric [<igp-metric|none|(0-4294967295)>]",
+	    "no set aigp-metric [<igp-metric|med|none|(0-4294967295)>]",
 	    NO_STR
 	    SET_STR
 	    "BGP AIGP attribute (AIGP Metric TLV)\n"
 	    "AIGP Metric value from IGP protocol\n"
+	    "AIGP Metric value from the MED\n"
 	    "Remove the AIGP attribute\n"
 	    "Manual AIGP Metric value (use + for an addition)\n")
 {
