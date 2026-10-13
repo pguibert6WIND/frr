@@ -3335,12 +3335,14 @@ bool subgroup_announce_check(struct bgp_dest *dest, struct bgp_path_info *pi,
 	 * Adjust AIGP for propagation when the nexthop is set to ourselves,
 	 * e.g., using "set ip nexthop peer-address" or when advertising to
 	 * EBGP. Note in route reflection the nexthop is usually unmodified
-	 * and the AIGP should not be adjusted in that case.
+	 * and the AIGP should not be adjusted in that case. An AIGP added by
+	 * the outbound route-map is originated, and is not adjusted either.
 	 */
 	if (bgp_attr_exists(attr, BGP_ATTR_AIGP)) {
 		if (AIGP_TRANSMIT_ALLOWED(peer)) {
-			if (nh_reset ||
-			    CHECK_FLAG(attr->rmap_change_flags, BATTR_RMAP_NEXTHOP_PEER_ADDRESS)) {
+			if ((nh_reset ||
+			     CHECK_FLAG(attr->rmap_change_flags, BATTR_RMAP_NEXTHOP_PEER_ADDRESS)) &&
+			    bgp_attr_exists(piattr, BGP_ATTR_AIGP)) {
 				uint64_t aigp;
 
 				if (bgp_aigp_metric_total(pi, attr, &aigp))

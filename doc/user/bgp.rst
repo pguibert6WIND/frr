@@ -2851,7 +2851,9 @@ Capability Negotiation
    :clicmd:`set aigp-metric \<igp-metric|med|none|[+](0-4294967295)\>`, or from
    a neighbor with AIGP enabled, and loses it with ``set aigp-metric none``.
    When the nexthop is changed to the local address, the AIGP metric is
-   increased by the IGP metric to the previous nexthop.
+   increased by the IGP metric to the previous nexthop, unless the AIGP
+   attribute is added by the outbound route-map: the route did not carry it,
+   and the value set by the route-map is advertised as is.
 
    When the previous nexthop is resolved by a static route, the AIGP metric is
    increased by the metric of the static route, which is 0 by default, and not
