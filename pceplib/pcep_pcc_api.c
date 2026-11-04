@@ -125,6 +125,7 @@ pcep_configuration *create_default_pcep_configuration(void)
 	config->support_pce_triggered_initial_sync = true;
 	config->support_sr_te_pst = true;
 	config->pcc_can_resolve_nai_to_sid = true;
+	config->pcc_can_resolve_nai_to_ipv6_sid = true;
 	config->max_sid_depth = 0;
 	config->dst_pcep_port = 0;
 	config->src_pcep_port = 0;
